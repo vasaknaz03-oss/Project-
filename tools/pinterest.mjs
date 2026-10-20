@@ -17,10 +17,13 @@ for (let i = 0; i < 3; i++) {
   await page.mouse.wheel(0, 2000);
   await page.waitForTimeout(1500);
 }
-const pins = await page.evaluate(() => [...document.querySelectorAll('a[href*="/pin/"]')].map((a) => {
-  const img = a.querySelector('img');
-  return img && { pin: new URL(a.getAttribute('href'), location.href).href, image: (img.currentSrc || img.src).replace(/\/(\d+x|originals)\//, '/474x/'), alt: img.alt };
-}).filter(Boolean));
+const pins = await page.evaluate(() => [...document.querySelectorAll('img')]
+  .filter((img) => /i\.pinimg\.com\/(236x|474x|564x|736x|originals)\//.test(img.currentSrc || img.src))
+  .map((img) => ({
+    pin: img.closest('a')?.href || '',
+    image: (img.currentSrc || img.src).replace(/\/(\d+x|originals)\//, '/474x/'),
+    alt: img.alt,
+  })));
 fs.writeFileSync(out, JSON.stringify(pins, null, 1));
 console.log(`${query} → ${pins.length} pins → ${out}`);
 await browser.close();
