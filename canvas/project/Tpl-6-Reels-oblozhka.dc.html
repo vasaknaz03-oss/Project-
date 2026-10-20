@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Шаблон — обложка Reels</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&amp;family=Marck+Script&amp;family=Montserrat:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div style="position: relative; width: 1080px; height: 1920px; overflow: hidden; background: #F1E9DE; font-family: 'Cormorant Garamond', serif; color: #2E2019">
+<svg aria-hidden="true" width="1080" height="1920" style="position: absolute; left: 0; top: 0"><filter id="paper"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"></feTurbulence><feColorMatrix values="0 0 0 0 0.45  0 0 0 0 0.33  0 0 0 0 0.24  0 0 0 0.09 0"></feColorMatrix></filter><rect width="100%" height="100%" filter="url(#paper)"></rect></svg>
+<div style="position: absolute; left: 70px; right: 70px; top: 300px; text-align: center; font-family: 'Montserrat', sans-serif; font-weight: 500; font-size: 24px; letter-spacing: 0.3em; color: #6B4A3A">DESSERTOPIA · REELS</div>
+<div style="position: absolute; left: 70px; right: 70px; top: 368px; text-align: center; font-style: italic; font-size: 132px; line-height: 1">Название</div>
+<div style="position: absolute; left: 70px; right: 70px; top: 500px; text-align: center; font-size: 84px; line-height: 1">ролика</div>
+<div style="position: absolute; left: 200px; top: 650px; padding: 28px 28px 128px; background: #FFFCF6; box-shadow: 0 18px 40px rgba(74,46,36,0.16), 0 3px 8px rgba(74,46,36,0.10); transform: rotate(-2deg)">
+<div style="width: 624px; height: 700px; box-sizing: border-box; border: 3px dashed rgba(173,122,79,0.45); background: #EFE6DA"></div>
+<div style="position: absolute; left: 0; right: 0; bottom: 36px; text-align: center; font-family: 'Marck Script', cursive; font-size: 48px; color: #5C3B2B">подпись от руки</div>
+</div>
+<div style="position: absolute; left: 440px; top: 628px; width: 180px; height: 44px; background: rgba(217,195,165,0.72); transform: rotate(-3deg); box-shadow: 0 1px 2px rgba(74,46,36,0.08)"></div>
+<svg aria-hidden="true" width="1080" height="1920" style="position: absolute; left: 0; top: 0" fill="none" stroke="#AD7A4F" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M140 760L156 736M166 780L192 776M132 730L128 704"></path><path d="M910.0 1460.0C897.0 1451.0 885.0 1442.0 886.0 1430.0C887.0 1421.0 895.0 1416.0 902.0 1419.0C906.0 1421.0 908.0 1424.0 910.0 1428.0C912.0 1424.0 915.0 1421.0 919.0 1419.0C926.0 1416.0 934.0 1421.0 934.0 1430.0C935.0 1442.0 923.0 1451.0 910.0 1460.0Z" fill="#C2363B" stroke="none"></path></svg>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1080,"height":1920}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

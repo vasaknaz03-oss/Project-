@@ -1,0 +1,62 @@
+{
+  "cakes": ["Banan", "Vishnya", "Barkhat", "Limon", "Plombir", "Snickers"],
+  "trifles": ["Banan", "Vishnya", "Barkhat", "Snickers", "Plombir", "Klubnika", "Limon"],
+  "fillings": {
+    "Banan": {
+      "name": "Банан-карамель",
+      "title": ["Банан-", "карамель"],
+      "desc": "ванильный или шоколадный бисквит, сливочный крем-чиз, солёная карамель, свежий банан",
+      "mood": "сливочно и солёно-сладко",
+      "sponge": "vanilla", "filling": "caramel", "inclusion": "banana", "topping": "banana",
+      "labels": [["сливочный крем-чиз", "frost"], ["солёная карамель", "filling1"], ["свежий банан", "filling2"], ["ванильный или шоколадный бисквит", "sponge3"]]
+    },
+    "Vishnya": {
+      "name": "Вишня-шоколад",
+      "title": ["Вишня-", "шоколад"],
+      "desc": "шоколадный бисквит, сливочный или шоколадный крем-чиз, вишнёвое конфи с кусочками цельной вишни",
+      "mood": "шоколад с вишнёвой кислинкой",
+      "sponge": "chocolate", "filling": "cherry", "inclusion": "cherry", "topping": "cherry",
+      "labels": [["сливочный или шоколадный крем-чиз", "frost"], ["вишнёвое конфи", "filling1"], ["кусочки цельной вишни", "filling2"], ["шоколадный бисквит", "sponge3"]]
+    },
+    "Barkhat": {
+      "name": "Красный бархат",
+      "title": ["Красный", "бархат"],
+      "desc": "бисквит красный бархат, сливочный крем-чиз, ягодное конфи на выбор: клубничное, малиновое или вишнёвое",
+      "mood": "конфи — на ваш выбор",
+      "sponge": "red", "filling": "berry", "inclusion": "none", "topping": "crumbs",
+      "labels": [["сливочный крем-чиз", "frost"], ["ягодное конфи на выбор", "filling1"], ["бисквит красный бархат", "sponge3"]]
+    },
+    "Limon": {
+      "name": "Лимон-мак",
+      "title": ["Лимон-", "мак"],
+      "desc": "маковый бисквит, сливочный крем-чиз, лимонный курд",
+      "mood": "свежо и с кислинкой",
+      "sponge": "poppy", "filling": "lemon", "inclusion": "none", "topping": "lemon",
+      "labels": [["сливочный крем-чиз", "frost"], ["лимонный курд", "filling1"], ["маковый бисквит", "sponge3"]]
+    },
+    "Plombir": {
+      "name": "Ягодный пломбир",
+      "title": ["Ягодный", "пломбир"],
+      "desc": "ванильный бисквит, сливочный крем-чиз, клубнично-малиновая начинка",
+      "mood": "как летнее мороженое",
+      "sponge": "vanilla", "filling": "strawberry", "inclusion": "berry", "topping": "berries",
+      "labels": [["сливочный крем-чиз", "frost"], ["клубнично-малиновая начинка", "filling1"], ["ванильный бисквит", "sponge3"]]
+    },
+    "Snickers": {
+      "name": "Сникерс",
+      "title": ["Сникерс", ""],
+      "desc": "шоколадный бисквит, сливочный крем-чиз, солёная карамель, жареный арахис",
+      "mood": "для любителей орешков",
+      "sponge": "chocolate", "filling": "caramel", "inclusion": "peanut", "topping": "peanuts",
+      "labels": [["сливочный крем-чиз", "frost"], ["солёная карамель", "filling1"], ["жареный арахис", "filling2"], ["шоколадный бисквит", "sponge3"]]
+    },
+    "Klubnika": {
+      "name": "Клубника-банан",
+      "title": ["Клубника-", "банан"],
+      "desc": "клубника и банан",
+      "mood": "",
+      "sponge": "vanilla", "filling": "strawberry", "inclusion": "banana", "topping": "strawberry",
+      "labels": []
+    }
+  }
+}

@@ -1,0 +1,118 @@
+"""The profile preview (Main) and the brand sheet (Style).
+
+Run `python3 tools/build.py` (it calls this module).
+"""
+from build import (CARAMEL, CARAMEL_TEXT, CHERRY, CONFETTI, CREAM, HAND, INK, PAPER, PROJECT, RULE, ICONS,
+                   icon_svg, page, paper_noise)
+
+HIGHLIGHTS = [("vazhno", "Важно"), ("nachinki", "Начинки"), ("raboty", "Работы"), ("otzyvy", "Отзывы"), ("deserty", "Десерты")]
+GRID = [
+    ("acc311caf7482b23272767a83e2e6cb5", "Пост «Торты, которые говорят за тебя»", "pin"),
+    ("4e531b87e15dad19504aaaad31d66a47", "Карусель «Повод не нужен»", "carousel"),
+    ("0192b5076a120dafd266790ff9ee6270", "Пост «Десерты в стаканчиках»", ""),
+    ("3f2f924fea4a3947ce2a07ae1027e553", "Пост «Что написать на твоём торте?»", ""),
+    ("4053d6ba731c96bceb9810e75856a825", "Торт «время пить чай»", ""),
+    ("23b9924553f15cce9ddcde18a7004421", "Торт «Ура! это ещё не твой песок»", ""),
+    ("a1351d27dc96044b7b0c5334f5583991", "Торт с лягушками", ""),
+    ("b0573522c810f1d2a6b28ff6881de9a9", "Бенто «можно просто так»", ""),
+    ("0f4be2e274687d61f9078170b9c5f393", "Торт Happy Birthday", ""),
+]
+BIO = [
+    "Dessertopia — сладкая страна чудес",
+    "бенто и торты до 2 кг · трайфлы",
+    "самовывоз: м. Аэродромная (Минск Мир)",
+    "заказ за 3–4 дня — пишите в Telegram ↓",
+]
+TAPE = "rgba(173,122,79,0.32)"
+
+
+def highlight(key, label):
+    return f"""<div style="display: flex; flex-direction: column; align-items: center; gap: 14px; width: 186px">
+<div style="position: relative; width: 176px; height: 176px; border-radius: 50%; box-shadow: 0 0 0 3px #363636; overflow: hidden; background: {CREAM}">
+<svg aria-hidden="true" width="176" height="176" style="position: absolute; left: 0; top: 0"><circle cx="88" cy="88" r="77" fill="none" stroke="{CARAMEL}" stroke-width="1.6" stroke-dasharray="3 3.6" stroke-linecap="round"></circle></svg>
+{icon_svg(key, CARAMEL, CHERRY, TAPE, 120, 28, 28, stroke=7, label=label)}
+</div>
+<div style="font-size: 27px; color: #F2F2F2">{label}</div>
+</div>"""
+
+
+def tile(blob, alt, badge):
+    icon = ""
+    if badge == "pin":
+        icon = ('<svg aria-hidden="true" width="44" height="44" viewBox="0 0 24 24" style="position: absolute; right: 14px; top: 14px" fill="#FFFFFF">'
+                '<path d="M15 3l6 6-3 1-3 3 1 5-2 2-4-4-5 5-1-1 5-5-4-4 2-2 5 1 3-3z"></path></svg>')
+    if badge == "carousel":
+        icon = ('<svg aria-hidden="true" width="44" height="44" viewBox="0 0 24 24" style="position: absolute; right: 14px; top: 14px" fill="none" stroke="#FFFFFF" stroke-width="2">'
+                '<rect x="3" y="7" width="13" height="14" rx="2"></rect><path d="M8 3h11a2 2 0 0 1 2 2v11"></path></svg>')
+    return (f'<div style="position: relative; height: 477px; overflow: hidden; background: #1C1C1C">'
+            f'<img src="/_blob/{blob}" alt="{alt}" style="display: block; width: 100%; height: 100%; object-fit: cover">{icon}</div>')
+
+
+def main_board():
+    stats = "".join(f'<div style="display: flex; flex-direction: column; align-items: flex-start"><div style="font-weight: 600; font-size: 40px">{n}</div>'
+                     f'<div style="font-size: 28px; color: #D6D6D6">{t}</div></div>' for n, t in [("11", "публикации"), ("31", "подписчики"), ("10", "подписки")])
+    bio = "".join(f"<div>{line}</div>" for line in BIO)
+    body = f"""<div style="position: relative; width: 1080px; height: 2610px; overflow: hidden; background: #0C0C0C; font-family: 'Montserrat', sans-serif; color: #F5F5F5">
+<div style="position: absolute; left: 40px; top: 52px; display: flex; align-items: center; gap: 34px">
+<svg aria-hidden="true" width="34" height="56" viewBox="0 0 17 28" fill="none" stroke="#F5F5F5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3L3 14L14 25"></path></svg>
+<div style="font-weight: 600; font-size: 46px">desserto.pia</div>
+</div>
+<div style="position: absolute; left: 44px; top: 170px; width: 262px; height: 262px; border-radius: 50%; overflow: hidden; background: {CREAM}">
+<img src="/_blob/a9eac0041f17fa83168692c9ca4fcb63" alt="Аватар: торт-сердце" style="position: absolute; left: 42px; top: 46px; width: 178px">
+</div>
+<div style="position: absolute; left: 350px; top: 178px; right: 40px; font-weight: 600; font-size: 34px; line-height: 1.25">Диана | торты · бенто · трайфлы | Минск</div>
+<div style="position: absolute; left: 350px; top: 296px; right: 60px; display: flex; justify-content: space-between">{stats}</div>
+<div style="position: absolute; left: 44px; top: 470px; right: 44px; font-size: 31px; line-height: 1.42; color: #EDEDED">{bio}
+<div style="margin-top: 4px; font-weight: 600; color: #B9CCF5">t.me/BMU_GS</div></div>
+<div style="position: absolute; left: 44px; right: 44px; top: 760px; display: flex; gap: 16px">
+<div style="flex: 1; height: 84px; border-radius: 18px; background: #2A2A2A; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 31px">Подписаться</div>
+<div style="flex: 1; height: 84px; border-radius: 18px; background: #2A2A2A; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 31px">Сообщение</div>
+</div>
+<div style="position: absolute; left: 30px; right: 30px; top: 900px; display: flex; justify-content: space-between">{"".join(highlight(k, l) for k, l in HIGHLIGHTS)}</div>
+<div style="position: absolute; left: 0; right: 0; top: 1160px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px">{"".join(tile(*t) for t in GRID)}</div>
+</div>"""
+    return page("Профиль — как будет выглядеть страница", 1080, 2610, body)
+
+
+def style_board():
+    swatches = [
+        ("Крем", CREAM, "фон всех макетов"), ("Бумага", PAPER, "карточки, полароиды"), ("Какао", INK, "заголовки, кнопка"),
+        ("Шоколад", HAND, "рукописный текст"), ("Карамель", CARAMEL, "дудлы, штампы"), ("Вишня", CHERRY, "сердечки, акцент"),
+    ]
+    sw = "".join(f"""<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="height: 150px; border-radius: 18px; background: {c}; box-shadow: inset 0 0 0 2px rgba(46,32,25,0.10)"></div>
+<div style="font-family: 'Marck Script', cursive; font-size: 40px; line-height: 1; color: {INK}">{n}</div>
+<div style="font-family: 'Montserrat', sans-serif; font-weight: 500; font-size: 22px; letter-spacing: 0.1em; color: #6B4A3A">{c}</div>
+<div style="font-weight: 500; font-size: 28px; line-height: 1.1; color: {HAND}">{d}</div></div>""" for n, c, d in swatches)
+    confetti = "".join(f'<div style="width: 26px; height: 26px; border-radius: 50%; background: {c}"></div>' for c in CONFETTI.values())
+    icons = "".join(f'<div style="position: relative; width: 150px; height: 150px">{icon_svg(k, CARAMEL, CHERRY, TAPE, 150, 0, 0, stroke=5, label="")}</div>' for k in ICONS)
+    fonts = [
+        ("Cormorant Garamond", "заголовки", "font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 104px", "Повод не нужен"),
+        ("Marck Script", "подписи от руки", "font-family: 'Marck Script', cursive; font-size: 72px", "для самой нежной"),
+        ("Montserrat", "служебные надписи, кнопки", "font-family: 'Montserrat', sans-serif; font-weight: 500; font-size: 34px; letter-spacing: 0.3em", "СЛАДКИЙ АРХИВ"),
+    ]
+    fr = "".join(f"""<div style="padding: 26px 0; border-top: 2px solid {RULE}">
+<div style="font-family: 'Montserrat', sans-serif; font-weight: 500; font-size: 22px; letter-spacing: 0.24em; color: {CARAMEL_TEXT}">{n.upper()} · {r.upper()}</div>
+<div style="margin-top: 10px; line-height: 1.05; color: {INK}; {css}">{sample}</div></div>""" for n, r, css, sample in fonts)
+    body = f"""<div style="position: relative; width: 1080px; height: 2000px; overflow: hidden; background: {CREAM}; font-family: 'Cormorant Garamond', serif; color: {INK}">
+{paper_noise(1080, 2000)}
+<div style="position: absolute; left: 70px; right: 70px; top: 70px; display: flex; justify-content: space-between; font-family: 'Montserrat', sans-serif; font-weight: 500; font-size: 24px; letter-spacing: 0.28em; color: #6B4A3A"><div>DESSERTOPIA</div><div>ФИРМЕННЫЙ СТИЛЬ</div></div>
+<div style="position: absolute; left: 70px; right: 70px; top: 120px; height: 2px; background: {RULE}"></div>
+<div style="position: absolute; left: 62px; top: 150px; font-style: italic; font-size: 160px; line-height: 1">Фирменный</div>
+<div style="position: absolute; left: 72px; top: 310px; font-size: 92px; line-height: 1">стиль</div>
+<div style="position: absolute; left: 430px; top: 330px; font-family: 'Marck Script', cursive; font-size: 46px; color: {CARAMEL_TEXT}; transform: rotate(-3deg)">как в «Сладком архиве»</div>
+<div style="position: absolute; left: 70px; right: 70px; top: 470px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 34px 30px">{sw}</div>
+<div style="position: absolute; left: 70px; top: 1150px; display: flex; gap: 18px; align-items: center"><div style="font-family: 'Marck Script', cursive; font-size: 40px; color: {HAND}">конфетти:</div>{confetti}</div>
+<div style="position: absolute; left: 70px; right: 70px; top: 1230px">{fr}</div>
+<div style="position: absolute; left: 50px; right: 50px; top: 1790px; display: flex; justify-content: space-between">{icons}</div>
+</div>"""
+    return page("Фирменный стиль", 1080, 2000, body)
+
+
+def build_profile():
+    (PROJECT / "Main.dc.html").write_text(main_board())
+    (PROJECT / "Style.dc.html").write_text(style_board())
+
+
+if __name__ == "__main__":
+    build_profile()
