@@ -248,6 +248,42 @@ def tpl_reels_cover():
     return story("Шаблон — обложка Reels", body)
 
 
+def bow(x, y, s=1.0, colour=CHERRY, rot=0):
+    """A ribbon bow doodle, as on the cakes."""
+    return (f'<svg aria-hidden="true" width="{round(150 * s)}" height="{round(110 * s)}" viewBox="-75 -40 150 110" '
+            f'style="position: absolute; left: {x}px; top: {y}px; transform: rotate({rot}deg)" fill="none" stroke="{colour}" stroke-width="4" '
+            'stroke-linecap="round" stroke-linejoin="round"><path d="M-4 0C-30 -30 -70 -22 -62 2C-56 20 -24 12 -4 0Z"></path>'
+            '<path d="M4 0C30 -30 70 -22 62 2C56 20 24 12 4 0Z"></path><path d="M-4 4C-14 24 -26 46 -40 62M4 4C12 26 22 46 36 64"></path>'
+            '<path d="M0 0m-7 0a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" fill="' + colour + '"></path></svg>')
+
+
+def tpl_prices():
+    rows = [
+        ("Бенто-торт", "мини-торт с надписью"),
+        ("Торт", "за 1 кг · до 2 кг"),
+        ("Трайфл", "1 стаканчик"),
+        ("Набор трайфлов", "количество на выбор"),
+        ("Декор", "ягоды, топперы, сложная надпись"),
+    ]
+    items = "".join(f"""<div>
+<div style="display: flex; align-items: baseline; gap: 14px">
+<div style="{MARCK}; font-size: 54px; line-height: 1.1; color: {INK}">{a}</div>
+<div style="flex: 1; border-bottom: 4px dotted rgba(173,122,79,0.6); transform: translateY(-10px)"></div>
+<div style="font-family: 'Cormorant Garamond', serif; font-style: italic; font-weight: 500; font-size: 52px; color: {INK}">[цена]</div>
+</div>
+<div style="font-weight: 500; font-size: 32px; line-height: 1.15; color: {HAND}">{b}</div>
+</div>""" for a, b in rows)
+    card = f'<div style="display: flex; flex-direction: column; gap: 30px">{items}</div>'
+    body = f"""{header("DESSERTOPIA", "ЦЕНЫ")}
+{title("Цены", "и форматы")}
+{paper(70, 630, 940, card, -1, "56px 56px 52px")}
+{bow(436, 568, 1.4)}
+<div style="position: absolute; left: 70px; top: 1390px; width: 940px; text-align: center; font-weight: 500; font-size: 38px; line-height: 1.25; color: {HAND}">точную стоимость посчитаю в переписке — зависит от веса, начинки и декора</div>
+{pill("НАПИСАТЬ В TELEGRAM", 230, 1530, 32)}
+{doodles("", red_heart(918, 1580, 1.0))}"""
+    return story("Шаблон — цены", body)
+
+
 def build_stories():
     out = {
         "Vazhno-1-Kak-zakazat": vazhno_contacts(),
@@ -260,6 +296,7 @@ def build_stories():
         "Tpl-4-Novaya-nachinka": tpl_new_filling(),
         "Tpl-5-Skoro": tpl_soon(),
         "Tpl-6-Reels-oblozhka": tpl_reels_cover(),
+        "Tpl-7-Ceny": tpl_prices(),
     }
     for name, html in out.items():
         (PROJECT / f"{name}.dc.html").write_text(html)

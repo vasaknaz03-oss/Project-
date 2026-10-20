@@ -214,10 +214,48 @@ def cover(slug, key, label, style):
     return page(f"Обложка — {label}", 1080, 1080, body)
 
 
+def doily(cx, cy, r, paper=PAPER, hole=CARAMEL):
+    """A lace doily: scalloped edge, rings of cut-out eyelets and petals, plain centre (radius ≈ 0.6r)."""
+    import math
+    out = [f'<path d="{scallop(cx, cy, r * 0.965, 56, r * 0.04)}" fill="{paper}"></path>']
+    for i in range(56):
+        a = 2 * math.pi * (i + 0.5) / 56
+        out.append(f'<circle cx="{cx + r * 0.9 * math.cos(a):.1f}" cy="{cy + r * 0.9 * math.sin(a):.1f}" r="{r * 0.016:.1f}" fill="{hole}"></circle>')
+    for i in range(28):
+        a = 360 * i / 28
+        x, y = cx + r * 0.79 * math.cos(math.radians(a)), cy + r * 0.79 * math.sin(math.radians(a))
+        out.append(f'<ellipse cx="{x:.1f}" cy="{y:.1f}" rx="{r * 0.055:.1f}" ry="{r * 0.02:.1f}" fill="{hole}" transform="rotate({a:.1f} {x:.1f} {y:.1f})"></ellipse>')
+    for i in range(42):
+        a = 2 * math.pi * (i + 0.5) / 42
+        out.append(f'<circle cx="{cx + r * 0.69 * math.cos(a):.1f}" cy="{cy + r * 0.69 * math.sin(a):.1f}" r="{r * 0.009:.1f}" fill="{hole}"></circle>')
+    out.append(f'<path d="{scallop(cx, cy, r * 0.62, 30, r * 0.025)}" fill="none" stroke="{hole}" stroke-width="{r * 0.007:.1f}" opacity="0.55"></path>')
+    return "".join(out)
+
+
+def lace_cover(key, label):
+    body = f"""<div style="position: relative; width: 1080px; height: 1080px; overflow: hidden; background: {CARAMEL}">
+{paper_noise(1080, 1080)}
+<svg aria-hidden="true" width="1080" height="1080" style="position: absolute; left: 0; top: 0">{doily(540, 540, 505)}</svg>
+{icon_svg(key, CARAMEL, CHERRY, "rgba(173,122,79,0.32)", 520, 280, 276, stroke=6.5, label=label)}
+</div>"""
+    return page(f"Обложка — {label}, кружево", 1080, 1080, body)
+
+
+def lace_logo():
+    body = f"""<div style="position: relative; width: 1080px; height: 1080px; overflow: hidden; background: {CARAMEL}">
+{paper_noise(1080, 1080)}
+<svg aria-hidden="true" width="1080" height="1080" style="position: absolute; left: 0; top: 0">{doily(540, 540, 510)}</svg>
+<img src="/_blob/a9eac0041f17fa83168692c9ca4fcb63" alt="Торт-сердце на кружевной салфетке" style="position: absolute; left: 322px; top: 334px; width: 436px">
+</div>"""
+    return page("Аватар — кружевная салфетка", 1080, 1080, body)
+
+
 def build_covers():
     for slug, key, label in COVERS:
         for style in STYLES:
             (PROJECT / f"Cover-{slug}-{style}.dc.html").write_text(cover(slug, key, label, style))
+        (PROJECT / f"Cover-{slug}-Lace.dc.html").write_text(lace_cover(key, label))
+    (PROJECT / "Logo-8-Doily.dc.html").write_text(lace_logo())
 
 
 if __name__ == "__main__":
