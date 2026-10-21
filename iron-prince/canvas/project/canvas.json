@@ -1,0 +1,337 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-10-21T10:00:00Z"
+ },
+ "title": "Iron Prince — оформление Instagram",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1080,
+   "h": 2140,
+   "title": "Профиль — как будет выглядеть страница"
+  },
+  "Style.dc.html": {
+   "x": 1160,
+   "y": 0,
+   "w": 1080,
+   "h": 2160,
+   "title": "Фирменный стиль"
+  },
+  "Avatar-1-Crest.dc.html": {
+   "x": 0,
+   "y": 2500,
+   "w": 1080,
+   "h": 1080,
+   "title": "Аватар — полный герб"
+  },
+  "Avatar-2-Znak.dc.html": {
+   "x": 1160,
+   "y": 2500,
+   "w": 1080,
+   "h": 1080,
+   "title": "Аватар — упрощённый знак IP"
+  },
+  "Avatar-3-Svetlyy.dc.html": {
+   "x": 2320,
+   "y": 2500,
+   "w": 1080,
+   "h": 1080,
+   "title": "Аватар — светлый, как визитка"
+  },
+  "Cover-Uslugi-Steel.dc.html": {
+   "x": 0,
+   "y": 3920,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Услуги (Steel)"
+  },
+  "Cover-Ceny-Steel.dc.html": {
+   "x": 1160,
+   "y": 3920,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Цены (Steel)"
+  },
+  "Cover-Raboty-Steel.dc.html": {
+   "x": 2320,
+   "y": 3920,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Работы (Steel)"
+  },
+  "Cover-Do-posle-Steel.dc.html": {
+   "x": 3480,
+   "y": 3920,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — До/после (Steel)"
+  },
+  "Cover-Otzyvy-Steel.dc.html": {
+   "x": 4640,
+   "y": 3920,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Отзывы (Steel)"
+  },
+  "Cover-Zakaz-Steel.dc.html": {
+   "x": 5800,
+   "y": 3920,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Как заказать (Steel)"
+  },
+  "Cover-Garantiya-Steel.dc.html": {
+   "x": 6960,
+   "y": 3920,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Гарантия (Steel)"
+  },
+  "Cover-Uslugi-Scarlet.dc.html": {
+   "x": 0,
+   "y": 5340,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Услуги (Scarlet)"
+  },
+  "Cover-Ceny-Scarlet.dc.html": {
+   "x": 1160,
+   "y": 5340,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Цены (Scarlet)"
+  },
+  "Cover-Raboty-Scarlet.dc.html": {
+   "x": 2320,
+   "y": 5340,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Работы (Scarlet)"
+  },
+  "Cover-Do-posle-Scarlet.dc.html": {
+   "x": 3480,
+   "y": 5340,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — До/после (Scarlet)"
+  },
+  "Cover-Otzyvy-Scarlet.dc.html": {
+   "x": 4640,
+   "y": 5340,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Отзывы (Scarlet)"
+  },
+  "Cover-Zakaz-Scarlet.dc.html": {
+   "x": 5800,
+   "y": 5340,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Как заказать (Scarlet)"
+  },
+  "Cover-Garantiya-Scarlet.dc.html": {
+   "x": 6960,
+   "y": 5340,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Гарантия (Scarlet)"
+  },
+  "Cover-Uslugi-Ivory.dc.html": {
+   "x": 0,
+   "y": 6760,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Услуги (Ivory)"
+  },
+  "Cover-Ceny-Ivory.dc.html": {
+   "x": 1160,
+   "y": 6760,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Цены (Ivory)"
+  },
+  "Cover-Raboty-Ivory.dc.html": {
+   "x": 2320,
+   "y": 6760,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Работы (Ivory)"
+  },
+  "Cover-Do-posle-Ivory.dc.html": {
+   "x": 3480,
+   "y": 6760,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — До/после (Ivory)"
+  },
+  "Cover-Otzyvy-Ivory.dc.html": {
+   "x": 4640,
+   "y": 6760,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Отзывы (Ivory)"
+  },
+  "Cover-Zakaz-Ivory.dc.html": {
+   "x": 5800,
+   "y": 6760,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Как заказать (Ivory)"
+  },
+  "Cover-Garantiya-Ivory.dc.html": {
+   "x": 6960,
+   "y": 6760,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Гарантия (Ivory)"
+  },
+  "Story-1-Uslugi.dc.html": {
+   "x": 0,
+   "y": 8180,
+   "w": 1080,
+   "h": 1920,
+   "title": "История — Услуги"
+  },
+  "Story-2-Ceny-Chistka.dc.html": {
+   "x": 1160,
+   "y": 8180,
+   "w": 1080,
+   "h": 1920,
+   "title": "История — цены: Чистка и обслуживание"
+  },
+  "Story-3-Ceny-Komplektuyushchie.dc.html": {
+   "x": 2320,
+   "y": 8180,
+   "w": 1080,
+   "h": 1920,
+   "title": "История — цены: Замена и установка"
+  },
+  "Story-4-Ceny-Nastroyka.dc.html": {
+   "x": 3480,
+   "y": 8180,
+   "w": 1080,
+   "h": 1920,
+   "title": "История — цены: Настройка"
+  },
+  "Story-5-Ceny-Dopolnitelno.dc.html": {
+   "x": 4640,
+   "y": 8180,
+   "w": 1080,
+   "h": 1920,
+   "title": "История — цены: Дополнительно"
+  },
+  "Story-6-Ceny-Kompleksy.dc.html": {
+   "x": 5800,
+   "y": 8180,
+   "w": 1080,
+   "h": 1920,
+   "title": "История — цены: комплексы"
+  },
+  "Story-7-Kak-zakazat.dc.html": {
+   "x": 6960,
+   "y": 8180,
+   "w": 1080,
+   "h": 1920,
+   "title": "История — Как заказать"
+  },
+  "Story-8-Garantiya.dc.html": {
+   "x": 8120,
+   "y": 8180,
+   "w": 1080,
+   "h": 1920,
+   "title": "История — Гарантия и условия"
+  },
+  "Post-1-Znakomstvo.dc.html": {
+   "x": 0,
+   "y": 10440,
+   "w": 1080,
+   "h": 1440,
+   "title": "Пост — знакомство"
+  },
+  "Post-2-Do-posle.dc.html": {
+   "x": 1160,
+   "y": 10440,
+   "w": 1080,
+   "h": 1440,
+   "title": "Пост — до / после"
+  },
+  "Post-3-Sborka-pod-klyuch.dc.html": {
+   "x": 2320,
+   "y": 10440,
+   "w": 1080,
+   "h": 1440,
+   "title": "Пост — сборка под ключ"
+  },
+  "Post-4-Chistka.dc.html": {
+   "x": 3480,
+   "y": 10440,
+   "w": 1080,
+   "h": 1440,
+   "title": "Пост — что входит в чистку"
+  },
+  "Post-5-Temperatury.dc.html": {
+   "x": 4640,
+   "y": 10440,
+   "w": 1080,
+   "h": 1440,
+   "title": "Пост — температуры до / после"
+  },
+  "Post-6-Otzyv.dc.html": {
+   "x": 5800,
+   "y": 10440,
+   "w": 1080,
+   "h": 1440,
+   "title": "Пост — отзыв"
+  }
+ },
+ "order": [
+  "Main.dc.html",
+  "Style.dc.html",
+  "Avatar-1-Crest.dc.html",
+  "Avatar-2-Znak.dc.html",
+  "Avatar-3-Svetlyy.dc.html",
+  "Cover-Uslugi-Steel.dc.html",
+  "Cover-Ceny-Steel.dc.html",
+  "Cover-Raboty-Steel.dc.html",
+  "Cover-Do-posle-Steel.dc.html",
+  "Cover-Otzyvy-Steel.dc.html",
+  "Cover-Zakaz-Steel.dc.html",
+  "Cover-Garantiya-Steel.dc.html",
+  "Cover-Uslugi-Scarlet.dc.html",
+  "Cover-Ceny-Scarlet.dc.html",
+  "Cover-Raboty-Scarlet.dc.html",
+  "Cover-Do-posle-Scarlet.dc.html",
+  "Cover-Otzyvy-Scarlet.dc.html",
+  "Cover-Zakaz-Scarlet.dc.html",
+  "Cover-Garantiya-Scarlet.dc.html",
+  "Cover-Uslugi-Ivory.dc.html",
+  "Cover-Ceny-Ivory.dc.html",
+  "Cover-Raboty-Ivory.dc.html",
+  "Cover-Do-posle-Ivory.dc.html",
+  "Cover-Otzyvy-Ivory.dc.html",
+  "Cover-Zakaz-Ivory.dc.html",
+  "Cover-Garantiya-Ivory.dc.html",
+  "Story-1-Uslugi.dc.html",
+  "Story-2-Ceny-Chistka.dc.html",
+  "Story-3-Ceny-Komplektuyushchie.dc.html",
+  "Story-4-Ceny-Nastroyka.dc.html",
+  "Story-5-Ceny-Dopolnitelno.dc.html",
+  "Story-6-Ceny-Kompleksy.dc.html",
+  "Story-7-Kak-zakazat.dc.html",
+  "Story-8-Garantiya.dc.html",
+  "Post-1-Znakomstvo.dc.html",
+  "Post-2-Do-posle.dc.html",
+  "Post-3-Sborka-pod-klyuch.dc.html",
+  "Post-4-Chistka.dc.html",
+  "Post-5-Temperatury.dc.html",
+  "Post-6-Otzyv.dc.html"
+ ],
+ "notes": {}
+}

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Знак Iron Prince" width="1000" height="1000" viewBox="0 0 240 240">
+<path d="M40 56 H200 V122 C200 176 162 206 120 224 C78 206 40 176 40 122 Z" fill="#2B2F36" stroke="#C9CED6" stroke-width="6" stroke-linejoin="round"></path>
+<path d="M80 48 L80 20 L100 34 L120 8 L140 34 L160 20 L160 48 Z" fill="#E04B5A" stroke="#C9CED6" stroke-width="4.0" stroke-linejoin="round"></path>
+<rect x="76" y="44" width="88" height="9" rx="2" fill="#C9CED6"></rect>
+<circle cx="80" cy="17" r="5" fill="#C9CED6"></circle><circle cx="120" cy="6" r="5" fill="#C9CED6"></circle><circle cx="160" cy="17" r="5" fill="#C9CED6"></circle>
+<text x="120" y="160" text-anchor="middle" font-family="Cinzel, serif" font-weight="700" font-size="84" letter-spacing="2" fill="#C9CED6">IP</text>
+</svg>
