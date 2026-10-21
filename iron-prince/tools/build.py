@@ -3,7 +3,7 @@
     python3 iron-prince/tools/build.py
     node iron-prince/tools/render.mjs          # PNG in iron-prince/export/
 
-Prices and texts live in the lists below (PRICES, BIO, HIGHLIGHTS): edit them, rebuild,
+Texts live in the lists below (BIO, HIGHLIGHTS): edit them, rebuild,
 re-render. The crest is the «Crest» logo from the Figma file «Логотип Василия — концепты».
 """
 import json
@@ -42,54 +42,6 @@ BIO = [
     "Минск · гарантия 1 месяц",
     "Консультация бесплатно — пишите ↓",
 ]
-
-# The user's price list (doc «Прайс-лист: обслуживание и апгрейд ПК», 2026-10-08).
-PRICES = {
-    "chistka": ("Чистка и обслуживание", [
-        ("Экспресс-чистка без разборки: продувка, фильтры", "25"),
-        ("Полная чистка с разборкой и заменой термопасты", "45"),
-        ("Обслуживание видеокарты: разборка, чистка, термопаста", "40"),
-        ("Замена термопрокладок на видеокарте", "+20"),
-        ("Смазка или замена вентилятора, за 1 шт.", "5"),
-        ("Чистка ноутбука с заменой термопасты", "50"),
-    ]),
-    "komplektuyushchie": ("Замена и установка", [
-        ("Сборка ПК с нуля под ключ, с укладкой кабелей", "100"),
-        ("Сложная сборка: СВО, 6+ вентиляторов, вертикальная видеокарта", "от 140"),
-        ("Замена материнской платы (полная пересборка)", "50"),
-        ("Замена процессора с термопастой", "20"),
-        ("Замена или установка кулера процессора", "15"),
-        ("Замена видеокарты", "15"),
-        ("Замена блока питания", "20"),
-        ("Установка SSD или HDD", "10"),
-        ("Установка оперативной памяти", "5"),
-        ("Укладка кабелей в собранном ПК", "20"),
-    ]),
-    "nastroyka": ("Настройка", [
-        ("Базовая настройка BIOS: память, Resizable BAR, fTPM", "20"),
-        ("Обновление BIOS", "25"),
-        ("Андервольт процессора с тестами стабильности", "40"),
-        ("Кривые вентиляторов: процессор, корпус, видеокарта", "20"),
-        ("Windows с драйверами и базовыми программами", "40"),
-        ("Установка или обновление драйверов", "15"),
-        ("Диагностика (бесплатно, если ремонт делаю я)", "15"),
-    ]),
-    "dop": ("Дополнительно", [
-        ("Подбор конфигурации из новых комплектующих", "30"),
-        ("Подбор с б/у комплектующими: поиск, проверка", "6% бюджета"),
-        ("Выезд на проверку б/у комплектующего", "15"),
-        ("Заказ комплектующих и доставка до клиента", "20"),
-        ("Выезд на дом по городу", "15"),
-        ("Срочная работа в тот же день", "+30%"),
-    ]),
-}
-BUNDLES = [
-    ("Профилактика", "Полная чистка с термопастой + обслуживание видеокарты", "85", "70"),
-    ("Сборка под ключ", "Сборка + Windows + настройка BIOS + кривые вентиляторов", "180", "150"),
-    ("Новый ПК с нуля", "Подбор + заказ и доставка + сборка + Windows + BIOS и вентиляторы", "230", "190"),
-    ("Апгрейд под ключ", "Комплектующие + процессор и память + чистка + видеокарта + настройка", "210", "175"),
-]
-
 
 def page(title, w, h, body):
     return f"""<!doctype html>
@@ -207,7 +159,6 @@ def header(w, top=96, color=STEEL):
 
 ICONS = {
     "uslugi": '<path d="M64 14a18 18 0 0 0-17 24L16 69a8 8 0 0 0 11 11l31-31a18 18 0 0 0 24-17L71 43l-12-3-3-12z"></path>',
-    "ceny": '<path d="M52 14H82a4 4 0 0 1 4 4v30L50 84 16 50z"></path><circle cx="69" cy="31" r="6"></circle>',
     "raboty": '<rect x="28" y="12" width="44" height="76" rx="5"></rect><circle cx="50" cy="60" r="14"></circle><path d="M37 25H63M37 34H55"></path>',
     "doposle": '<rect x="12" y="22" width="76" height="56" rx="6"></rect><path d="M50 14V86"></path><circle cx="50" cy="50" r="10" fill="BG"></circle><path d="M47 46l-4 4 4 4M53 46l4 4-4 4"></path>',
     "otzyvy": '<path d="M50 13l11 24 26 3-19 18 5 26-23-13-23 13 5-26-19-18 26-3z"></path>',
@@ -255,7 +206,7 @@ def avatars():
 # ---------- 02: highlight covers ----------
 
 HIGHLIGHTS = [
-    ("uslugi", "Услуги", "Uslugi"), ("ceny", "Цены", "Ceny"), ("raboty", "Работы", "Raboty"),
+    ("uslugi", "Услуги", "Uslugi"), ("raboty", "Работы", "Raboty"),
     ("doposle", "До/после", "Do-posle"), ("otzyvy", "Отзывы", "Otzyvy"),
     ("zakaz", "Как заказать", "Zakaz"), ("garantiya", "Гарантия", "Garantiya"),
 ]
@@ -302,18 +253,6 @@ def story(title, inner, bg=NIGHT, fg=STEEL):
 </div>"""
 
 
-def price_rows(rows, size=34, gap=34):
-    out = []
-    for name, price in rows:
-        unit = "" if any(c in price for c in "%") or not price.strip("+от ").isdigit() else " р."
-        out.append(f"""<div style="display: flex; align-items: baseline; gap: 16px">
-<div style="flex: 0 1 auto; font-weight: 500; font-size: {size}px; line-height: 1.3; color: {SILVER}">{name}</div>
-<div style="flex: 1 1 40px; min-width: 40px; border-bottom: 3px dotted rgba(201,206,214,0.35); transform: translateY(-8px)"></div>
-<div style="flex: 0 0 auto; {FORUM}; font-size: {round(size * 1.5)}px; line-height: 1; color: #FFFFFF; white-space: nowrap">{price}<span style="{SANS}; font-weight: 500; font-size: {round(size * 0.7)}px; color: {MUTED}">{unit}</span></div>
-</div>""")
-    return f'<div style="display: flex; flex-direction: column; gap: {gap}px">{"".join(out)}</div>'
-
-
 def story_title(eyebrow_text, title, top=330, size=120):
     return f"""<div style="position: absolute; left: 110px; right: 110px; top: {top}px; display: flex; flex-direction: column; align-items: flex-start; gap: 22px">
 {eyebrow(eyebrow_text)}
@@ -338,26 +277,6 @@ def stories():
 <div style="position: absolute; left: 110px; right: 110px; top: 1480px; font-weight: 500; font-size: 32px; line-height: 1.4; color: {STEEL}">Стоимость называю до начала работ. В конце — фотоотчёт и результаты тестов.</div>"""
     boards["Story-1-Uslugi"] = ("История — Услуги", page("История — Услуги", 1080, 1920, story("Услуги", inner)))
 
-    for i, (key, slug) in enumerate([("chistka", "Chistka"), ("komplektuyushchie", "Komplektuyushchie"),
-                                     ("nastroyka", "Nastroyka"), ("dop", "Dopolnitelno")], start=2):
-        title, rows = PRICES[key]
-        small = len(rows) > 7
-        inner = story_title(f"ПРАЙС · {i - 1} / 5", title, size=104 if len(title) > 14 else 120) + f"""
-<div style="position: absolute; left: 110px; right: 110px; top: 640px">{price_rows(rows, size=30 if small else 34, gap=26 if small else 40)}</div>
-<div style="position: absolute; left: 110px; right: 110px; top: 1560px; font-weight: 500; font-size: 26px; line-height: 1.4; color: {MUTED}">Цены в рублях за работу, без комплектующих.</div>"""
-        boards[f"Story-{i}-Ceny-{slug}"] = (f"История — цены: {title}", page(f"История — цены: {title}", 1080, 1920, story(title, inner)))
-
-    bundle_cards = "".join(f"""<div style="display: flex; justify-content: space-between; gap: 30px; align-items: center; padding: 34px 40px; background: {PANEL}; border: 2px solid {HAIR}">
-<div style="display: flex; flex-direction: column; gap: 10px"><div style="{FORUM}; font-size: 52px; line-height: 1; color: #FFFFFF">{n}</div>
-<div style="font-weight: 500; font-size: 26px; line-height: 1.35; color: {STEEL}">{d}</div></div>
-<div style="display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0"><div style="font-weight: 500; font-size: 28px; color: {MUTED}; text-decoration: line-through">{old} р.</div>
-<div style="{FORUM}; font-size: 76px; line-height: 1; color: {SCARLET}">{new}<span style="{SANS}; font-weight: 500; font-size: 26px; color: {MUTED}"> р.</span></div></div></div>"""
-                           for n, d, old, new in BUNDLES)
-    inner = story_title("ПРАЙС · 5 / 5", "Комплексы") + f"""
-<div style="position: absolute; left: 110px; right: 110px; top: 620px; display: flex; flex-direction: column; gap: 22px">{bundle_cards}</div>
-<div style="position: absolute; left: 110px; right: 110px; top: 1580px; font-weight: 500; font-size: 26px; line-height: 1.4; color: {MUTED}">С б/у комплектующими к «Новому ПК» вместо подбора добавляется 6% от бюджета (мин. 50, макс. 200 р.).</div>"""
-    boards["Story-6-Ceny-Kompleksy"] = ("История — цены: комплексы", page("История — цены: комплексы", 1080, 1920, story("Комплексы", inner)))
-
     steps = [
         ("Пишете, что нужно", "Консультирую бесплатно и называю стоимость до начала работ."),
         ("Фиксируем состояние", "При приёме фотографируем технику — вы спокойны, я тоже."),
@@ -371,7 +290,7 @@ def stories():
     inner = story_title("ПОРЯДОК РАБОТЫ", "Как заказать") + f"""
 <div style="position: absolute; left: 110px; right: 110px; top: 660px; display: flex; flex-direction: column; gap: 64px">{step_html}</div>
 <div style="position: absolute; left: 110px; right: 110px; top: 1420px; padding: 30px 36px; border: 2px solid {SCARLET}; font-weight: 500; font-size: 30px; line-height: 1.4; color: {SILVER}">Чистка — обычно в тот же или на следующий день. Сборка — 1–2 дня после получения комплектующих.</div>"""
-    boards["Story-7-Kak-zakazat"] = ("История — Как заказать", page("История — Как заказать", 1080, 1920, story("Как заказать", inner)))
+    boards["Story-2-Kak-zakazat"] = ("История — Как заказать", page("История — Как заказать", 1080, 1920, story("Как заказать", inner)))
 
     terms = [
         "Гарантия на выполненную работу — 1 месяц.",
@@ -388,7 +307,7 @@ def stories():
 {eyebrow("ЧЕСТНЫЕ УСЛОВИЯ")}
 <div style="{FORUM}; font-size: 120px; line-height: 1; color: #FFFFFF">Гарантия</div></div>
 <div style="position: absolute; left: 110px; right: 110px; top: 830px; display: flex; flex-direction: column; gap: 40px">{term_html}</div>"""
-    boards["Story-8-Garantiya"] = ("История — Гарантия и условия", page("История — Гарантия и условия", 1080, 1920, story("Гарантия", inner)))
+    boards["Story-3-Garantiya"] = ("История — Гарантия и условия", page("История — Гарантия и условия", 1080, 1920, story("Гарантия", inner)))
     return boards
 
 
@@ -437,34 +356,6 @@ def posts():
 <div style="display: flex; align-items: center; gap: 16px; padding: 18px 26px; border: 2px solid {HAIR}">{icon("termo", 56, SCARLET, stroke=6)}<div style="{FORUM}; font-size: 54px; color: #FFFFFF">[92]<span style="{SANS}; font-weight: 500">°</span> → [68]<span style="{SANS}; font-weight: 500">°</span></div></div></div>"""
     boards["Post-2-Do-posle"] = ("Пост — до / после", page("Пост — до / после", PW, PH, post_shell(inner)))
 
-    items = [("sborka", "Сборка и укладка кабелей"), ("windows", "Windows и драйверы"),
-             ("nastroyka", "Настройка BIOS"), ("chistka", "Кривые вентиляторов")]
-    items_html = "".join(f"""<div style="display: flex; align-items: center; gap: 26px">{icon(k, 76, SCARLET, stroke=5.5)}
-<div style="font-weight: 500; font-size: 36px; color: {SILVER}">{t}</div></div>""" for k, t in items)
-    inner = f"""{header(PW, top=92)}
-{photo_slot(84, 200, 912, 560, ("СБОРКА", SILVER, INK), "фото сборки")}
-<div style="position: absolute; left: 110px; right: 110px; top: 810px; display: flex; justify-content: space-between; align-items: flex-start">
-<div style="display: flex; flex-direction: column; gap: 30px">{eyebrow("КОМПЛЕКС")}<div style="{FORUM}; font-size: 96px; line-height: 1; color: #FFFFFF">Сборка<br>под ключ</div></div>
-<div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px; margin-top: 40px"><div style="font-weight: 500; font-size: 36px; color: {MUTED}; text-decoration: line-through">180 р.</div>
-<div style="{FORUM}; font-size: 150px; line-height: 1; color: {SCARLET}">150<span style="{SANS}; font-weight: 500; font-size: 40px; color: {MUTED}"> р.</span></div></div></div>
-<div style="position: absolute; left: 110px; right: 110px; top: 1100px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 30px 40px">{items_html}</div>"""
-    boards["Post-3-Sborka-pod-klyuch"] = ("Пост — сборка под ключ", page("Пост — сборка под ключ", PW, PH, post_shell(inner)))
-
-    checklist = [("Разборка и продувка корпуса", "uslugi"), ("Чистка лопастей и фильтров", "chistka"),
-                 ("Замена термопасты", "termo"), ("Проверка температур под нагрузкой", "garantiya")]
-    check_html = "".join(f"""<div style="display: flex; align-items: center; gap: 32px; padding: 30px 36px; background: {PANEL}; border: 2px solid {HAIR}">
-<div style="{CINZEL}; font-weight: 700; font-size: 44px; color: {SCARLET}; width: 70px">{['I', 'II', 'III', 'IV'][n]}</div>
-<div style="font-weight: 500; font-size: 36px; line-height: 1.25; color: {SILVER}">{t}</div>
-<div style="margin-left: auto; flex-shrink: 0">{icon(k, 64, STEEL, bg=PANEL, stroke=5.5)}</div></div>""" for n, (t, k) in enumerate(checklist))
-    inner = f"""{header(PW, top=92)}
-<div style="position: absolute; left: 110px; right: 110px; top: 220px; display: flex; flex-direction: column; gap: 24px">
-{eyebrow("ЧТО ВХОДИТ")}<div style="{FORUM}; font-size: 120px; line-height: 1; color: #FFFFFF">Полная чистка</div>{rule()}</div>
-<div style="position: absolute; left: 110px; right: 110px; top: 520px; display: flex; flex-direction: column; gap: 22px">{check_html}</div>
-<div style="position: absolute; left: 110px; right: 110px; top: 1190px; display: flex; justify-content: space-between; align-items: baseline">
-<div style="font-weight: 500; font-size: 34px; color: {STEEL}">ПК — <span style="{FORUM}; font-size: 72px; color: #FFFFFF">45</span> р.</div>
-<div style="font-weight: 500; font-size: 34px; color: {STEEL}">ноутбук — <span style="{FORUM}; font-size: 72px; color: #FFFFFF">50</span> р.</div></div>"""
-    boards["Post-4-Chistka"] = ("Пост — что входит в чистку", page("Пост — что входит в чистку", PW, PH, post_shell(inner)))
-
     inner = f"""{header(PW, top=92)}
 <div style="position: absolute; left: 0; right: 0; top: 270px; display: flex; flex-direction: column; align-items: center; gap: 22px; text-align: center">
 {eyebrow("ЗАЧЕМ ЧИСТИТЬ")}<div style="{FORUM}; font-size: 112px; line-height: 1.02; color: #FFFFFF">Компьютер шумит<br>и греется?</div></div>
@@ -474,7 +365,7 @@ def posts():
 <div style="display: flex; flex-direction: column; align-items: center; gap: 8px"><div style="font-weight: 800; font-size: 28px; letter-spacing: 0.2em; color: {MUTED}">СТАЛО</div><div style="{FORUM}; font-size: 220px; line-height: 1; color: #FFFFFF; white-space: nowrap">[68]<span style="{SANS}; font-weight: 400; font-size: 120px; vertical-align: 70px">°</span></div></div></div>
 <div style="position: absolute; left: 150px; right: 150px; top: 1000px; font-weight: 500; font-size: 36px; line-height: 1.45; color: {STEEL}; text-align: center">Пыль и высохшая термопаста — главные причины перегрева. Чистка с заменой пасты возвращает тишину и запас по температурам.</div>
 <div style="position: absolute; left: 0; right: 0; top: 1240px; text-align: center; font-weight: 500; font-size: 26px; color: {MUTED}">[вставьте реальные температуры процессора до и после]</div>"""
-    boards["Post-5-Temperatury"] = ("Пост — температуры до / после", page("Пост — температуры до / после", PW, PH, post_shell(inner)))
+    boards["Post-3-Temperatury"] = ("Пост — температуры до / после", page("Пост — температуры до / после", PW, PH, post_shell(inner)))
 
     stars = "".join(f'<svg aria-hidden="true" width="64" height="64" viewBox="0 0 100 100"><path d="M50 8l12 27 29 3-22 20 6 29-25-15-25 15 6-29-22-20 29-3z" fill="{SCARLET}"></path></svg>' for _ in range(5))
     inner = f"""{header(PW, top=92)}
@@ -484,14 +375,13 @@ def posts():
 <div style="position: absolute; left: 150px; right: 150px; top: 600px; {FORUM}; font-size: 66px; line-height: 1.2; color: #FFFFFF; text-align: center">[Текст отзыва клиента: что сделали и как теперь работает компьютер]</div>
 <div style="position: absolute; left: 0; right: 0; top: 1060px; display: flex; flex-direction: column; align-items: center; gap: 16px">
 {rule(80)}<div style="font-weight: 700; font-size: 36px; color: {SILVER}">[Имя клиента]</div><div style="font-weight: 500; font-size: 28px; color: {MUTED}">[услуга] · Kufar</div></div>"""
-    boards["Post-6-Otzyv"] = ("Пост — отзыв", page("Пост — отзыв", PW, PH, post_shell(inner)))
+    boards["Post-4-Otzyv"] = ("Пост — отзыв", page("Пост — отзыв", PW, PH, post_shell(inner)))
     return boards
 
 
 # ---------- 00: profile preview and brand sheet ----------
 
-POST_KEYS = ["Post-1-Znakomstvo", "Post-2-Do-posle", "Post-3-Sborka-pod-klyuch",
-             "Post-4-Chistka", "Post-5-Temperatury", "Post-6-Otzyv"]
+POST_KEYS = ["Post-1-Znakomstvo", "Post-2-Do-posle", "Post-3-Temperatury", "Post-4-Otzyv"]
 
 
 def body_of(html):
@@ -500,7 +390,7 @@ def body_of(html):
 
 def main_board(post_boards):
     stats = "".join(f'<div style="display: flex; flex-direction: column; align-items: flex-start"><div style="font-weight: 700; font-size: 40px">{n}</div>'
-                    f'<div style="font-size: 28px; color: #D6D6D6">{t}</div></div>' for n, t in [("6", "публикации"), ("0", "подписчики"), ("0", "подписки")])
+                    f'<div style="font-size: 28px; color: #D6D6D6">{t}</div></div>' for n, t in [("4", "публикации"), ("0", "подписчики"), ("0", "подписки")])
     bio = "".join(f"<div>{line}</div>" for line in BIO)
     hl = "".join(f"""<div style="display: flex; flex-direction: column; align-items: center; gap: 14px; width: 150px">
 <div style="position: relative; width: 140px; height: 140px; border-radius: 50%; overflow: hidden; box-shadow: 0 0 0 3px #363636">
@@ -545,7 +435,7 @@ def style_board():
     fr = "".join(f"""<div style="padding: 24px 0; border-top: 2px solid {HAIR}">
 <div style="font-weight: 800; font-size: 22px; letter-spacing: 0.24em; color: {SCARLET}">{n.upper()} · {r.upper()}</div>
 <div style="margin-top: 10px; line-height: 1.1; color: #FFFFFF; {css}">{s}</div></div>""" for n, r, css, s in fonts)
-    icons = "".join(icon(k, 92, STEEL, stroke=4.5) for k in ["sborka", "chistka", "nastroyka", "uslugi", "ceny", "garantiya", "otzyvy", "zakaz"])
+    icons = "".join(icon(k, 92, STEEL, stroke=4.5) for k in ["sborka", "chistka", "nastroyka", "uslugi", "raboty", "garantiya", "otzyvy", "zakaz"])
     body = f"""<div style="position: relative; width: 1080px; height: 2160px; overflow: hidden; background: {NIGHT}; {SANS}; color: {SILVER}">
 {brushed(1080, 2160)}
 {frame(1080, 2160)}
