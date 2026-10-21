@@ -3,35 +3,33 @@
     python3 iron-prince/tools/build.py
     node iron-prince/tools/render.mjs          # PNG in iron-prince/export/
 
-Texts live in the lists below (BIO, HIGHLIGHTS): edit them, rebuild,
-re-render. The crest is the «Crest» logo from the Figma file «Логотип Василия — концепты».
+Texts live in the lists below (BIO, HIGHLIGHTS): edit them, rebuild, re-render.
+Light style after the business card: warm paper, dark ink, hairlines, one red accent.
+The main mark is the card's monogram (thin shield with «IP» under a crown); the
+full «Crest» from the Figma file «Логотип Василия — концепты» is drawn in outline.
 """
 import json
-import math
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PROJECT = ROOT / "canvas" / "project"
 
-# Palette of the crest.
-NIGHT = "#15171A"
-PANEL = "#1E2126"
-FIELD = "#2B2F36"
-STEEL = "#C9CED6"
-SILVER = "#E7E9ED"
-SCARLET = "#E04B5A"
-MUTED = "#8C929C"
-IVORY = "#EEE9E0"
-INK = "#17181B"
-HAIR = "rgba(201,206,214,0.28)"
+# Palette of the business card.
+PAPER = "#EDE6DF"
+CARD = "#F5F0EA"
+INK = "#24211E"
+SOFT = "#4A443E"
+MUTED = "#6E655D"
+RED = "#C9454F"
+HAIR = "rgba(36,33,30,0.22)"
+LINE = "rgba(36,33,30,0.55)"
 
 FONTS = (
-    '<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&amp;family=Forum'
-    '&amp;family=Manrope:wght@400;500;700;800&amp;display=swap" rel="stylesheet">'
+    '<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;1,400'
+    '&amp;family=Poppins:wght@300;400&amp;display=swap" rel="stylesheet">'
 )
-CINZEL = "font-family: 'Cinzel', serif"
-FORUM = "font-family: 'Forum', serif"
-SANS = "font-family: 'Manrope', sans-serif"
+SERIF = "font-family: 'Lora', serif"
+POPPINS = "font-family: 'Poppins', sans-serif"
 
 PHONE = "+375 29 946 58 63"
 HANDLE = "ironprince.minsk"
@@ -42,6 +40,7 @@ BIO = [
     "Минск · гарантия 1 месяц",
     "Консультация бесплатно — пишите ↓",
 ]
+
 
 def page(title, w, h, body):
     return f"""<!doctype html>
@@ -71,88 +70,81 @@ return {{}};
 """
 
 
+def at(x, y):
+    return "" if x is None else f' style="position: absolute; left: {x}px; top: {y}px"'
+
+
 # ---------- logo ----------
 
-def crest(size, steel=STEEL, field=FIELD, accent=SCARLET, x=None, y=None, label="Герб Iron Prince"):
-    """The final crest: quartered shield with an inner frame, riveted crown, four service icons."""
-    pos = "" if x is None else f' style="position: absolute; left: {x}px; top: {y}px"'
-    notch = field if field != "none" else NIGHT
+def monogram(size, color=INK, accent=RED, x=None, y=None, line=5):
+    """The card's monogram: thin shield with serif «IP», a crown with balls on its tips."""
+    return f"""<svg role="img" aria-label="Знак Iron Prince" width="{size}" height="{size}" viewBox="0 0 240 240"{at(x, y)}>
+<path d="M88 46 L80 18 L102 34 L120 12 L138 34 L160 18 L152 46 Z" fill="none" stroke="{color}" stroke-width="{line}" stroke-linejoin="miter"></path>
+<circle cx="80" cy="16" r="6" fill="{color}"></circle><circle cx="120" cy="9" r="6.5" fill="{accent}"></circle><circle cx="160" cy="16" r="6" fill="{color}"></circle>
+<rect x="86" y="52" width="68" height="7" fill="{color}"></rect>
+<path d="M62 72 H178 V140 C178 178 152 200 120 218 C88 200 62 178 62 140 Z" fill="none" stroke="{color}" stroke-width="{line}" stroke-linejoin="miter"></path>
+<text x="121" y="172" text-anchor="middle" font-family="Lora, serif" font-weight="400" font-size="92" letter-spacing="-2" fill="{color}">IP</text>
+</svg>"""
+
+
+def crest(size, color=INK, accent=RED, bg=PAPER, x=None, y=None, label="Герб Iron Prince"):
+    """The «Crest» in outline: quartered shield, crown, four service icons."""
     blade = "M80 155 C77 141 86 133 98 134 C97 147 90 153 80 155 Z"
-    blades = "".join(f'<path d="{blade}" fill="{steel}" transform="rotate({a} 80 155)"></path>' for a in (0, 120, 240))
-    pins = "".join(f'<rect x="{px}" y="{py}" width="4" height="7" fill="{steel}"></rect>'
+    blades = "".join(f'<path d="{blade}" fill="{color}" transform="rotate({a} 80 155)"></path>' for a in (0, 120, 240))
+    pins = "".join(f'<rect x="{px}" y="{py}" width="4" height="7" fill="{color}"></rect>'
                    for px in (151, 159, 167) for py in (67, 104))
-    pins += "".join(f'<rect x="{px}" y="{py}" width="7" height="4" fill="{steel}"></rect>'
+    pins += "".join(f'<rect x="{px}" y="{py}" width="7" height="4" fill="{color}"></rect>'
                     for px in (138, 175) for py in (79, 87, 95))
-    return f"""<svg role="img" aria-label="{label}" width="{size}" height="{size}" viewBox="0 0 240 240"{pos}>
-<path d="M40 56 H200 V122 C200 176 162 206 120 224 C78 206 40 176 40 122 Z" fill="{field}" stroke="{steel}" stroke-width="6" stroke-linejoin="round"></path>
-<path d="M49 65 H191 V122 C191 170 157 195 120 214 C83 195 49 170 49 122 Z" fill="none" stroke="{steel}" stroke-width="1.6" opacity="0.7"></path>
-<path d="M120 65 V214 M49 122 H191" stroke="{steel}" stroke-width="4"></path>
-<path d="M80 48 L80 20 L100 34 L120 8 L140 34 L160 20 L160 48 Z" fill="{accent}" stroke="{steel}" stroke-width="4" stroke-linejoin="round"></path>
-<rect x="76" y="44" width="88" height="9" rx="2" fill="{steel}"></rect>
-<circle cx="80" cy="17" r="5" fill="{steel}"></circle><circle cx="120" cy="6" r="5" fill="{steel}"></circle><circle cx="160" cy="17" r="5" fill="{steel}"></circle>
+    return f"""<svg role="img" aria-label="{label}" width="{size}" height="{size}" viewBox="0 0 240 240"{at(x, y)}>
+<path d="M40 56 H200 V122 C200 176 162 206 120 224 C78 206 40 176 40 122 Z" fill="none" stroke="{color}" stroke-width="5"></path>
+<path d="M49 65 H191 V122 C191 170 157 195 120 214 C83 195 49 170 49 122 Z" fill="none" stroke="{color}" stroke-width="1.4" opacity="0.6"></path>
+<path d="M120 65 V214 M49 122 H191" stroke="{color}" stroke-width="3"></path>
+<path d="M82 46 L78 20 L100 34 L120 10 L140 34 L162 20 L158 46 Z" fill="none" stroke="{color}" stroke-width="4"></path>
+<rect x="80" y="50" width="80" height="6" fill="{color}"></rect>
+<circle cx="78" cy="17" r="5" fill="{color}"></circle><circle cx="120" cy="7" r="5.5" fill="{accent}"></circle><circle cx="162" cy="17" r="5" fill="{color}"></circle>
 <polygon points="90,74 68,100 82,100 74,116 100,88 86,88 94,74" fill="{accent}"></polygon>
-<rect x="145" y="74" width="30" height="30" rx="4" fill="{steel}"></rect><rect x="153" y="82" width="14" height="14" rx="2" fill="{notch}"></rect>{pins}
-<circle cx="84" cy="165" r="24" fill="none" stroke="{steel}" stroke-width="4"></circle>
-<g transform="translate(4 7)">{blades}</g><circle cx="84" cy="162" r="4" fill="{notch}"></circle>
-<g transform="rotate(-45 156 162)"><rect x="151" y="146" width="10" height="40" rx="4" fill="{accent}"></rect><circle cx="156" cy="142" r="13" fill="{accent}"></circle><rect x="151" y="126" width="10" height="15" fill="{notch}"></rect></g>
+<rect x="145" y="74" width="30" height="30" rx="4" fill="{color}"></rect><rect x="153" y="82" width="14" height="14" rx="2" fill="{bg}"></rect>{pins}
+<circle cx="84" cy="165" r="24" fill="none" stroke="{color}" stroke-width="3.5"></circle>
+<g transform="translate(4 7)">{blades}</g><circle cx="84" cy="162" r="4" fill="{bg}"></circle>
+<g transform="rotate(-45 156 162)"><rect x="151" y="146" width="10" height="40" rx="4" fill="{accent}"></rect><circle cx="156" cy="142" r="13" fill="{accent}"></circle><rect x="151" y="126" width="10" height="15" fill="{bg}"></rect></g>
 </svg>"""
 
 
-def sign(size, steel=STEEL, field=FIELD, accent=SCARLET, x=None, y=None, letters=None, line=6):
-    """Simplified sign for small sizes: shield, crown and «IP»."""
-    pos = "" if x is None else f' style="position: absolute; left: {x}px; top: {y}px"'
-    letters = letters or steel
-    return f"""<svg role="img" aria-label="Знак Iron Prince" width="{size}" height="{size}" viewBox="0 0 240 240"{pos}>
-<path d="M40 56 H200 V122 C200 176 162 206 120 224 C78 206 40 176 40 122 Z" fill="{field}" stroke="{steel}" stroke-width="{line}" stroke-linejoin="round"></path>
-<path d="M80 48 L80 20 L100 34 L120 8 L140 34 L160 20 L160 48 Z" fill="{accent}" stroke="{steel}" stroke-width="{line * 2 / 3:.1f}" stroke-linejoin="round"></path>
-<rect x="76" y="44" width="88" height="9" rx="2" fill="{steel}"></rect>
-<circle cx="80" cy="17" r="5" fill="{steel}"></circle><circle cx="120" cy="6" r="5" fill="{steel}"></circle><circle cx="160" cy="17" r="5" fill="{steel}"></circle>
-<text x="120" y="160" text-anchor="middle" font-family="Cinzel, serif" font-weight="700" font-size="84" letter-spacing="2" fill="{letters}">IP</text>
-</svg>"""
-
-
-def wordmark(size=64, color=STEEL, sub=None, sub_color=SCARLET, spacing=0.06):
-    s = f'<div style="{CINZEL}; font-weight: 700; font-size: {size}px; line-height: 1; letter-spacing: {spacing}em; color: {color}">IRON PRINCE</div>'
-    if sub:
-        s += (f'<div style="{CINZEL}; font-size: {round(size * 0.3)}px; letter-spacing: 0.32em; color: {sub_color}; '
-              f'margin-top: {round(size * 0.22)}px">{sub}</div>')
-    return f'<div style="display: flex; flex-direction: column; align-items: center; text-align: center">{s}</div>'
+def wordmark(size=64, color=INK, spacing=0.32):
+    return (f'<div style="{POPPINS}; font-weight: 300; font-size: {size}px; line-height: 1; letter-spacing: {spacing}em; '
+            f'margin-right: -{spacing}em; color: {color}; white-space: nowrap">IRON PRINCE</div>')
 
 
 # ---------- shared decoration ----------
 
-def brushed(w, h, opacity="0.05"):
-    """Faint brushed-steel grain: horizontal stretched noise."""
-    return (f'<svg aria-hidden="true" width="{w}" height="{h}" style="position: absolute; left: 0; top: 0">'
-            '<filter id="grain"><feTurbulence type="fractalNoise" baseFrequency="0.004 0.9" numOctaves="2" stitchTiles="stitch"></feTurbulence>'
-            f'<feColorMatrix values="0 0 0 0 0.8  0 0 0 0 0.82  0 0 0 0 0.86  0 0 0 {opacity} 0"></feColorMatrix></filter>'
-            '<rect width="100%" height="100%" filter="url(#grain)"></rect></svg>')
+def frame(w, h, inset=40, color=HAIR):
+    """One hairline with soft corners, as on the card."""
+    return (f'<div style="position: absolute; left: {inset}px; top: {inset}px; width: {w - 2 * inset}px; height: {h - 2 * inset}px; '
+            f'box-sizing: border-box; border: 2px solid {color}; border-radius: 14px"></div>')
 
 
-def frame(w, h, inset=44, color=HAIR, rivet=STEEL):
-    """Double hairline frame with rivets in the corners — the crest's inner frame."""
-    a, b = inset, inset + 12
-    rivets = "".join(f'<circle cx="{cx}" cy="{cy}" r="5" fill="{rivet}"></circle>'
-                     for cx in (a, w - a) for cy in (a, h - a))
-    return (f'<svg aria-hidden="true" width="{w}" height="{h}" style="position: absolute; left: 0; top: 0">'
-            f'<rect x="{a}" y="{a}" width="{w - 2 * a}" height="{h - 2 * a}" fill="none" stroke="{color}" stroke-width="2"></rect>'
-            f'<rect x="{b}" y="{b}" width="{w - 2 * b}" height="{h - 2 * b}" fill="none" stroke="{color}" stroke-width="1"></rect>'
-            f'{rivets}</svg>')
+def eyebrow(text, color=MUTED, size=24):
+    return f'<div style="{SERIF}; font-weight: 500; font-size: {size}px; letter-spacing: 0.32em; color: {color}">{text}</div>'
 
 
-def eyebrow(text, color=SCARLET, size=24):
-    return f'<div style="{SANS}; font-weight: 800; font-size: {size}px; letter-spacing: 0.3em; color: {color}">{text}</div>'
-
-
-def rule(width=120, color=SCARLET, height=3):
+def rule(width=120, color=RED, height=3):
     return f'<div style="width: {width}px; height: {height}px; background: {color}"></div>'
 
 
-def header(w, top=96, color=STEEL):
-    """Small sign + wordmark on top of stories and posts."""
-    return (f'<div style="position: absolute; left: 0; width: {w}px; top: {top}px; display: flex; justify-content: center; align-items: center; gap: 18px">'
-            f'{sign(64, steel=color, field="none", line=8)}'
-            f'<div style="{CINZEL}; font-weight: 700; font-size: 30px; letter-spacing: 0.24em; color: {color}">IRON PRINCE</div></div>')
+def header(w, top=96):
+    """Small monogram + wordmark on top of stories and posts."""
+    return (f'<div style="position: absolute; left: 0; width: {w}px; top: {top}px; display: flex; justify-content: center; align-items: center; gap: 22px">'
+            f'{monogram(70, line=7)}{wordmark(30)}</div>')
+
+
+def title(text, size=120, italic=True, align="left"):
+    style = "italic" if italic else "normal"
+    return (f'<div style="{SERIF}; font-style: {style}; font-weight: 400; font-size: {size}px; line-height: 1.05; '
+            f'color: {INK}; text-align: {align}">{text}</div>')
+
+
+def text(t, size=32, color=SOFT, extra=""):
+    return f'<div style="{SERIF}; font-size: {size}px; line-height: 1.45; color: {color}; {extra}">{t}</div>'
 
 
 # ---------- icons (viewBox 0 0 100 100, stroke) ----------
@@ -167,39 +159,34 @@ ICONS = {
     "chistka": '<circle cx="50" cy="50" r="36"></circle><path d="M50 46c-3-13 4-22 16-22 0 12-6 19-16 22zM54 52c12 5 15 16 9 26-10-6-12-15-9-26zM45 53c-9 9-21 9-27 0 10-6 19-5 27 0z"></path><circle cx="50" cy="50" r="4"></circle>',
     "sborka": '<rect x="26" y="26" width="48" height="48" rx="5"></rect><rect x="40" y="40" width="20" height="20" rx="2"></rect><path d="M38 14v12M50 14v12M62 14v12M38 74v12M50 74v12M62 74v12M14 38h12M14 50h12M14 62h12M74 38h12M74 50h12M74 62h12"></path>',
     "nastroyka": '<path d="M16 28H84M16 50H84M16 72H84"></path><circle cx="34" cy="28" r="8" fill="BG"></circle><circle cx="64" cy="50" r="8" fill="BG"></circle><circle cx="44" cy="72" r="8" fill="BG"></circle>',
-    "windows": '<rect x="16" y="16" width="68" height="68" rx="6"></rect><path d="M50 16V84M16 50H84"></path>',
     "foto": '<rect x="12" y="26" width="76" height="54" rx="7"></rect><path d="M36 26l6-10h16l6 10"></path><circle cx="50" cy="53" r="14"></circle>',
     "termo": '<path d="M42 58V20a8 8 0 0 1 16 0v38a16 16 0 1 1-16 0z"></path><path d="M50 36v28"></path>',
 }
 
 
-def icon(key, size, color, bg=NIGHT, stroke=5, x=None, y=None, label=None):
-    pos = "" if x is None else f' style="position: absolute; left: {x}px; top: {y}px"'
+def icon(key, size, color, bg=PAPER, stroke=4, x=None, y=None, label=None):
     a11y = f'role="img" aria-label="{label}"' if label else 'aria-hidden="true"'
-    body = ICONS[key].replace("BG", bg).replace("SW2", str(stroke * 2.2))
+    body = ICONS[key].replace("BG", bg).replace("SW2", str(stroke * 2.4))
     return (f'<svg {a11y} width="{size}" height="{size}" viewBox="0 0 100 100" fill="none" stroke="{color}" '
-            f'stroke-width="{stroke}" stroke-linecap="round" stroke-linejoin="round"{pos}>{body}</svg>')
+            f'stroke-width="{stroke}" stroke-linecap="round" stroke-linejoin="round"{at(x, y)}>{body}</svg>')
 
 
 # ---------- 01: avatars ----------
 
 def avatars():
     boards = {}
-    body = f"""<div style="position: relative; width: 1080px; height: 1080px; overflow: hidden; background: {NIGHT}">
-{brushed(1080, 1080)}
-<svg aria-hidden="true" width="1080" height="1080" style="position: absolute; left: 0; top: 0"><circle cx="540" cy="540" r="470" fill="none" stroke="{HAIR}" stroke-width="2"></circle></svg>
-{crest(760, x=160, y=150)}
+    body = f"""<div style="position: relative; width: 1080px; height: 1080px; overflow: hidden; background: {PAPER}">
+{monogram(700, x=190, y=180, line=5)}
 </div>"""
-    boards["Avatar-1-Crest"] = ("Аватар — полный герб", page("Аватар — полный герб", 1080, 1080, body))
-    body = f"""<div style="position: relative; width: 1080px; height: 1080px; overflow: hidden; background: {NIGHT}">
-{brushed(1080, 1080)}
-{sign(720, x=180, y=170, line=7)}
+    boards["Avatar-1-Monogramma"] = ("Аватар — монограмма IP", page("Аватар — монограмма IP", 1080, 1080, body))
+    body = f"""<div style="position: relative; width: 1080px; height: 1080px; overflow: hidden; background: {PAPER}">
+{crest(740, x=170, y=160)}
 </div>"""
-    boards["Avatar-2-Znak"] = ("Аватар — упрощённый знак IP", page("Аватар — упрощённый знак IP", 1080, 1080, body))
-    body = f"""<div style="position: relative; width: 1080px; height: 1080px; overflow: hidden; background: {IVORY}">
-{sign(720, steel=INK, field="none", accent="none", x=180, y=170, letters=INK, line=5)}
+    boards["Avatar-2-Gerb"] = ("Аватар — герб в линию", page("Аватар — герб в линию", 1080, 1080, body))
+    body = f"""<div style="position: relative; width: 1080px; height: 1080px; overflow: hidden; background: {INK}">
+{monogram(700, color=PAPER, x=190, y=180, line=5)}
 </div>"""
-    boards["Avatar-3-Svetlyy"] = ("Аватар — светлый, как визитка", page("Аватар — светлый, как визитка", 1080, 1080, body))
+    boards["Avatar-3-Tyomnyy"] = ("Аватар — тёмный вариант", page("Аватар — тёмный вариант", 1080, 1080, body))
     return boards
 
 
@@ -211,21 +198,18 @@ HIGHLIGHTS = [
     ("zakaz", "Как заказать", "Zakaz"), ("garantiya", "Гарантия", "Garantiya"),
 ]
 COVER_STYLES = {
-    "Steel": (NIGHT, STEEL, HAIR),
-    "Scarlet": (SCARLET, NIGHT, "rgba(21,23,26,0.35)"),
-    "Ivory": (IVORY, INK, "rgba(23,24,27,0.25)"),
+    "Paper": (PAPER, INK, LINE),
+    "Red": (PAPER, RED, HAIR),
+    "Ink": (INK, PAPER, "rgba(237,230,223,0.4)"),
 }
 
 
 def cover_body(key, style, size=1080):
     bg, fg, ring = COVER_STYLES[style]
     k = size / 1080
-    grain = brushed(size, size) if style == "Steel" else ""
     return f"""<div style="position: relative; width: {size}px; height: {size}px; overflow: hidden; background: {bg}">
-{grain}
-<svg aria-hidden="true" width="{size}" height="{size}" style="position: absolute; left: 0; top: 0"><circle cx="{540 * k}" cy="{540 * k}" r="{430 * k}" fill="none" stroke="{ring}" stroke-width="{3 * k}"></circle>
-<circle cx="{540 * k}" cy="{540 * k}" r="{405 * k}" fill="none" stroke="{ring}" stroke-width="{1.5 * k}"></circle></svg>
-{icon(key, round(440 * k), fg, bg=bg, stroke=5.5, x=round(320 * k), y=round(320 * k))}
+<svg aria-hidden="true" width="{size}" height="{size}" style="position: absolute; left: 0; top: 0"><circle cx="{540 * k}" cy="{540 * k}" r="{420 * k}" fill="none" stroke="{ring}" stroke-width="{2.5 * k}"></circle></svg>
+{icon(key, round(420 * k), fg, bg=bg, stroke=3.6, x=round(330 * k), y=round(330 * k))}
 </div>"""
 
 
@@ -233,31 +217,28 @@ def covers():
     boards = {}
     for key, label, slug in HIGHLIGHTS:
         for style in COVER_STYLES:
-            title = f"Обложка — {label} ({style})"
-            boards[f"Cover-{slug}-{style}"] = (title, page(title, 1080, 1080, cover_body(key, style)))
+            t = f"Обложка — {label} ({style})"
+            boards[f"Cover-{slug}-{style}"] = (t, page(t, 1080, 1080, cover_body(key, style)))
     return boards
 
 
 # ---------- 03: stories ----------
 
-def story(title, inner, bg=NIGHT, fg=STEEL):
-    return f"""<div style="position: relative; width: 1080px; height: 1920px; overflow: hidden; background: {bg}; {SANS}; color: {SILVER}">
-{brushed(1080, 1920)}
+def story(inner):
+    return f"""<div style="position: relative; width: 1080px; height: 1920px; overflow: hidden; background: {PAPER}; {SERIF}; color: {INK}">
 {frame(1080, 1920)}
-{header(1080, top=120, color=fg)}
+{header(1080, top=120)}
 {inner}
 <div style="position: absolute; left: 0; right: 0; bottom: 150px; display: flex; flex-direction: column; align-items: center; gap: 10px">
-<div style="{SANS}; font-weight: 700; font-size: 34px; letter-spacing: 0.06em; color: {SILVER}">{PHONE}</div>
-<div style="{SANS}; font-weight: 500; font-size: 26px; color: {MUTED}">или в директ · Минск</div>
+<div style="{SERIF}; font-weight: 500; font-size: 36px; letter-spacing: 0.04em; color: {INK}">{PHONE}</div>
+<div style="{SERIF}; font-size: 26px; letter-spacing: 0.2em; color: {MUTED}">ИЛИ В ДИРЕКТ · МИНСК</div>
 </div>
 </div>"""
 
 
-def story_title(eyebrow_text, title, top=330, size=120):
-    return f"""<div style="position: absolute; left: 110px; right: 110px; top: {top}px; display: flex; flex-direction: column; align-items: flex-start; gap: 22px">
-{eyebrow(eyebrow_text)}
-<div style="{FORUM}; font-size: {size}px; line-height: 1; color: #FFFFFF">{title}</div>
-{rule()}
+def story_title(eyebrow_text, t, top=330, size=124):
+    return f"""<div style="position: absolute; left: 110px; right: 110px; top: {top}px; display: flex; flex-direction: column; align-items: flex-start; gap: 26px">
+{eyebrow(eyebrow_text)}{title(t, size)}{rule()}
 </div>"""
 
 
@@ -268,14 +249,14 @@ def stories():
         ("chistka", "Обслуживание", "Чистка от пыли, термопаста и прокладки, видеокарты, апгрейд SSD и памяти"),
         ("nastroyka", "Настройка", "Windows и драйверы, BIOS, кривые вентиляторов, перенос данных"),
     ]
-    cards = "".join(f"""<div style="display: flex; gap: 34px; align-items: center; padding: 40px 44px; background: {PANEL}; border: 2px solid {HAIR}">
-{icon(k, 120, SCARLET, bg=PANEL, stroke=5)}
-<div style="display: flex; flex-direction: column; gap: 12px"><div style="{FORUM}; font-size: 64px; line-height: 1; color: #FFFFFF">{t}</div>
-<div style="font-weight: 500; font-size: 30px; line-height: 1.35; color: {STEEL}">{d}</div></div></div>""" for k, t, d in pillars)
+    cards = "".join(f"""<div style="display: flex; gap: 36px; align-items: center; padding: 40px 44px; background: {CARD}; border: 2px solid {LINE}; border-radius: 14px">
+{icon(k, 112, RED, bg=CARD, stroke=4)}
+<div style="display: flex; flex-direction: column; gap: 12px"><div style="{SERIF}; font-weight: 600; font-size: 50px; line-height: 1; color: {INK}">{t}</div>
+{text(d, 29)}</div></div>""" for k, t, d in pillars)
     inner = story_title("ПК И НОУТБУКИ · МИНСК", "Чем я помогу") + f"""
-<div style="position: absolute; left: 110px; right: 110px; top: 650px; display: flex; flex-direction: column; gap: 30px">{cards}</div>
-<div style="position: absolute; left: 110px; right: 110px; top: 1480px; font-weight: 500; font-size: 32px; line-height: 1.4; color: {STEEL}">Стоимость называю до начала работ. В конце — фотоотчёт и результаты тестов.</div>"""
-    boards["Story-1-Uslugi"] = ("История — Услуги", page("История — Услуги", 1080, 1920, story("Услуги", inner)))
+<div style="position: absolute; left: 110px; right: 110px; top: 660px; display: flex; flex-direction: column; gap: 30px">{cards}</div>
+<div style="position: absolute; left: 110px; right: 110px; top: 1470px">{text("Стоимость называю до начала работ. В конце — фотоотчёт и результаты тестов.", 32)}</div>"""
+    boards["Story-1-Uslugi"] = ("История — Услуги", page("История — Услуги", 1080, 1920, story(inner)))
 
     steps = [
         ("Пишете, что нужно", "Консультирую бесплатно и называю стоимость до начала работ."),
@@ -283,14 +264,14 @@ def stories():
         ("Согласую всё по ходу", "Если выяснится что-то ещё, сначала спрошу вас."),
         ("Фотоотчёт и тесты", "Показываю, что сделано: температуры, стабильность."),
     ]
-    step_html = "".join(f"""<div style="display: flex; gap: 36px; align-items: flex-start">
-<div style="{CINZEL}; font-weight: 700; font-size: 72px; line-height: 0.9; color: {SCARLET}; width: 110px; flex-shrink: 0">{['I', 'II', 'III', 'IV'][n]}</div>
-<div style="display: flex; flex-direction: column; gap: 10px"><div style="{FORUM}; font-size: 54px; line-height: 1.05; color: #FFFFFF">{t}</div>
-<div style="font-weight: 500; font-size: 30px; line-height: 1.4; color: {STEEL}">{d}</div></div></div>""" for n, (t, d) in enumerate(steps))
+    step_html = "".join(f"""<div style="display: flex; gap: 36px; align-items: flex-start; padding-bottom: 30px; border-bottom: 2px solid {HAIR}">
+<div style="{SERIF}; font-style: italic; font-size: 76px; line-height: 0.9; color: {RED}; width: 90px; flex-shrink: 0">{n + 1}</div>
+<div style="display: flex; flex-direction: column; gap: 10px"><div style="{SERIF}; font-weight: 600; font-size: 46px; line-height: 1.1; color: {INK}">{t}</div>
+{text(d, 30)}</div></div>""" for n, (t, d) in enumerate(steps))
     inner = story_title("ПОРЯДОК РАБОТЫ", "Как заказать") + f"""
-<div style="position: absolute; left: 110px; right: 110px; top: 660px; display: flex; flex-direction: column; gap: 64px">{step_html}</div>
-<div style="position: absolute; left: 110px; right: 110px; top: 1420px; padding: 30px 36px; border: 2px solid {SCARLET}; font-weight: 500; font-size: 30px; line-height: 1.4; color: {SILVER}">Чистка — обычно в тот же или на следующий день. Сборка — 1–2 дня после получения комплектующих.</div>"""
-    boards["Story-2-Kak-zakazat"] = ("История — Как заказать", page("История — Как заказать", 1080, 1920, story("Как заказать", inner)))
+<div style="position: absolute; left: 110px; right: 110px; top: 640px; display: flex; flex-direction: column; gap: 30px">{step_html}</div>
+<div style="position: absolute; left: 110px; right: 110px; top: 1500px; padding: 30px 36px; border: 2px solid {RED}; border-radius: 14px">{text("Чистка — обычно в тот же или на следующий день. Сборка — 1–2 дня после получения комплектующих.", 30, INK)}</div>"""
+    boards["Story-2-Kak-zakazat"] = ("История — Как заказать", page("История — Как заказать", 1080, 1920, story(inner)))
 
     terms = [
         "Гарантия на выполненную работу — 1 месяц.",
@@ -299,15 +280,15 @@ def stories():
         "Работа оплачивается после выполнения, наличными или переводом.",
         "Б/у комплектующие проверяю при покупке и снимаю проверку на фото или видео.",
     ]
-    term_html = "".join(f"""<div style="display: flex; gap: 26px; align-items: flex-start">
-<svg aria-hidden="true" width="40" height="40" viewBox="0 0 100 100" fill="none" stroke="{SCARLET}" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; margin-top: 4px"><path d="M18 52l20 20 44-44"></path></svg>
-<div style="font-weight: 500; font-size: 33px; line-height: 1.4; color: {SILVER}">{t}</div></div>""" for t in terms)
-    inner = f"""<div style="position: absolute; left: 0; right: 0; top: 300px; display: flex; flex-direction: column; align-items: center; gap: 18px">
-{icon("garantiya", 200, SCARLET, stroke=4.5)}
+    term_html = "".join(f"""<div style="display: flex; gap: 26px; align-items: flex-start; padding-bottom: 30px; border-bottom: 2px solid {HAIR}">
+<svg aria-hidden="true" width="22" height="22" viewBox="0 0 10 10" style="flex-shrink: 0; margin-top: 16px"><path d="M5 0L10 5L5 10L0 5Z" fill="{INK}"></path></svg>
+{text(t, 33, INK)}</div>""" for t in terms)
+    inner = f"""<div style="position: absolute; left: 0; right: 0; top: 300px; display: flex; flex-direction: column; align-items: center; gap: 24px">
+{icon("garantiya", 180, RED, stroke=3.6)}
 {eyebrow("ЧЕСТНЫЕ УСЛОВИЯ")}
-<div style="{FORUM}; font-size: 120px; line-height: 1; color: #FFFFFF">Гарантия</div></div>
-<div style="position: absolute; left: 110px; right: 110px; top: 830px; display: flex; flex-direction: column; gap: 40px">{term_html}</div>"""
-    boards["Story-3-Garantiya"] = ("История — Гарантия и условия", page("История — Гарантия и условия", 1080, 1920, story("Гарантия", inner)))
+{title("Гарантия", 124, align="center")}</div>
+<div style="position: absolute; left: 110px; right: 110px; top: 860px; display: flex; flex-direction: column; gap: 30px">{term_html}</div>"""
+    boards["Story-3-Garantiya"] = ("История — Гарантия и условия", page("История — Гарантия и условия", 1080, 1920, story(inner)))
     return boards
 
 
@@ -316,20 +297,19 @@ def stories():
 PW, PH = 1080, 1440
 
 
-def post_shell(inner, bg=NIGHT, frame_on=True):
-    return f"""<div style="position: relative; width: {PW}px; height: {PH}px; overflow: hidden; background: {bg}; {SANS}; color: {SILVER}">
-{brushed(PW, PH) if bg == NIGHT else ""}
-{frame(PW, PH) if frame_on else ""}
+def post_shell(inner):
+    return f"""<div style="position: relative; width: {PW}px; height: {PH}px; overflow: hidden; background: {PAPER}; {SERIF}; color: {INK}">
+{frame(PW, PH)}
 {inner}
 </div>"""
 
 
 def photo_slot(x, y, w, h, label, note="вставьте фото"):
-    return f"""<div style="position: absolute; left: {x}px; top: {y}px; width: {w}px; height: {h}px; overflow: hidden; background: {PANEL}; border: 2px solid {HAIR}">
-<svg aria-hidden="true" width="{w}" height="{h}" style="position: absolute; left: 0; top: 0"><defs><pattern id="hatch{x}{y}" width="26" height="26" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0V26" stroke="rgba(201,206,214,0.07)" stroke-width="10"></path></pattern></defs><rect width="100%" height="100%" fill="url(#hatch{x}{y})"></rect></svg>
+    return f"""<div style="position: absolute; left: {x}px; top: {y}px; width: {w}px; height: {h}px; overflow: hidden; box-sizing: border-box; background: {CARD}; border: 2px solid {LINE}; border-radius: 12px">
+<svg aria-hidden="true" width="{w}" height="{h}" style="position: absolute; left: 0; top: 0"><defs><pattern id="hatch{x}{y}" width="26" height="26" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0V26" stroke="rgba(36,33,30,0.05)" stroke-width="10"></path></pattern></defs><rect width="100%" height="100%" fill="url(#hatch{x}{y})"></rect></svg>
 <div style="position: absolute; left: 0; right: 0; top: {h // 2 - 70}px; display: flex; flex-direction: column; align-items: center; gap: 14px">
-{icon("foto", 84, MUTED, bg=PANEL, stroke=5)}<div style="font-weight: 500; font-size: 26px; color: {MUTED}">[{note}]</div></div>
-<div style="position: absolute; left: 28px; top: 28px; padding: 10px 24px; background: {label[1]}; color: {label[2]}; font-weight: 800; font-size: 28px; letter-spacing: 0.2em">{label[0]}</div>
+{icon("foto", 84, MUTED, bg=CARD, stroke=4)}<div style="{SERIF}; font-size: 26px; color: {MUTED}">[{note}]</div></div>
+<div style="position: absolute; left: 26px; top: 26px; padding: 10px 24px; border-radius: 8px; background: {label[1]}; color: {label[2]}; border: 2px solid {label[3]}; {SERIF}; font-weight: 600; font-size: 26px; letter-spacing: 0.24em">{label[0]}</div>
 </div>"""
 
 
@@ -337,44 +317,44 @@ def posts():
     boards = {}
 
     pillars = "".join(f"""<div style="display: flex; flex-direction: column; align-items: center; gap: 18px; width: 260px">
-{icon(k, 120, SCARLET, stroke=5)}<div style="{FORUM}; font-size: 46px; color: #FFFFFF">{t}</div></div>"""
-                      for k, t in [("sborka", "Сборка"), ("chistka", "Обслуживание"), ("nastroyka", "Настройка")])
-    inner = f"""{crest(380, x=350, y=120)}
-<div style="position: absolute; left: 0; right: 0; top: 540px; display: flex; flex-direction: column; align-items: center; gap: 26px; text-align: center">
-{eyebrow("IRON PRINCE · МИНСК")}
-<div style="{FORUM}; font-size: 120px; line-height: 1; color: #FFFFFF">Привет, я Василий</div>
-<div style="font-weight: 500; font-size: 36px; line-height: 1.4; color: {STEEL}; width: 820px">Собираю, обслуживаю и настраиваю компьютеры и ноутбуки. Аккуратно, с фотоотчётом и гарантией.</div></div>
-<div style="position: absolute; left: 0; right: 0; top: 1020px; display: flex; justify-content: center; gap: 40px">{pillars}</div>"""
+{icon(k, 110, RED, stroke=4)}<div style="{SERIF}; font-weight: 500; font-size: 30px; letter-spacing: 0.2em; color: {INK}">{t}</div></div>"""
+                      for k, t in [("sborka", "СБОРКА"), ("chistka", "ЧИСТКА"), ("nastroyka", "НАСТРОЙКА")])
+    inner = f"""{monogram(300, x=390, y=120, line=5)}
+<div style="position: absolute; left: 0; right: 0; top: 470px; display: flex; flex-direction: column; align-items: center; gap: 30px; text-align: center">
+{wordmark(58)}{rule(560, INK, 2)}{eyebrow("ПК И НОУТБУКИ · МИНСК")}
+<div style="margin-top: 24px">{title("Привет, я Василий", 100, align="center")}</div>
+{text("Собираю, обслуживаю и настраиваю компьютеры и ноутбуки. Аккуратно, с фотоотчётом и гарантией.", 34, SOFT, "width: 800px")}</div>
+<div style="position: absolute; left: 0; right: 0; top: 1110px; display: flex; justify-content: center; gap: 40px">{pillars}</div>"""
     boards["Post-1-Znakomstvo"] = ("Пост — знакомство", page("Пост — знакомство", PW, PH, post_shell(inner)))
 
     inner = f"""{header(PW, top=92)}
-{photo_slot(84, 200, 450, 880, ("ДО", IVORY, INK), "фото до")}
-{photo_slot(546, 200, 450, 880, ("ПОСЛЕ", SCARLET, "#FFFFFF"), "фото после")}
-<svg aria-hidden="true" width="80" height="80" viewBox="0 0 80 80" style="position: absolute; left: 500px; top: 600px"><circle cx="40" cy="40" r="36" fill="{SILVER}"></circle><path d="M33 30l-10 10 10 10M47 30l10 10-10 10" fill="none" stroke="{NIGHT}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
-<div style="position: absolute; left: 84px; right: 84px; top: 1120px; display: flex; justify-content: space-between; align-items: flex-end">
-<div style="display: flex; flex-direction: column; gap: 14px">{eyebrow("ЧИСТКА ПК ОТ ПЫЛИ")}<div style="{FORUM}; font-size: 76px; line-height: 1; color: #FFFFFF">До и после</div></div>
-<div style="display: flex; align-items: center; gap: 16px; padding: 18px 26px; border: 2px solid {HAIR}">{icon("termo", 56, SCARLET, stroke=6)}<div style="{FORUM}; font-size: 54px; color: #FFFFFF">[92]<span style="{SANS}; font-weight: 500">°</span> → [68]<span style="{SANS}; font-weight: 500">°</span></div></div></div>"""
+{photo_slot(84, 210, 450, 870, ("ДО", PAPER, INK, INK), "фото до")}
+{photo_slot(546, 210, 450, 870, ("ПОСЛЕ", RED, "#FFFFFF", RED), "фото после")}
+<svg aria-hidden="true" width="80" height="80" viewBox="0 0 80 80" style="position: absolute; left: 500px; top: 605px"><circle cx="40" cy="40" r="36" fill="{PAPER}" stroke="{INK}" stroke-width="2.5"></circle><path d="M33 30l-10 10 10 10M47 30l10 10-10 10" fill="none" stroke="{INK}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<div style="position: absolute; left: 84px; right: 84px; top: 1130px; display: flex; justify-content: space-between; align-items: flex-end">
+<div style="display: flex; flex-direction: column; gap: 16px">{eyebrow("ЧИСТКА ПК ОТ ПЫЛИ")}{title("До и после", 80)}</div>
+<div style="display: flex; align-items: center; gap: 14px; padding: 16px 26px; border: 2px solid {LINE}; border-radius: 12px">{icon("termo", 52, RED, stroke=5)}<div style="{SERIF}; font-size: 44px; color: {INK}">[92]° → [68]°</div></div></div>"""
     boards["Post-2-Do-posle"] = ("Пост — до / после", page("Пост — до / после", PW, PH, post_shell(inner)))
 
     inner = f"""{header(PW, top=92)}
-<div style="position: absolute; left: 0; right: 0; top: 270px; display: flex; flex-direction: column; align-items: center; gap: 22px; text-align: center">
-{eyebrow("ЗАЧЕМ ЧИСТИТЬ")}<div style="{FORUM}; font-size: 112px; line-height: 1.02; color: #FFFFFF">Компьютер шумит<br>и греется?</div></div>
-<div style="position: absolute; left: 110px; right: 110px; top: 640px; display: flex; justify-content: center; align-items: center; gap: 50px">
-<div style="display: flex; flex-direction: column; align-items: center; gap: 8px"><div style="font-weight: 800; font-size: 28px; letter-spacing: 0.2em; color: {MUTED}">БЫЛО</div><div style="{FORUM}; font-size: 220px; line-height: 1; color: {SCARLET}; white-space: nowrap">[92]<span style="{SANS}; font-weight: 400; font-size: 120px; vertical-align: 70px">°</span></div></div>
-<svg aria-hidden="true" width="110" height="60" viewBox="0 0 110 60"><path d="M6 30H96M76 10l20 20-20 20" fill="none" stroke="{STEEL}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
-<div style="display: flex; flex-direction: column; align-items: center; gap: 8px"><div style="font-weight: 800; font-size: 28px; letter-spacing: 0.2em; color: {MUTED}">СТАЛО</div><div style="{FORUM}; font-size: 220px; line-height: 1; color: #FFFFFF; white-space: nowrap">[68]<span style="{SANS}; font-weight: 400; font-size: 120px; vertical-align: 70px">°</span></div></div></div>
-<div style="position: absolute; left: 150px; right: 150px; top: 1000px; font-weight: 500; font-size: 36px; line-height: 1.45; color: {STEEL}; text-align: center">Пыль и высохшая термопаста — главные причины перегрева. Чистка с заменой пасты возвращает тишину и запас по температурам.</div>
-<div style="position: absolute; left: 0; right: 0; top: 1240px; text-align: center; font-weight: 500; font-size: 26px; color: {MUTED}">[вставьте реальные температуры процессора до и после]</div>"""
+<div style="position: absolute; left: 0; right: 0; top: 280px; display: flex; flex-direction: column; align-items: center; gap: 26px; text-align: center">
+{eyebrow("ЗАЧЕМ ЧИСТИТЬ")}{title("Компьютер шумит<br>и греется?", 100, align="center")}{rule()}</div>
+<div style="position: absolute; left: 110px; right: 110px; top: 680px; display: flex; justify-content: center; align-items: center; gap: 50px">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 8px">{eyebrow("БЫЛО")}<div style="{SERIF}; font-size: 200px; line-height: 1; color: {RED}; white-space: nowrap">[92]°</div></div>
+<svg aria-hidden="true" width="110" height="60" viewBox="0 0 110 60"><path d="M6 30H96M76 10l20 20-20 20" fill="none" stroke="{INK}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 8px">{eyebrow("СТАЛО")}<div style="{SERIF}; font-size: 200px; line-height: 1; color: {INK}; white-space: nowrap">[68]°</div></div></div>
+<div style="position: absolute; left: 150px; right: 150px; top: 1010px">{text("Пыль и высохшая термопаста — главные причины перегрева. Чистка с заменой пасты возвращает тишину и запас по температурам.", 34, SOFT, "text-align: center")}</div>
+<div style="position: absolute; left: 0; right: 0; top: 1250px">{text("[вставьте реальные температуры процессора до и после]", 26, MUTED, "text-align: center")}</div>"""
     boards["Post-3-Temperatury"] = ("Пост — температуры до / после", page("Пост — температуры до / после", PW, PH, post_shell(inner)))
 
-    stars = "".join(f'<svg aria-hidden="true" width="64" height="64" viewBox="0 0 100 100"><path d="M50 8l12 27 29 3-22 20 6 29-25-15-25 15 6-29-22-20 29-3z" fill="{SCARLET}"></path></svg>' for _ in range(5))
+    stars = "".join(f'<svg aria-hidden="true" width="56" height="56" viewBox="0 0 100 100"><path d="M50 8l12 27 29 3-22 20 6 29-25-15-25 15 6-29-22-20 29-3z" fill="{RED}"></path></svg>' for _ in range(5))
     inner = f"""{header(PW, top=92)}
-<div style="position: absolute; left: 0; right: 0; top: 260px; display: flex; flex-direction: column; align-items: center; gap: 34px">
+<div style="position: absolute; left: 0; right: 0; top: 270px; display: flex; flex-direction: column; align-items: center; gap: 34px">
 {eyebrow("ОТЗЫВ")}<div style="display: flex; gap: 14px">{stars}</div></div>
-<div style="position: absolute; left: 130px; right: 130px; top: 430px; {FORUM}; font-size: 200px; line-height: 0.6; color: {SCARLET}; text-align: center">«</div>
-<div style="position: absolute; left: 150px; right: 150px; top: 600px; {FORUM}; font-size: 66px; line-height: 1.2; color: #FFFFFF; text-align: center">[Текст отзыва клиента: что сделали и как теперь работает компьютер]</div>
-<div style="position: absolute; left: 0; right: 0; top: 1060px; display: flex; flex-direction: column; align-items: center; gap: 16px">
-{rule(80)}<div style="font-weight: 700; font-size: 36px; color: {SILVER}">[Имя клиента]</div><div style="font-weight: 500; font-size: 28px; color: {MUTED}">[услуга] · Kufar</div></div>"""
+<div style="position: absolute; left: 0; right: 0; top: 430px; {SERIF}; font-style: italic; font-size: 200px; line-height: 0.6; color: {RED}; text-align: center">«</div>
+<div style="position: absolute; left: 150px; right: 150px; top: 590px">{title("[Текст отзыва клиента: что сделали и как теперь работает компьютер]", 64, align="center")}</div>
+<div style="position: absolute; left: 0; right: 0; top: 1080px; display: flex; flex-direction: column; align-items: center; gap: 16px">
+{rule(80)}<div style="{SERIF}; font-weight: 600; font-size: 36px; color: {INK}">[Имя клиента]</div>{eyebrow("[УСЛУГА] · KUFAR", size=22)}</div>"""
     boards["Post-4-Otzyv"] = ("Пост — отзыв", page("Пост — отзыв", PW, PH, post_shell(inner)))
     return boards
 
@@ -382,6 +362,7 @@ def posts():
 # ---------- 00: profile preview and brand sheet ----------
 
 POST_KEYS = ["Post-1-Znakomstvo", "Post-2-Do-posle", "Post-3-Temperatury", "Post-4-Otzyv"]
+UI = "font-family: -apple-system, 'Segoe UI', Roboto, sans-serif"
 
 
 def body_of(html):
@@ -390,30 +371,30 @@ def body_of(html):
 
 def main_board(post_boards):
     stats = "".join(f'<div style="display: flex; flex-direction: column; align-items: flex-start"><div style="font-weight: 700; font-size: 40px">{n}</div>'
-                    f'<div style="font-size: 28px; color: #D6D6D6">{t}</div></div>' for n, t in [("4", "публикации"), ("0", "подписчики"), ("0", "подписки")])
+                    f'<div style="font-size: 28px; color: #555555">{t}</div></div>' for n, t in [("4", "публикации"), ("0", "подписчики"), ("0", "подписки")])
     bio = "".join(f"<div>{line}</div>" for line in BIO)
     hl = "".join(f"""<div style="display: flex; flex-direction: column; align-items: center; gap: 14px; width: 150px">
-<div style="position: relative; width: 140px; height: 140px; border-radius: 50%; overflow: hidden; box-shadow: 0 0 0 3px #363636">
-<div style="transform: scale({140 / 1080}); transform-origin: 0 0">{cover_body(k, "Steel")}</div></div>
-<div style="font-size: 24px; color: #F2F2F2; white-space: nowrap">{label}</div></div>""" for k, label, _ in HIGHLIGHTS[:6])
+<div style="position: relative; width: 140px; height: 140px; border-radius: 50%; overflow: hidden; box-shadow: 0 0 0 3px #DBDBDB">
+<div style="transform: scale({140 / 1080}); transform-origin: 0 0">{cover_body(k, "Paper")}</div></div>
+<div style="font-size: 24px; color: #111111; white-space: nowrap">{label}</div></div>""" for k, label, _ in HIGHLIGHTS[:6])
     scale = 359 / PW
-    tiles = "".join(f"""<div style="position: relative; height: 479px; overflow: hidden; background: #1C1C1C">
+    tiles = "".join(f"""<div style="position: relative; height: 479px; overflow: hidden; background: {PAPER}">
 <div style="transform: scale({scale:.4f}); transform-origin: 0 0">{body_of(post_boards[k][1])}</div></div>""" for k in POST_KEYS)
-    body = f"""<div style="position: relative; width: 1080px; height: 2140px; overflow: hidden; background: #0C0C0C; {SANS}; color: #F5F5F5">
+    body = f"""<div style="position: relative; width: 1080px; height: 2140px; overflow: hidden; background: #FFFFFF; {UI}; color: #111111">
 <div style="position: absolute; left: 40px; top: 52px; display: flex; align-items: center; gap: 34px">
-<svg aria-hidden="true" width="34" height="56" viewBox="0 0 17 28" fill="none" stroke="#F5F5F5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3L3 14L14 25"></path></svg>
+<svg aria-hidden="true" width="34" height="56" viewBox="0 0 17 28" fill="none" stroke="#111111" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3L3 14L14 25"></path></svg>
 <div style="font-weight: 700; font-size: 46px">{HANDLE}</div>
 </div>
-<div style="position: absolute; left: 44px; top: 170px; width: 262px; height: 262px; border-radius: 50%; overflow: hidden; background: {NIGHT}">
-{crest(210, x=26, y=22)}
+<div style="position: absolute; left: 44px; top: 170px; width: 262px; height: 262px; border-radius: 50%; overflow: hidden; background: {PAPER}; box-shadow: 0 0 0 2px #DBDBDB">
+{monogram(200, x=31, y=34, line=6)}
 </div>
 <div style="position: absolute; left: 350px; top: 178px; right: 40px; font-weight: 700; font-size: 34px; line-height: 1.25">{NAME}</div>
 <div style="position: absolute; left: 350px; top: 296px; right: 60px; display: flex; justify-content: space-between">{stats}</div>
-<div style="position: absolute; left: 44px; top: 470px; right: 44px; font-size: 31px; line-height: 1.42; color: #EDEDED">{bio}
-<div style="margin-top: 4px; font-weight: 700; color: #B9CCF5">t.me/[ваш_ник]</div></div>
+<div style="position: absolute; left: 44px; top: 470px; right: 44px; font-size: 31px; line-height: 1.42; color: #222222">{bio}
+<div style="margin-top: 4px; font-weight: 700; color: #00376B">t.me/[ваш_ник]</div></div>
 <div style="position: absolute; left: 44px; right: 44px; top: 760px; display: flex; gap: 16px">
-<div style="flex: 1; height: 84px; border-radius: 18px; background: #2A2A2A; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 31px">Подписаться</div>
-<div style="flex: 1; height: 84px; border-radius: 18px; background: #2A2A2A; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 31px">Сообщение</div>
+<div style="flex: 1; height: 84px; border-radius: 18px; background: #0095F6; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 31px">Подписаться</div>
+<div style="flex: 1; height: 84px; border-radius: 18px; background: #EFEFEF; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 31px">Сообщение</div>
 </div>
 <div style="position: absolute; left: 30px; right: 30px; top: 900px; display: flex; justify-content: space-between">{hl}</div>
 <div style="position: absolute; left: 0; right: 0; top: 1170px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px">{tiles}</div>
@@ -422,33 +403,33 @@ def main_board(post_boards):
 
 
 def style_board():
-    swatches = [("Ночь", NIGHT, "фон"), ("Щит", FIELD, "поля герба, карточки"), ("Сталь", STEEL, "линии, текст"),
-                ("Алый", SCARLET, "корона, акценты, цены"), ("Слоновая кость", IVORY, "светлые версии"), ("Графит", INK, "текст на светлом")]
+    swatches = [("Бумага", PAPER, "фон всех макетов"), ("Карточка", CARD, "плашки, фото-рамки"), ("Чернила", INK, "текст, линии, знак"),
+                ("Графит", MUTED, "подписи, надзаголовки"), ("Алый", RED, "одна черта, точка на короне, акценты")]
     sw = "".join(f"""<div style="display: flex; flex-direction: column; gap: 10px">
-<div style="height: 140px; background: {c}; border: 2px solid {HAIR}"></div>
-<div style="{FORUM}; font-size: 40px; line-height: 1; color: #FFFFFF">{n}</div>
-<div style="font-weight: 700; font-size: 22px; letter-spacing: 0.1em; color: {STEEL}">{c}</div>
-<div style="font-weight: 500; font-size: 24px; color: {MUTED}">{d}</div></div>""" for n, c, d in swatches)
-    fonts = [("Cinzel", "логотип, латиница", f"{CINZEL}; font-weight: 700; font-size: 72px; letter-spacing: 0.06em", "IRON PRINCE"),
-             ("Forum", "заголовки на русском", f"{FORUM}; font-size: 80px", "Полная чистка"),
-             ("Manrope", "текст, цены, кнопки", f"{SANS}; font-weight: 500; font-size: 36px", "Сборка · обслуживание · настройка")]
+<div style="height: 130px; background: {c}; border: 2px solid {HAIR}; border-radius: 10px"></div>
+<div style="{SERIF}; font-weight: 600; font-size: 30px; line-height: 1; color: {INK}">{n}</div>
+<div style="{SERIF}; font-size: 22px; letter-spacing: 0.1em; color: {MUTED}">{c}</div>
+<div style="{SERIF}; font-size: 22px; line-height: 1.3; color: {SOFT}">{d}</div></div>""" for n, c, d in swatches)
+    fonts = [("Poppins Light", "логотип, латиница", f"{POPPINS}; font-weight: 300; font-size: 64px; letter-spacing: 0.3em", "IRON PRINCE"),
+             ("Lora Italic", "заголовки", f"{SERIF}; font-style: italic; font-size: 76px", "Пишите — подберу, соберу и почищу"),
+             ("Lora", "текст, надзаголовки вразрядку", f"{SERIF}; font-size: 34px", "Сборка · обслуживание · настройка")]
     fr = "".join(f"""<div style="padding: 24px 0; border-top: 2px solid {HAIR}">
-<div style="font-weight: 800; font-size: 22px; letter-spacing: 0.24em; color: {SCARLET}">{n.upper()} · {r.upper()}</div>
-<div style="margin-top: 10px; line-height: 1.1; color: #FFFFFF; {css}">{s}</div></div>""" for n, r, css, s in fonts)
-    icons = "".join(icon(k, 92, STEEL, stroke=4.5) for k in ["sborka", "chistka", "nastroyka", "uslugi", "raboty", "garantiya", "otzyvy", "zakaz"])
-    body = f"""<div style="position: relative; width: 1080px; height: 2160px; overflow: hidden; background: {NIGHT}; {SANS}; color: {SILVER}">
-{brushed(1080, 2160)}
+{eyebrow(f"{n.upper()} · {r.upper()}", size=20)}
+<div style="margin-top: 12px; line-height: 1.1; color: {INK}; {css}">{s}</div></div>""" for n, r, css, s in fonts)
+    icons = "".join(icon(k, 88, INK, stroke=3.6) for k in ["sborka", "chistka", "nastroyka", "uslugi", "raboty", "garantiya", "otzyvy", "zakaz"])
+    body = f"""<div style="position: relative; width: 1080px; height: 2160px; overflow: hidden; background: {PAPER}; {SERIF}; color: {INK}">
 {frame(1080, 2160)}
-<div style="position: absolute; left: 110px; right: 110px; top: 110px; display: flex; justify-content: space-between; font-weight: 800; font-size: 22px; letter-spacing: 0.28em; color: {STEEL}"><div>IRON PRINCE</div><div>ФИРМЕННЫЙ СТИЛЬ</div></div>
-<div style="position: absolute; left: 110px; right: 110px; top: 190px; display: flex; align-items: center; justify-content: space-between">
-{crest(330)}
-<div style="display: flex; flex-direction: column; align-items: center; gap: 20px">{sign(150)}{sign(64)}{sign(32)}</div>
-<div style="width: 300px; height: 300px; background: {IVORY}; display: flex; align-items: center; justify-content: center">{crest(250, steel=INK, field="none", accent=INK)}</div>
-</div>
-<div style="position: absolute; left: 0; right: 0; top: 580px">{wordmark(84, sub="PC SERVICE · MINSK")}</div>
-<div style="position: absolute; left: 110px; right: 110px; top: 800px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 36px 30px">{sw}</div>
-<div style="position: absolute; left: 110px; right: 110px; top: 1430px">{fr}</div>
-<div style="position: absolute; left: 110px; right: 110px; top: 1940px; display: flex; justify-content: space-between">{icons}</div>
+<div style="position: absolute; left: 110px; right: 110px; top: 110px; display: flex; justify-content: space-between">{eyebrow("IRON PRINCE", size=20)}{eyebrow("ФИРМЕННЫЙ СТИЛЬ", size=20)}</div>
+<div style="position: absolute; left: 0; right: 0; top: 190px; display: flex; flex-direction: column; align-items: center; gap: 34px">
+{monogram(300, line=5)}{wordmark(78)}{rule(640, INK, 2)}
+<div style="{SERIF}; font-weight: 600; font-size: 30px; letter-spacing: 0.24em; color: {INK}">СБОРКА · ОБСЛУЖИВАНИЕ · НАСТРОЙКА</div></div>
+<div style="position: absolute; left: 110px; right: 110px; top: 860px; display: flex; align-items: center; justify-content: space-between">
+<div style="display: flex; align-items: flex-end; gap: 28px">{monogram(120)}{monogram(64, line=7)}{monogram(32, line=9)}</div>
+<div style="width: 230px; height: 230px; border-radius: 50%; background: {INK}; display: flex; align-items: center; justify-content: center">{monogram(170, color=PAPER)}</div>
+{crest(230)}</div>
+<div style="position: absolute; left: 110px; right: 110px; top: 1170px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 24px">{sw}</div>
+<div style="position: absolute; left: 110px; right: 110px; top: 1480px">{fr}</div>
+<div style="position: absolute; left: 110px; right: 110px; top: 1960px; display: flex; justify-content: space-between">{icons}</div>
 </div>"""
     return page("Фирменный стиль", 1080, 2160, body)
 
@@ -460,10 +441,10 @@ def write_canvas(groups):
     y = 0
     for row in groups:
         x, h = 0, 0
-        for name, (title, html) in row.items():
+        for name, (t, html) in row.items():
             w = int(html.split('"width":')[1].split(",")[0])
             bh = int(html.split('"height":')[1].split("}")[0])
-            boards[f"{name}.dc.html"] = {"x": x, "y": y, "w": w, "h": bh, "title": title}
+            boards[f"{name}.dc.html"] = {"x": x, "y": y, "w": w, "h": bh, "title": t}
             order.append(f"{name}.dc.html")
             x += w + 80
             h = max(h, bh)
@@ -486,6 +467,10 @@ def main():
     cover_rows = [{k: v for k, v in cv.items() if k.endswith(s)} for s in COVER_STYLES]
     st = stories()
     groups = [profile, avatars(), *cover_rows, st, p]
+    names = {f"{name}.dc.html" for row in groups for name in row}
+    for old in PROJECT.glob("*.dc.html"):
+        if old.name not in names:
+            old.unlink()
     for row in groups:
         for name, (_, html) in row.items():
             (PROJECT / f"{name}.dc.html").write_text(html)

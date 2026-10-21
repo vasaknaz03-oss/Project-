@@ -24,152 +24,152 @@
    "h": 2160,
    "title": "Фирменный стиль"
   },
-  "Avatar-1-Crest.dc.html": {
+  "Avatar-1-Monogramma.dc.html": {
    "x": 0,
    "y": 2500,
    "w": 1080,
    "h": 1080,
-   "title": "Аватар — полный герб"
+   "title": "Аватар — монограмма IP"
   },
-  "Avatar-2-Znak.dc.html": {
+  "Avatar-2-Gerb.dc.html": {
    "x": 1160,
    "y": 2500,
    "w": 1080,
    "h": 1080,
-   "title": "Аватар — упрощённый знак IP"
+   "title": "Аватар — герб в линию"
   },
-  "Avatar-3-Svetlyy.dc.html": {
+  "Avatar-3-Tyomnyy.dc.html": {
    "x": 2320,
    "y": 2500,
    "w": 1080,
    "h": 1080,
-   "title": "Аватар — светлый, как визитка"
+   "title": "Аватар — тёмный вариант"
   },
-  "Cover-Uslugi-Steel.dc.html": {
+  "Cover-Uslugi-Paper.dc.html": {
    "x": 0,
    "y": 3920,
    "w": 1080,
    "h": 1080,
-   "title": "Обложка — Услуги (Steel)"
+   "title": "Обложка — Услуги (Paper)"
   },
-  "Cover-Raboty-Steel.dc.html": {
+  "Cover-Raboty-Paper.dc.html": {
    "x": 1160,
    "y": 3920,
    "w": 1080,
    "h": 1080,
-   "title": "Обложка — Работы (Steel)"
+   "title": "Обложка — Работы (Paper)"
   },
-  "Cover-Do-posle-Steel.dc.html": {
+  "Cover-Do-posle-Paper.dc.html": {
    "x": 2320,
    "y": 3920,
    "w": 1080,
    "h": 1080,
-   "title": "Обложка — До/после (Steel)"
+   "title": "Обложка — До/после (Paper)"
   },
-  "Cover-Otzyvy-Steel.dc.html": {
+  "Cover-Otzyvy-Paper.dc.html": {
    "x": 3480,
    "y": 3920,
    "w": 1080,
    "h": 1080,
-   "title": "Обложка — Отзывы (Steel)"
+   "title": "Обложка — Отзывы (Paper)"
   },
-  "Cover-Zakaz-Steel.dc.html": {
+  "Cover-Zakaz-Paper.dc.html": {
    "x": 4640,
    "y": 3920,
    "w": 1080,
    "h": 1080,
-   "title": "Обложка — Как заказать (Steel)"
+   "title": "Обложка — Как заказать (Paper)"
   },
-  "Cover-Garantiya-Steel.dc.html": {
+  "Cover-Garantiya-Paper.dc.html": {
    "x": 5800,
    "y": 3920,
    "w": 1080,
    "h": 1080,
-   "title": "Обложка — Гарантия (Steel)"
+   "title": "Обложка — Гарантия (Paper)"
   },
-  "Cover-Uslugi-Scarlet.dc.html": {
+  "Cover-Uslugi-Red.dc.html": {
    "x": 0,
    "y": 5340,
    "w": 1080,
    "h": 1080,
-   "title": "Обложка — Услуги (Scarlet)"
+   "title": "Обложка — Услуги (Red)"
   },
-  "Cover-Raboty-Scarlet.dc.html": {
+  "Cover-Raboty-Red.dc.html": {
    "x": 1160,
    "y": 5340,
    "w": 1080,
    "h": 1080,
-   "title": "Обложка — Работы (Scarlet)"
+   "title": "Обложка — Работы (Red)"
   },
-  "Cover-Do-posle-Scarlet.dc.html": {
+  "Cover-Do-posle-Red.dc.html": {
    "x": 2320,
    "y": 5340,
    "w": 1080,
    "h": 1080,
-   "title": "Обложка — До/после (Scarlet)"
+   "title": "Обложка — До/после (Red)"
   },
-  "Cover-Otzyvy-Scarlet.dc.html": {
+  "Cover-Otzyvy-Red.dc.html": {
    "x": 3480,
    "y": 5340,
    "w": 1080,
    "h": 1080,
-   "title": "Обложка — Отзывы (Scarlet)"
+   "title": "Обложка — Отзывы (Red)"
   },
-  "Cover-Zakaz-Scarlet.dc.html": {
+  "Cover-Zakaz-Red.dc.html": {
    "x": 4640,
    "y": 5340,
    "w": 1080,
    "h": 1080,
-   "title": "Обложка — Как заказать (Scarlet)"
+   "title": "Обложка — Как заказать (Red)"
   },
-  "Cover-Garantiya-Scarlet.dc.html": {
+  "Cover-Garantiya-Red.dc.html": {
    "x": 5800,
    "y": 5340,
    "w": 1080,
    "h": 1080,
-   "title": "Обложка — Гарантия (Scarlet)"
+   "title": "Обложка — Гарантия (Red)"
   },
-  "Cover-Uslugi-Ivory.dc.html": {
+  "Cover-Uslugi-Ink.dc.html": {
    "x": 0,
    "y": 6760,
    "w": 1080,
    "h": 1080,
-   "title": "Обложка — Услуги (Ivory)"
+   "title": "Обложка — Услуги (Ink)"
   },
-  "Cover-Raboty-Ivory.dc.html": {
+  "Cover-Raboty-Ink.dc.html": {
    "x": 1160,
    "y": 6760,
    "w": 1080,
    "h": 1080,
-   "title": "Обложка — Работы (Ivory)"
+   "title": "Обложка — Работы (Ink)"
   },
-  "Cover-Do-posle-Ivory.dc.html": {
+  "Cover-Do-posle-Ink.dc.html": {
    "x": 2320,
    "y": 6760,
    "w": 1080,
    "h": 1080,
-   "title": "Обложка — До/после (Ivory)"
+   "title": "Обложка — До/после (Ink)"
   },
-  "Cover-Otzyvy-Ivory.dc.html": {
+  "Cover-Otzyvy-Ink.dc.html": {
    "x": 3480,
    "y": 6760,
    "w": 1080,
    "h": 1080,
-   "title": "Обложка — Отзывы (Ivory)"
+   "title": "Обложка — Отзывы (Ink)"
   },
-  "Cover-Zakaz-Ivory.dc.html": {
+  "Cover-Zakaz-Ink.dc.html": {
    "x": 4640,
    "y": 6760,
    "w": 1080,
    "h": 1080,
-   "title": "Обложка — Как заказать (Ivory)"
+   "title": "Обложка — Как заказать (Ink)"
   },
-  "Cover-Garantiya-Ivory.dc.html": {
+  "Cover-Garantiya-Ink.dc.html": {
    "x": 5800,
    "y": 6760,
    "w": 1080,
    "h": 1080,
-   "title": "Обложка — Гарантия (Ivory)"
+   "title": "Обложка — Гарантия (Ink)"
   },
   "Story-1-Uslugi.dc.html": {
    "x": 0,
@@ -224,27 +224,27 @@
  "order": [
   "Main.dc.html",
   "Style.dc.html",
-  "Avatar-1-Crest.dc.html",
-  "Avatar-2-Znak.dc.html",
-  "Avatar-3-Svetlyy.dc.html",
-  "Cover-Uslugi-Steel.dc.html",
-  "Cover-Raboty-Steel.dc.html",
-  "Cover-Do-posle-Steel.dc.html",
-  "Cover-Otzyvy-Steel.dc.html",
-  "Cover-Zakaz-Steel.dc.html",
-  "Cover-Garantiya-Steel.dc.html",
-  "Cover-Uslugi-Scarlet.dc.html",
-  "Cover-Raboty-Scarlet.dc.html",
-  "Cover-Do-posle-Scarlet.dc.html",
-  "Cover-Otzyvy-Scarlet.dc.html",
-  "Cover-Zakaz-Scarlet.dc.html",
-  "Cover-Garantiya-Scarlet.dc.html",
-  "Cover-Uslugi-Ivory.dc.html",
-  "Cover-Raboty-Ivory.dc.html",
-  "Cover-Do-posle-Ivory.dc.html",
-  "Cover-Otzyvy-Ivory.dc.html",
-  "Cover-Zakaz-Ivory.dc.html",
-  "Cover-Garantiya-Ivory.dc.html",
+  "Avatar-1-Monogramma.dc.html",
+  "Avatar-2-Gerb.dc.html",
+  "Avatar-3-Tyomnyy.dc.html",
+  "Cover-Uslugi-Paper.dc.html",
+  "Cover-Raboty-Paper.dc.html",
+  "Cover-Do-posle-Paper.dc.html",
+  "Cover-Otzyvy-Paper.dc.html",
+  "Cover-Zakaz-Paper.dc.html",
+  "Cover-Garantiya-Paper.dc.html",
+  "Cover-Uslugi-Red.dc.html",
+  "Cover-Raboty-Red.dc.html",
+  "Cover-Do-posle-Red.dc.html",
+  "Cover-Otzyvy-Red.dc.html",
+  "Cover-Zakaz-Red.dc.html",
+  "Cover-Garantiya-Red.dc.html",
+  "Cover-Uslugi-Ink.dc.html",
+  "Cover-Raboty-Ink.dc.html",
+  "Cover-Do-posle-Ink.dc.html",
+  "Cover-Otzyvy-Ink.dc.html",
+  "Cover-Zakaz-Ink.dc.html",
+  "Cover-Garantiya-Ink.dc.html",
   "Story-1-Uslugi.dc.html",
   "Story-2-Kak-zakazat.dc.html",
   "Story-3-Garantiya.dc.html",
