@@ -1,0 +1,313 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-10-21T10:00:00Z"
+ },
+ "title": "Iron Prince — оформление Instagram",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1080,
+   "h": 2140,
+   "title": "Профиль — как будет выглядеть страница"
+  },
+  "Style.dc.html": {
+   "x": 1160,
+   "y": 0,
+   "w": 1080,
+   "h": 2160,
+   "title": "Фирменный стиль"
+  },
+  "Avatar-1-Monogramma.dc.html": {
+   "x": 0,
+   "y": 2500,
+   "w": 1080,
+   "h": 1080,
+   "title": "Аватар — монограмма IP"
+  },
+  "Avatar-2-Gerb.dc.html": {
+   "x": 1160,
+   "y": 2500,
+   "w": 1080,
+   "h": 1080,
+   "title": "Аватар — герб в линию"
+  },
+  "Avatar-3-Tyomnyy.dc.html": {
+   "x": 2320,
+   "y": 2500,
+   "w": 1080,
+   "h": 1080,
+   "title": "Аватар — тёмный вариант"
+  },
+  "Avatar-4-Personazh.dc.html": {
+   "x": 3480,
+   "y": 2500,
+   "w": 1080,
+   "h": 1080,
+   "title": "Аватар — персонаж-вентилятор"
+  },
+  "Cover-Obo-mne-Paper.dc.html": {
+   "x": 0,
+   "y": 3920,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Обо мне (Paper)"
+  },
+  "Cover-Uslugi-Paper.dc.html": {
+   "x": 1160,
+   "y": 3920,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Услуги (Paper)"
+  },
+  "Cover-Raboty-Paper.dc.html": {
+   "x": 2320,
+   "y": 3920,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Работы (Paper)"
+  },
+  "Cover-Do-posle-Paper.dc.html": {
+   "x": 3480,
+   "y": 3920,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — До/после (Paper)"
+  },
+  "Cover-Otzyvy-Paper.dc.html": {
+   "x": 4640,
+   "y": 3920,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Отзывы (Paper)"
+  },
+  "Cover-Zakaz-Paper.dc.html": {
+   "x": 5800,
+   "y": 3920,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Как заказать (Paper)"
+  },
+  "Cover-Garantiya-Paper.dc.html": {
+   "x": 6960,
+   "y": 3920,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Гарантия (Paper)"
+  },
+  "Cover-Obo-mne-Red.dc.html": {
+   "x": 0,
+   "y": 5340,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Обо мне (Red)"
+  },
+  "Cover-Uslugi-Red.dc.html": {
+   "x": 1160,
+   "y": 5340,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Услуги (Red)"
+  },
+  "Cover-Raboty-Red.dc.html": {
+   "x": 2320,
+   "y": 5340,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Работы (Red)"
+  },
+  "Cover-Do-posle-Red.dc.html": {
+   "x": 3480,
+   "y": 5340,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — До/после (Red)"
+  },
+  "Cover-Otzyvy-Red.dc.html": {
+   "x": 4640,
+   "y": 5340,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Отзывы (Red)"
+  },
+  "Cover-Zakaz-Red.dc.html": {
+   "x": 5800,
+   "y": 5340,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Как заказать (Red)"
+  },
+  "Cover-Garantiya-Red.dc.html": {
+   "x": 6960,
+   "y": 5340,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Гарантия (Red)"
+  },
+  "Cover-Obo-mne-Ink.dc.html": {
+   "x": 0,
+   "y": 6760,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Обо мне (Ink)"
+  },
+  "Cover-Uslugi-Ink.dc.html": {
+   "x": 1160,
+   "y": 6760,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Услуги (Ink)"
+  },
+  "Cover-Raboty-Ink.dc.html": {
+   "x": 2320,
+   "y": 6760,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Работы (Ink)"
+  },
+  "Cover-Do-posle-Ink.dc.html": {
+   "x": 3480,
+   "y": 6760,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — До/после (Ink)"
+  },
+  "Cover-Otzyvy-Ink.dc.html": {
+   "x": 4640,
+   "y": 6760,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Отзывы (Ink)"
+  },
+  "Cover-Zakaz-Ink.dc.html": {
+   "x": 5800,
+   "y": 6760,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Как заказать (Ink)"
+  },
+  "Cover-Garantiya-Ink.dc.html": {
+   "x": 6960,
+   "y": 6760,
+   "w": 1080,
+   "h": 1080,
+   "title": "Обложка — Гарантия (Ink)"
+  },
+  "Story-1-Uslugi.dc.html": {
+   "x": 0,
+   "y": 8180,
+   "w": 1080,
+   "h": 1920,
+   "title": "История — Услуги"
+  },
+  "Story-2-Kak-zakazat.dc.html": {
+   "x": 1160,
+   "y": 8180,
+   "w": 1080,
+   "h": 1920,
+   "title": "История — Как заказать"
+  },
+  "Story-3-Garantiya.dc.html": {
+   "x": 2320,
+   "y": 8180,
+   "w": 1080,
+   "h": 1920,
+   "title": "История — Гарантия и условия"
+  },
+  "Story-4-Pishite.dc.html": {
+   "x": 3480,
+   "y": 8180,
+   "w": 1080,
+   "h": 1920,
+   "title": "История — Пишите"
+  },
+  "Post-1-Znakomstvo.dc.html": {
+   "x": 0,
+   "y": 10440,
+   "w": 1080,
+   "h": 1440,
+   "title": "Пост — знакомство"
+  },
+  "Post-2-Do-posle.dc.html": {
+   "x": 1160,
+   "y": 10440,
+   "w": 1080,
+   "h": 1440,
+   "title": "Пост — до / после"
+  },
+  "Post-3-Temperatury.dc.html": {
+   "x": 2320,
+   "y": 10440,
+   "w": 1080,
+   "h": 1440,
+   "title": "Пост — температуры до / после"
+  },
+  "Post-4-Otzyv.dc.html": {
+   "x": 3480,
+   "y": 10440,
+   "w": 1080,
+   "h": 1440,
+   "title": "Пост — отзыв"
+  },
+  "Post-5-Sborka.dc.html": {
+   "x": 4640,
+   "y": 10440,
+   "w": 1080,
+   "h": 1440,
+   "title": "Пост — сборка: что внутри"
+  },
+  "Post-6-Pishite.dc.html": {
+   "x": 5800,
+   "y": 10440,
+   "w": 1080,
+   "h": 1440,
+   "title": "Пост — пишите"
+  }
+ },
+ "order": [
+  "Main.dc.html",
+  "Style.dc.html",
+  "Avatar-1-Monogramma.dc.html",
+  "Avatar-2-Gerb.dc.html",
+  "Avatar-3-Tyomnyy.dc.html",
+  "Avatar-4-Personazh.dc.html",
+  "Cover-Obo-mne-Paper.dc.html",
+  "Cover-Uslugi-Paper.dc.html",
+  "Cover-Raboty-Paper.dc.html",
+  "Cover-Do-posle-Paper.dc.html",
+  "Cover-Otzyvy-Paper.dc.html",
+  "Cover-Zakaz-Paper.dc.html",
+  "Cover-Garantiya-Paper.dc.html",
+  "Cover-Obo-mne-Red.dc.html",
+  "Cover-Uslugi-Red.dc.html",
+  "Cover-Raboty-Red.dc.html",
+  "Cover-Do-posle-Red.dc.html",
+  "Cover-Otzyvy-Red.dc.html",
+  "Cover-Zakaz-Red.dc.html",
+  "Cover-Garantiya-Red.dc.html",
+  "Cover-Obo-mne-Ink.dc.html",
+  "Cover-Uslugi-Ink.dc.html",
+  "Cover-Raboty-Ink.dc.html",
+  "Cover-Do-posle-Ink.dc.html",
+  "Cover-Otzyvy-Ink.dc.html",
+  "Cover-Zakaz-Ink.dc.html",
+  "Cover-Garantiya-Ink.dc.html",
+  "Story-1-Uslugi.dc.html",
+  "Story-2-Kak-zakazat.dc.html",
+  "Story-3-Garantiya.dc.html",
+  "Story-4-Pishite.dc.html",
+  "Post-1-Znakomstvo.dc.html",
+  "Post-2-Do-posle.dc.html",
+  "Post-3-Temperatury.dc.html",
+  "Post-4-Otzyv.dc.html",
+  "Post-5-Sborka.dc.html",
+  "Post-6-Pishite.dc.html"
+ ],
+ "notes": {}
+}
