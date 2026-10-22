@@ -87,6 +87,51 @@ def monogram(size, color=INK, accent=RED, x=None, y=None, line=5):
 </svg>"""
 
 
+# Fan mascot from the brand deck: a crowned case fan with a brush, waving.
+FAN_BODY = "#2B2F36"
+FAN_BLADE = "#C9CED6"
+FACE = "#F2ECE4"
+GOLD = "#E8B84A"
+BRUSH = "#6E655D"
+_mascots = [0]
+
+
+def mascot(size, x=None, y=None, label="Персонаж Iron Prince — вентилятор в короне"):
+    """White sticker outline and a soft shadow come from an SVG filter."""
+    _mascots[0] += 1
+    f = f"stk{_mascots[0]}"
+    o = f'stroke="{INK}" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"'
+    blade = "M150 172 C122 150 118 104 148 82 C170 104 176 142 150 172 Z"
+    blades = "".join(f'<path d="{blade}" fill="{FAN_BLADE}" {o} transform="rotate({a} 150 172)"></path>' for a in (8, 80, 152, 224, 296))
+    return f"""<svg role="img" aria-label="{label}" width="{size}" height="{size}" viewBox="-16 -14 356 356"{at(x, y)}>
+<defs><filter id="{f}" x="-15%" y="-15%" width="130%" height="135%">
+<feMorphology in="SourceAlpha" operator="dilate" radius="11" result="d"></feMorphology>
+<feFlood flood-color="#FFFFFF" result="white"></feFlood><feComposite in="white" in2="d" operator="in" result="w"></feComposite>
+<feGaussianBlur in="d" stdDeviation="9" result="b"></feGaussianBlur><feOffset in="b" dy="10" result="ob"></feOffset>
+<feFlood flood-color="#24211E" flood-opacity="0.16" result="ink"></feFlood><feComposite in="ink" in2="ob" operator="in" result="s"></feComposite>
+<feMerge><feMergeNode in="s"></feMergeNode><feMergeNode in="w"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge>
+</filter></defs>
+<g filter="url(#{f})">
+<path d="M246 160 L274 104" stroke="{INK}" stroke-width="12" stroke-linecap="round"></path>
+<path d="M58 196 L40 226" stroke="{INK}" stroke-width="12" stroke-linecap="round"></path>
+<g transform="rotate(-22 36 230)"><rect x="30" y="226" width="12" height="40" rx="5" fill="#C07A3A" {o}></rect>
+<rect x="26" y="196" width="20" height="26" fill="{FAN_BLADE}" {o}></rect><path d="M22 196 L18 152 Q36 144 54 152 L50 196 Z" fill="{BRUSH}" {o}></path></g>
+<circle cx="36" cy="230" r="14" fill="{FACE}" {o}></circle>
+<ellipse cx="116" cy="272" rx="32" ry="17" fill="{FAN_BODY}" {o}></ellipse><ellipse cx="184" cy="272" rx="32" ry="17" fill="{FAN_BODY}" {o}></ellipse>
+<circle cx="150" cy="172" r="98" fill="{FAN_BODY}" {o}></circle>
+<circle cx="150" cy="172" r="80" fill="none" stroke="#4A505B" stroke-width="4"></circle>
+{blades}
+<circle cx="150" cy="172" r="42" fill="{FACE}" {o}></circle>
+<ellipse cx="136" cy="164" rx="5.5" ry="8" fill="{INK}"></ellipse><ellipse cx="164" cy="164" rx="5.5" ry="8" fill="{INK}"></ellipse>
+<circle cx="124" cy="182" r="6.5" fill="#EFA3AE"></circle><circle cx="176" cy="182" r="6.5" fill="#EFA3AE"></circle>
+<path d="M137 181 Q150 193 163 181" fill="none" stroke="{INK}" stroke-width="5" stroke-linecap="round"></path>
+<path d="M110 84 L100 40 L128 60 L150 28 L172 60 L200 40 L190 84 Z" fill="{GOLD}" {o}></path>
+<circle cx="100" cy="38" r="9" fill="{GOLD}" {o}></circle><circle cx="150" cy="25" r="9.5" fill="{RED}" {o}></circle><circle cx="200" cy="38" r="9" fill="{GOLD}" {o}></circle>
+<circle cx="276" cy="100" r="16" fill="{FACE}" {o}></circle>
+<path d="M290 64 A22 22 0 0 1 306 84 M296 46 A40 40 0 0 1 320 78" fill="none" stroke="{INK}" stroke-width="6" stroke-linecap="round"></path>
+</g></svg>"""
+
+
 def crest(size, color=INK, accent=RED, bg=PAPER, x=None, y=None, label="Герб Iron Prince"):
     """The «Crest» in outline: quartered shield, crown, four service icons."""
     blade = "M80 155 C77 141 86 133 98 134 C97 147 90 153 80 155 Z"
@@ -160,6 +205,12 @@ ICONS = {
     "sborka": '<rect x="26" y="26" width="48" height="48" rx="5"></rect><rect x="40" y="40" width="20" height="20" rx="2"></rect><path d="M38 14v12M50 14v12M62 14v12M38 74v12M50 74v12M62 74v12M14 38h12M14 50h12M14 62h12M74 38h12M74 50h12M74 62h12"></path>',
     "nastroyka": '<path d="M16 28H84M16 50H84M16 72H84"></path><circle cx="34" cy="28" r="8" fill="BG"></circle><circle cx="64" cy="50" r="8" fill="BG"></circle><circle cx="44" cy="72" r="8" fill="BG"></circle>',
     "foto": '<rect x="12" y="26" width="76" height="54" rx="7"></rect><path d="M36 26l6-10h16l6 10"></path><circle cx="50" cy="53" r="14"></circle>',
+    "gpu": '<rect x="10" y="28" width="80" height="40" rx="5"></rect><circle cx="34" cy="48" r="11"></circle><circle cx="66" cy="48" r="11"></circle><path d="M18 68v10h28v-10"></path>',
+    "ram": '<rect x="8" y="30" width="84" height="32" rx="3"></rect><path d="M20 39v14M34 39v14M48 39v14M62 39v14M76 39v14M12 62v8h76v-8"></path>',
+    "ssd": '<rect x="12" y="32" width="76" height="36" rx="4"></rect><circle cx="25" cy="50" r="4"></circle><path d="M40 44h36M40 56h24"></path>',
+    "psu": '<rect x="14" y="20" width="72" height="60" rx="6"></rect><circle cx="50" cy="50" r="20"></circle><path d="M50 30v40M30 50h40"></path>',
+    "korpus": '<rect x="26" y="10" width="48" height="80" rx="5"></rect><path d="M26 30h48"></path><circle cx="50" cy="58" r="13"></circle><circle cx="50" cy="20" r="3"></circle>',
+    "plata": '<rect x="14" y="14" width="72" height="72" rx="4"></rect><rect x="28" y="28" width="24" height="24"></rect><path d="M64 26v40M72 26v40M26 66h28M26 76h28"></path>',
     "termo": '<path d="M42 58V20a8 8 0 0 1 16 0v38a16 16 0 1 1-16 0z"></path><path d="M50 36v28"></path>',
 }
 
@@ -187,12 +238,17 @@ def avatars():
 {monogram(700, color=PAPER, x=190, y=180, line=5)}
 </div>"""
     boards["Avatar-3-Tyomnyy"] = ("Аватар — тёмный вариант", page("Аватар — тёмный вариант", 1080, 1080, body))
+    body = f"""<div style="position: relative; width: 1080px; height: 1080px; overflow: hidden; background: {PAPER}">
+{mascot(800, x=150, y=150)}
+</div>"""
+    boards["Avatar-4-Personazh"] = ("Аватар — персонаж-вентилятор", page("Аватар — персонаж-вентилятор", 1080, 1080, body))
     return boards
 
 
 # ---------- 02: highlight covers ----------
 
 HIGHLIGHTS = [
+    ("privet", "Обо мне", "Obo-mne"),
     ("uslugi", "Услуги", "Uslugi"), ("raboty", "Работы", "Raboty"),
     ("doposle", "До/после", "Do-posle"), ("otzyvy", "Отзывы", "Otzyvy"),
     ("zakaz", "Как заказать", "Zakaz"), ("garantiya", "Гарантия", "Garantiya"),
@@ -209,7 +265,7 @@ def cover_body(key, style, size=1080):
     k = size / 1080
     return f"""<div style="position: relative; width: {size}px; height: {size}px; overflow: hidden; background: {bg}">
 <svg aria-hidden="true" width="{size}" height="{size}" style="position: absolute; left: 0; top: 0"><circle cx="{540 * k}" cy="{540 * k}" r="{420 * k}" fill="none" stroke="{ring}" stroke-width="{2.5 * k}"></circle></svg>
-{icon(key, round(420 * k), fg, bg=bg, stroke=3.6, x=round(330 * k), y=round(330 * k))}
+{mascot(round(620 * k), x=round(230 * k), y=round(225 * k)) if key == "privet" else icon(key, round(420 * k), fg, bg=bg, stroke=3.6, x=round(330 * k), y=round(330 * k))}
 </div>"""
 
 
@@ -289,6 +345,12 @@ def stories():
 {title("Гарантия", 124, align="center")}</div>
 <div style="position: absolute; left: 110px; right: 110px; top: 860px; display: flex; flex-direction: column; gap: 30px">{term_html}</div>"""
     boards["Story-3-Garantiya"] = ("История — Гарантия и условия", page("История — Гарантия и условия", 1080, 1920, story(inner)))
+
+    inner = f"""{mascot(640, x=220, y=300)}
+<div style="position: absolute; left: 110px; right: 110px; top: 1010px; display: flex; flex-direction: column; align-items: center; gap: 30px; text-align: center">
+{eyebrow("ПОДБОР · СБОРКА · ЧИСТКА")}{title("Пишите —<br>подберу, соберу<br>и почищу", 104, align="center")}{rule()}
+{text("Консультация бесплатно. Отвечаю вечером и в выходные.", 32, SOFT)}</div>"""
+    boards["Story-4-Pishite"] = ("История — Пишите", page("История — Пишите", 1080, 1920, story(inner)))
     return boards
 
 
@@ -319,7 +381,7 @@ def posts():
     pillars = "".join(f"""<div style="display: flex; flex-direction: column; align-items: center; gap: 18px; width: 260px">
 {icon(k, 110, RED, stroke=4)}<div style="{SERIF}; font-weight: 500; font-size: 30px; letter-spacing: 0.2em; color: {INK}">{t}</div></div>"""
                       for k, t in [("sborka", "СБОРКА"), ("chistka", "ЧИСТКА"), ("nastroyka", "НАСТРОЙКА")])
-    inner = f"""{monogram(300, x=390, y=120, line=5)}
+    inner = f"""{mascot(370, x=355, y=86)}
 <div style="position: absolute; left: 0; right: 0; top: 470px; display: flex; flex-direction: column; align-items: center; gap: 30px; text-align: center">
 {wordmark(58)}{rule(560, INK, 2)}{eyebrow("ПК И НОУТБУКИ · МИНСК")}
 <div style="margin-top: 24px">{title("Привет, я Василий", 100, align="center")}</div>
@@ -356,12 +418,35 @@ def posts():
 <div style="position: absolute; left: 0; right: 0; top: 1080px; display: flex; flex-direction: column; align-items: center; gap: 16px">
 {rule(80)}<div style="{SERIF}; font-weight: 600; font-size: 36px; color: {INK}">[Имя клиента]</div>{eyebrow("[УСЛУГА] · KUFAR", size=22)}</div>"""
     boards["Post-4-Otzyv"] = ("Пост — отзыв", page("Пост — отзыв", PW, PH, post_shell(inner)))
+
+    # After the Pinterest refs: a white build in pink and blue light, a components list under it.
+    parts = [("sborka", "Процессор"), ("plata", "Мат. плата"), ("gpu", "Видеокарта"), ("ram", "Память"),
+             ("ssd", "SSD"), ("chistka", "Охлаждение"), ("psu", "Блок питания"), ("korpus", "Корпус")]
+    cards = "".join(f"""<div style="display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 22px 22px 20px; background: {CARD}; border: 2px solid {HAIR}; border-radius: 12px">
+{icon(k, 62, RED, bg=CARD, stroke=4.4)}<div style="{SERIF}; font-weight: 600; font-size: 25px; line-height: 1.1; color: {INK}; white-space: nowrap">{t}</div>
+<div style="{SERIF}; font-size: 21px; color: {MUTED}">[модель]</div></div>""" for k, t in parts)
+    inner = f"""{header(PW, top=92)}
+<div style="position: absolute; left: 84px; top: 200px; width: 912px; height: 540px; border-radius: 12px; box-shadow: -40px -10px 90px rgba(239,163,190,0.55), 40px 20px 90px rgba(150,190,240,0.55)"></div>
+{photo_slot(84, 200, 912, 540, ("ГОТОВАЯ СБОРКА", PAPER, INK, INK), "фото сборки")}
+<div style="position: absolute; left: 84px; right: 84px; top: 790px; display: flex; justify-content: space-between; align-items: flex-end">
+<div style="display: flex; flex-direction: column; gap: 14px">{eyebrow("СБОРКА ПОД КЛЮЧ")}{title("Что внутри", 76)}</div>
+{text("подбор под задачу,<br>тесты и фотоотчёт", 26, MUTED, "text-align: right")}</div>
+<div style="position: absolute; left: 84px; right: 84px; top: 960px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px">{cards}</div>"""
+    boards["Post-5-Sborka"] = ("Пост — сборка: что внутри", page("Пост — сборка: что внутри", PW, PH, post_shell(inner)))
+
+    inner = f"""{header(PW, top=92)}
+{mascot(520, x=280, y=210)}
+<div style="position: absolute; left: 0; right: 0; top: 770px; display: flex; flex-direction: column; align-items: center; gap: 28px; text-align: center">
+{eyebrow("ПОДБОР · СБОРКА · ЧИСТКА")}{title("Пишите — подберу,<br>соберу и почищу", 86, align="center")}{rule()}
+{text("Консультация бесплатно — в директ или по телефону", 32, SOFT)}
+<div style="{SERIF}; font-weight: 500; font-size: 40px; letter-spacing: 0.04em; color: {INK}">{PHONE}</div></div>"""
+    boards["Post-6-Pishite"] = ("Пост — пишите", page("Пост — пишите", PW, PH, post_shell(inner)))
     return boards
 
 
 # ---------- 00: profile preview and brand sheet ----------
 
-POST_KEYS = ["Post-1-Znakomstvo", "Post-2-Do-posle", "Post-3-Temperatury", "Post-4-Otzyv"]
+POST_KEYS = ["Post-6-Pishite", "Post-5-Sborka", "Post-1-Znakomstvo", "Post-2-Do-posle", "Post-3-Temperatury", "Post-4-Otzyv"]
 UI = "font-family: -apple-system, 'Segoe UI', Roboto, sans-serif"
 
 
@@ -371,12 +456,12 @@ def body_of(html):
 
 def main_board(post_boards):
     stats = "".join(f'<div style="display: flex; flex-direction: column; align-items: flex-start"><div style="font-weight: 700; font-size: 40px">{n}</div>'
-                    f'<div style="font-size: 28px; color: #555555">{t}</div></div>' for n, t in [("4", "публикации"), ("0", "подписчики"), ("0", "подписки")])
+                    f'<div style="font-size: 28px; color: #555555">{t}</div></div>' for n, t in [("6", "публикаций"), ("0", "подписчики"), ("0", "подписки")])
     bio = "".join(f"<div>{line}</div>" for line in BIO)
-    hl = "".join(f"""<div style="display: flex; flex-direction: column; align-items: center; gap: 14px; width: 150px">
-<div style="position: relative; width: 140px; height: 140px; border-radius: 50%; overflow: hidden; box-shadow: 0 0 0 3px #DBDBDB">
-<div style="transform: scale({140 / 1080}); transform-origin: 0 0">{cover_body(k, "Paper")}</div></div>
-<div style="font-size: 24px; color: #111111; white-space: nowrap">{label}</div></div>""" for k, label, _ in HIGHLIGHTS[:6])
+    hl = "".join(f"""<div style="display: flex; flex-direction: column; align-items: center; gap: 14px; width: 136px">
+<div style="position: relative; width: 128px; height: 128px; border-radius: 50%; overflow: hidden; box-shadow: 0 0 0 3px #DBDBDB">
+<div style="transform: scale({128 / 1080}); transform-origin: 0 0">{cover_body(k, "Paper")}</div></div>
+<div style="font-size: 22px; color: #111111; white-space: nowrap">{label}</div></div>""" for k, label, _ in HIGHLIGHTS)
     scale = 359 / PW
     tiles = "".join(f"""<div style="position: relative; height: 479px; overflow: hidden; background: {PAPER}">
 <div style="transform: scale({scale:.4f}); transform-origin: 0 0">{body_of(post_boards[k][1])}</div></div>""" for k in POST_KEYS)
@@ -425,7 +510,7 @@ def style_board():
 <div style="{SERIF}; font-weight: 600; font-size: 30px; letter-spacing: 0.24em; color: {INK}">СБОРКА · ОБСЛУЖИВАНИЕ · НАСТРОЙКА</div></div>
 <div style="position: absolute; left: 110px; right: 110px; top: 860px; display: flex; align-items: center; justify-content: space-between">
 <div style="display: flex; align-items: flex-end; gap: 28px">{monogram(120)}{monogram(64, line=7)}{monogram(32, line=9)}</div>
-<div style="width: 230px; height: 230px; border-radius: 50%; background: {INK}; display: flex; align-items: center; justify-content: center">{monogram(170, color=PAPER)}</div>
+{mascot(250)}
 {crest(230)}</div>
 <div style="position: absolute; left: 110px; right: 110px; top: 1170px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 24px">{sw}</div>
 <div style="position: absolute; left: 110px; right: 110px; top: 1480px">{fr}</div>
