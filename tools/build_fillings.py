@@ -152,7 +152,7 @@ def cakes_overview():
 <div style="position: absolute; left: -16px; top: 4px; width: 50px; height: 50px; border-radius: 50%; background: {CARAMEL}; display: flex; align-items: center; justify-content: center; font-family: 'Montserrat', sans-serif; font-weight: 600; font-size: 20px; letter-spacing: 0.04em; color: #FBF5EC">{i + 1:02d}</div></div>
 <div style="flex: 1; min-width: 0">
 <div style="font-family: 'Marck Script', cursive; font-size: 54px; line-height: 1.05; color: {INK}">{f["name"]}</div>
-<div style="margin-top: 4px; font-weight: 500; font-size: 30px; line-height: 1.14; color: {HAND}">{f["desc"]}</div>
+<div style="margin-top: 4px; font-weight: 500; font-size: 30px; line-height: 1.14; color: {HAND}">{keep_words(f["desc"])}</div>
 </div>
 </div>""")
         if i < len(DATA["cakes"]) - 1:
@@ -260,6 +260,45 @@ def filling_story_layers(slug, index, total):
     return story(f"Начинка в разлёте — {f['name']}", body)
 
 
+# ---------------------------------------------------------------- one cake filling, photo collage
+
+def keep_words(text):
+    """Stop «крем-чиз» from breaking at its hyphen."""
+    return text.replace("крем-чиз", '<span style="white-space: nowrap">крем-чиз</span>')
+
+
+def filling_story_photo(slug, index, total):
+    """The AI photo collage (cross-section among ingredient textures) in a polaroid, with the composition below."""
+    f = F[slug]
+    body = f"""{header("DESSERTOPIA", f"НАЧИНКИ · {index} / {total}")}
+<div style="position: absolute; left: 62px; top: 318px; font-style: italic; font-size: 124px; line-height: 1">{f["name"]}</div>
+<div style="position: absolute; left: 72px; top: 452px; font-family: 'Marck Script', cursive; font-size: 46px; line-height: 1.1; color: {CARAMEL_TEXT}">{f["mood"]}</div>
+<div style="position: absolute; left: 116px; top: 548px; padding: 24px; background: {PAPER}; box-shadow: {SHADOW}; transform: rotate(-1.5deg)">
+<img src="{f["photo"]}" alt="{f["name"]}: разрез торта и ингредиенты" style="display: block; width: 800px; height: 800px; object-fit: cover"></div>
+{tape(465, 526, 150, -3)}
+<div style="position: absolute; left: 852px; top: 500px; width: 150px; height: 150px; border-radius: 50%; background: {CARAMEL}; transform: rotate(8deg); box-shadow: 0 6px 16px rgba(74,46,36,0.18); display: flex; align-items: center; justify-content: center; font-style: italic; font-weight: 500; font-size: 80px; color: #FBF5EC">{index:02d}</div>
+<div style="position: absolute; left: 70px; right: 70px; top: 1436px; padding: 34px 48px 32px; background: {PAPER}; box-shadow: {SHADOW}; transform: rotate(0.8deg)">
+<div style="font-family: 'Montserrat', sans-serif; font-weight: 500; font-size: 22px; letter-spacing: 0.3em; color: {CARAMEL_TEXT}">СОСТАВ</div>
+<div style="margin-top: 10px; font-weight: 500; font-size: 37px; line-height: 1.16; color: {HAND}">{keep_words(f["desc"])}</div>
+</div>
+{footer("выбрали? пишите мне", 1672)}"""
+    return story(f"Начинка, фото — {f['name']}", body)
+
+
+def filling_post_photo(slug, index, total):
+    """A 1080×1350 feed slide: name on cream, the photo collage full-bleed below."""
+    f = F[slug]
+    body = f"""<div style="position: relative; width: 1080px; height: 1350px; overflow: hidden; background: {CREAM}; font-family: 'Cormorant Garamond', serif; color: {INK}">
+{paper_noise(1080, 1350)}
+<div style="position: absolute; left: 60px; right: 60px; top: 44px; display: flex; justify-content: space-between; font-family: 'Montserrat', sans-serif; font-weight: 500; font-size: 22px; letter-spacing: 0.28em; color: #6B4A3A"><div>DESSERTOPIA</div><div>НАЧИНКИ · {index} / {total}</div></div>
+<div style="position: absolute; left: 56px; top: 96px; font-style: italic; font-size: 104px; line-height: 1">{f["name"]}</div>
+<div style="position: absolute; left: 64px; top: 208px; font-family: 'Marck Script', cursive; font-size: 40px; line-height: 1; color: {CARAMEL_TEXT}">{f["mood"]}</div>
+<div style="position: absolute; right: 60px; top: 104px; width: 120px; height: 120px; border-radius: 50%; background: {CARAMEL}; transform: rotate(8deg); display: flex; align-items: center; justify-content: center; font-style: italic; font-weight: 500; font-size: 64px; color: #FBF5EC">{index:02d}</div>
+<img src="{f["photo"]}" alt="{f["name"]}: разрез торта и ингредиенты" style="position: absolute; left: 0; top: 270px; width: 1080px; height: 1080px; object-fit: cover">
+</div>"""
+    return page(f"Пост — {f['name']}", 1080, 1350, body)
+
+
 # ---------------------------------------------------------------- trifles overview
 
 def trifles_overview():
@@ -291,6 +330,9 @@ def build_fillings():
     cakes = DATA["cakes"]
     for i, slug in enumerate(cakes, 1):
         (PROJECT / f"Fill-{i}-{slug}.dc.html").write_text(filling_story_layers(slug, i, len(cakes)))
+        if F[slug].get("photo"):
+            (PROJECT / f"Fill-Foto-{i}-{slug}.dc.html").write_text(filling_story_photo(slug, i, len(cakes)))
+            (PROJECT / f"Fill-Post-{i}-{slug}.dc.html").write_text(filling_post_photo(slug, i, len(cakes)))
     (PROJECT / f"Fill-{len(cakes) + 1}-Trifles.dc.html").write_text(trifles_overview())
 
 
