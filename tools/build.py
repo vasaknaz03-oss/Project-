@@ -26,7 +26,8 @@ CONFETTI = {"y": "#E8B523", "b": "#3AA0D8", "g": "#8CC43F", "r": "#E2453A"}
 
 FONTS = (
     '<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500'
-    '&amp;family=Marck+Script&amp;family=Montserrat:wght@400;500;600&amp;display=swap" rel="stylesheet">'
+    '&amp;family=Marck+Script&amp;family=Montserrat:wght@400;500;600&amp;family=Great+Vibes&amp;family=Lobster'
+    '&amp;family=Playfair+Display+SC&amp;family=Tenor+Sans&amp;display=swap" rel="stylesheet">'
 )
 
 
@@ -260,11 +261,15 @@ def build_covers():
 
 if __name__ == "__main__":
     import build_fillings
+    import build_logos
+    import build_pinned
     import build_profile
     import build_stories
 
     build_covers()
     build_fillings.build_fillings()
     build_stories.build_stories()
+    build_pinned.build_pinned()
+    build_logos.build_logos()
     build_profile.build_profile()
     print("covers and fillings written to", PROJECT)

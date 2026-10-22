@@ -145,6 +145,9 @@ def tip_icon(kind):
         "sun": "M30 30m-11 0a11 11 0 1 0 22 0a11 11 0 1 0 -22 0M30 5L30 11M30 49L30 55M5 30L11 30M49 30L55 30M12 12L16 16M44 44L48 48M48 12L44 16M12 48L16 44M6 54L54 6",
         "car": "M6 40L6 30L14 18L44 18L52 30L56 32L56 40ZM14 30L46 30M18 46m-6 0a6 6 0 1 0 12 0a6 6 0 1 0 -12 0M44 46m-6 0a6 6 0 1 0 12 0a6 6 0 1 0 -12 0",
         "heart": heart(30, 32, 1.05),
+        "knife": "M14 50L46 12C50 7 57 11 53 18L22 54ZM16 48L6 58",
+        "candle": "M24 28L24 55L36 55L36 28ZM30 28L30 21M30 5C25 11 25 16 30 18C35 16 35 11 30 5Z",
+        "box": "M8 22L30 12L52 22L52 46L30 56L8 46ZM8 22L30 32L52 22M30 32L30 56",
     }
     return (f'<svg aria-hidden="true" width="84" height="84" viewBox="0 0 60 60" style="flex: none" fill="none" stroke="{CARAMEL}" stroke-width="3.6" '
             f'stroke-linecap="round" stroke-linejoin="round"><path d="{paths[kind]}"></path></svg>')
@@ -165,7 +168,7 @@ def vazhno_storage():
 {title("Как хранить", "торт", 160, 96)}
 {paper(70, 620, 940, f'<div style="display: flex; flex-direction: column; gap: 34px">{rows}</div>', -1, "52px 54px 50px")}
 {tape(470, 598)}
-<div style="position: absolute; left: 70px; top: 1500px; width: 940px; text-align: center; {MARCK}; font-size: 46px; color: {CARAMEL_TEXT}">приятного чаепития!</div>
+<div style="position: absolute; left: 70px; top: 1480px; width: 940px; text-align: center; font-family: 'Great Vibes', cursive; font-size: 88px; line-height: 1; color: {INK}">приятного чаепития!</div>
 {doodles("", red_heart(840, 1520, 0.9))}"""
     return story("Важно — как хранить торт", body)
 
@@ -333,7 +336,8 @@ def prices_bento():
 {title("Цены", "бенто и трайфлы", 176, 88)}
 {"".join(html)}
 <div style="position: absolute; left: 70px; top: 1590px; width: 940px; text-align: center; font-weight: 500; font-size: 34px; line-height: 1.22; color: {HAND}">ягоды, шоколадные подтёки, рисунки кремом и другой декор оплачиваются дополнительно</div>
-{doodles("", red_heart(986, 470, 0.8))}"""
+<div style="position: absolute; right: 120px; top: 1690px; font-family: 'Great Vibes', cursive; font-size: 60px; line-height: 1; color: {CARAMEL_TEXT}">с любовью, Диана</div>
+{doodles("", red_heart(986, 470, 0.8) + red_heart(990, 1720, 0.8))}"""
     return story("Цены — бенто и трайфлы", body)
 
 

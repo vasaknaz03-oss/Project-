@@ -1,84 +1,701 @@
 {
   "v": 3,
-  "createdOnFiles": {"v": 1, "at": "2026-10-20T09:43:29Z"},
-  "title": "Dessertopia — новый дизайн Instagram",
-  "launch": {"view": "canvas"},
-  "pages": [],
+  "attachments": {},
   "boards": {
-    "Main.dc.html": {"x": 0, "y": 0, "w": 1080, "h": 2610, "title": "Профиль — как будет выглядеть страница"},
-    "Style.dc.html": {"x": 1160, "y": 0, "w": 1080, "h": 2000, "title": "Фирменный стиль"},
-    "Promo.dc.html": {"x": 2320, "y": 0, "w": 1280, "h": 3600, "title": "Продвижение без бизнес-аккаунта", "expand": "fill"},
-    "Logo-1-Classic.dc.html": {"x": 0, "y": 4020, "w": 1080, "h": 1080, "title": "Логотип — классика (какао)"},
-    "Logo-2-Cherry.dc.html": {"x": 1160, "y": 4020, "w": 1080, "h": 1080, "title": "Логотип — вишнёвый (как сейчас)"},
-    "Logo-3-Script.dc.html": {"x": 2320, "y": 4020, "w": 1080, "h": 1080, "title": "Логотип — рукописный"},
-    "Logo-4-Stamp.dc.html": {"x": 3480, "y": 4020, "w": 1080, "h": 1080, "title": "Логотип — штамп"},
-    "Logo-5-Mono.dc.html": {"x": 4640, "y": 4020, "w": 1080, "h": 1080, "title": "Логотип — монограмма"},
-    "Logo-6-Dark.dc.html": {"x": 5800, "y": 4020, "w": 1080, "h": 1080, "title": "Логотип — тёмный"},
-    "Logo-7-Avatar.dc.html": {"x": 6960, "y": 4020, "w": 1080, "h": 1080, "title": "Аватар — знак без подписи"},
-    "Logo-8-Doily.dc.html": {"x": 8120, "y": 4020, "w": 1080, "h": 1080, "title": "Аватар — кружевная салфетка (Pinterest)"},
-    "Cover-Vazhno-Cream.dc.html": {"x": 0, "y": 5520, "w": 1080, "h": 1080, "title": "Важно — кремовая"},
-    "Cover-Nachinki-Cream.dc.html": {"x": 1160, "y": 5520, "w": 1080, "h": 1080, "title": "Начинки — кремовая"},
-    "Cover-Raboty-Cream.dc.html": {"x": 2320, "y": 5520, "w": 1080, "h": 1080, "title": "Работы — кремовая"},
-    "Cover-Otzyvy-Cream.dc.html": {"x": 3480, "y": 5520, "w": 1080, "h": 1080, "title": "Отзывы — кремовая"},
-    "Cover-Deserty-Cream.dc.html": {"x": 4640, "y": 5520, "w": 1080, "h": 1080, "title": "Десерты — кремовая"},
-    "Cover-Nadpisi-Cream.dc.html": {"x": 5800, "y": 5520, "w": 1080, "h": 1080, "title": "Надписи — кремовая"},
-    "Cover-Vazhno-Caramel.dc.html": {"x": 0, "y": 6720, "w": 1080, "h": 1080, "title": "Важно — карамельная"},
-    "Cover-Nachinki-Caramel.dc.html": {"x": 1160, "y": 6720, "w": 1080, "h": 1080, "title": "Начинки — карамельная"},
-    "Cover-Raboty-Caramel.dc.html": {"x": 2320, "y": 6720, "w": 1080, "h": 1080, "title": "Работы — карамельная"},
-    "Cover-Otzyvy-Caramel.dc.html": {"x": 3480, "y": 6720, "w": 1080, "h": 1080, "title": "Отзывы — карамельная"},
-    "Cover-Deserty-Caramel.dc.html": {"x": 4640, "y": 6720, "w": 1080, "h": 1080, "title": "Десерты — карамельная"},
-    "Cover-Nadpisi-Caramel.dc.html": {"x": 5800, "y": 6720, "w": 1080, "h": 1080, "title": "Надписи — карамельная"},
-    "Cover-Vazhno-Lace.dc.html": {"x": 0, "y": 7920, "w": 1080, "h": 1080, "title": "Важно — кружево"},
-    "Cover-Nachinki-Lace.dc.html": {"x": 1160, "y": 7920, "w": 1080, "h": 1080, "title": "Начинки — кружево"},
-    "Cover-Raboty-Lace.dc.html": {"x": 2320, "y": 7920, "w": 1080, "h": 1080, "title": "Работы — кружево"},
-    "Cover-Otzyvy-Lace.dc.html": {"x": 3480, "y": 7920, "w": 1080, "h": 1080, "title": "Отзывы — кружево"},
-    "Cover-Deserty-Lace.dc.html": {"x": 4640, "y": 7920, "w": 1080, "h": 1080, "title": "Десерты — кружево"},
-    "Cover-Nadpisi-Lace.dc.html": {"x": 5800, "y": 7920, "w": 1080, "h": 1080, "title": "Надписи — кружево"},
-    "Vazhno-1-Kak-zakazat.dc.html": {"x": 0, "y": 9440, "w": 1080, "h": 1920, "title": "Важно 01 — как заказать"},
-    "Vazhno-2-Chto-napisat.dc.html": {"x": 1160, "y": 9440, "w": 1080, "h": 1920, "title": "Важно 02 — что указать"},
-    "Vazhno-3-Sroki.dc.html": {"x": 2320, "y": 9440, "w": 1080, "h": 1920, "title": "Важно 03 — сроки"},
-    "Vazhno-4-Khranenie.dc.html": {"x": 3480, "y": 9440, "w": 1080, "h": 1920, "title": "Важно 04 — хранение (по желанию)"},
-    "Ceny-1-Torty.dc.html": {"x": 4640, "y": 9440, "w": 1080, "h": 1920, "title": "Цены 1/2 — торты"},
-    "Ceny-2-Bento-traifly.dc.html": {"x": 5800, "y": 9440, "w": 1080, "h": 1920, "title": "Цены 2/2 — бенто и трайфлы"},
-    "Fill-0-Cakes.dc.html": {"x": 0, "y": 11780, "w": 1080, "h": 1920, "title": "Начинки — торты, все"},
-    "Fill-1-Banan.dc.html": {"x": 1160, "y": 11780, "w": 1080, "h": 1920, "title": "Банан-карамель — слои в разлёте"},
-    "Fill-2-Vishnya.dc.html": {"x": 2320, "y": 11780, "w": 1080, "h": 1920, "title": "Вишня-шоколад — слои в разлёте"},
-    "Fill-3-Barkhat.dc.html": {"x": 3480, "y": 11780, "w": 1080, "h": 1920, "title": "Красный бархат — слои в разлёте"},
-    "Fill-4-Limon.dc.html": {"x": 4640, "y": 11780, "w": 1080, "h": 1920, "title": "Лимон-мак — слои в разлёте"},
-    "Fill-5-Plombir.dc.html": {"x": 5800, "y": 11780, "w": 1080, "h": 1920, "title": "Ягодный пломбир — слои в разлёте"},
-    "Fill-6-Snickers.dc.html": {"x": 6960, "y": 11780, "w": 1080, "h": 1920, "title": "Сникерс — слои в разлёте"},
-    "Fill-7-Trifles.dc.html": {"x": 8120, "y": 11780, "w": 1080, "h": 1920, "title": "Начинки — трайфлы"},
-    "Fill-Foto-1-Banan.dc.html": {"x": 0, "y": 14120, "w": 1080, "h": 1920, "title": "Банан-карамель — фото-история"},
-    "Fill-Foto-2-Vishnya.dc.html": {"x": 1160, "y": 14120, "w": 1080, "h": 1920, "title": "Вишня-шоколад — фото-история"},
-    "Fill-Foto-3-Barkhat.dc.html": {"x": 2320, "y": 14120, "w": 1080, "h": 1920, "title": "Красный бархат — фото-история"},
-    "Fill-Foto-4-Limon.dc.html": {"x": 3480, "y": 14120, "w": 1080, "h": 1920, "title": "Лимон-мак — фото-история"},
-    "Fill-Foto-5-Plombir.dc.html": {"x": 4640, "y": 14120, "w": 1080, "h": 1920, "title": "Ягодный пломбир — фото-история"},
-    "Fill-Foto-6-Snickers.dc.html": {"x": 5800, "y": 14120, "w": 1080, "h": 1920, "title": "Сникерс — фото-история"},
-    "Fill-Post-1-Banan.dc.html": {"x": 0, "y": 16460, "w": 1080, "h": 1350, "title": "Банан-карамель — слайд карусели"},
-    "Fill-Post-2-Vishnya.dc.html": {"x": 1160, "y": 16460, "w": 1080, "h": 1350, "title": "Вишня-шоколад — слайд карусели"},
-    "Fill-Post-3-Barkhat.dc.html": {"x": 2320, "y": 16460, "w": 1080, "h": 1350, "title": "Красный бархат — слайд карусели"},
-    "Fill-Post-4-Limon.dc.html": {"x": 3480, "y": 16460, "w": 1080, "h": 1350, "title": "Лимон-мак — слайд карусели"},
-    "Fill-Post-5-Plombir.dc.html": {"x": 4640, "y": 16460, "w": 1080, "h": 1350, "title": "Ягодный пломбир — слайд карусели"},
-    "Fill-Post-6-Snickers.dc.html": {"x": 5800, "y": 16460, "w": 1080, "h": 1350, "title": "Сникерс — слайд карусели"},
-    "Tpl-1-Rabota-primer.dc.html": {"x": 0, "y": 18230, "w": 1080, "h": 1920, "title": "Работы — пример"},
-    "Tpl-2-Rabota-pustoy.dc.html": {"x": 1160, "y": 18230, "w": 1080, "h": 1920, "title": "Работы — пустой фон"},
-    "Tpl-3-Otzyv.dc.html": {"x": 2320, "y": 18230, "w": 1080, "h": 1920, "title": "Отзыв — фон под скриншот"},
-    "Tpl-4-Novaya-nachinka.dc.html": {"x": 3480, "y": 18230, "w": 1080, "h": 1920, "title": "Новая начинка — шаблон"},
-    "Tpl-5-Skoro.dc.html": {"x": 4640, "y": 18230, "w": 1080, "h": 1920, "title": "Скоро — тизер новинки"},
-    "Tpl-6-Reels-oblozhka.dc.html": {"x": 5800, "y": 18230, "w": 1080, "h": 1920, "title": "Обложка Reels"}
+    "Ceny-1-Torty.dc.html": {
+      "h": 1920,
+      "title": "Цены 1/2 — торты",
+      "w": 1080,
+      "x": 4640,
+      "y": 10640
+    },
+    "Ceny-2-Bento-traifly.dc.html": {
+      "h": 1920,
+      "title": "Цены 2/2 — бенто и трайфлы",
+      "w": 1080,
+      "x": 5800,
+      "y": 10640
+    },
+    "Cover-Deserty-Caramel.dc.html": {
+      "h": 1080,
+      "title": "Десерты — карамельная",
+      "w": 1080,
+      "x": 4640,
+      "y": 7920
+    },
+    "Cover-Deserty-Cream.dc.html": {
+      "h": 1080,
+      "title": "Десерты — кремовая",
+      "w": 1080,
+      "x": 4640,
+      "y": 6720
+    },
+    "Cover-Deserty-Lace.dc.html": {
+      "h": 1080,
+      "title": "Десерты — кружево",
+      "w": 1080,
+      "x": 4640,
+      "y": 9120
+    },
+    "Cover-Nachinki-Caramel.dc.html": {
+      "h": 1080,
+      "title": "Начинки — карамельная",
+      "w": 1080,
+      "x": 1160,
+      "y": 7920
+    },
+    "Cover-Nachinki-Cream.dc.html": {
+      "h": 1080,
+      "title": "Начинки — кремовая",
+      "w": 1080,
+      "x": 1160,
+      "y": 6720
+    },
+    "Cover-Nachinki-Lace.dc.html": {
+      "h": 1080,
+      "title": "Начинки — кружево",
+      "w": 1080,
+      "x": 1160,
+      "y": 9120
+    },
+    "Cover-Nadpisi-Caramel.dc.html": {
+      "h": 1080,
+      "title": "Надписи — карамельная",
+      "w": 1080,
+      "x": 5800,
+      "y": 7920
+    },
+    "Cover-Nadpisi-Cream.dc.html": {
+      "h": 1080,
+      "title": "Надписи — кремовая",
+      "w": 1080,
+      "x": 5800,
+      "y": 6720
+    },
+    "Cover-Nadpisi-Lace.dc.html": {
+      "h": 1080,
+      "title": "Надписи — кружево",
+      "w": 1080,
+      "x": 5800,
+      "y": 9120
+    },
+    "Cover-Otzyvy-Caramel.dc.html": {
+      "h": 1080,
+      "title": "Отзывы — карамельная",
+      "w": 1080,
+      "x": 3480,
+      "y": 7920
+    },
+    "Cover-Otzyvy-Cream.dc.html": {
+      "h": 1080,
+      "title": "Отзывы — кремовая",
+      "w": 1080,
+      "x": 3480,
+      "y": 6720
+    },
+    "Cover-Otzyvy-Lace.dc.html": {
+      "h": 1080,
+      "title": "Отзывы — кружево",
+      "w": 1080,
+      "x": 3480,
+      "y": 9120
+    },
+    "Cover-Raboty-Caramel.dc.html": {
+      "h": 1080,
+      "title": "Работы — карамельная",
+      "w": 1080,
+      "x": 2320,
+      "y": 7920
+    },
+    "Cover-Raboty-Cream.dc.html": {
+      "h": 1080,
+      "title": "Работы — кремовая",
+      "w": 1080,
+      "x": 2320,
+      "y": 6720
+    },
+    "Cover-Raboty-Lace.dc.html": {
+      "h": 1080,
+      "title": "Работы — кружево",
+      "w": 1080,
+      "x": 2320,
+      "y": 9120
+    },
+    "Cover-Vazhno-Caramel.dc.html": {
+      "h": 1080,
+      "title": "Важно — карамельная",
+      "w": 1080,
+      "x": 0,
+      "y": 7920
+    },
+    "Cover-Vazhno-Cream.dc.html": {
+      "h": 1080,
+      "title": "Важно — кремовая",
+      "w": 1080,
+      "x": 0,
+      "y": 6720
+    },
+    "Cover-Vazhno-Lace.dc.html": {
+      "h": 1080,
+      "title": "Важно — кружево",
+      "w": 1080,
+      "x": 0,
+      "y": 9120
+    },
+    "Fill-0-Cakes.dc.html": {
+      "h": 1920,
+      "title": "Начинки — торты, все",
+      "w": 1080,
+      "x": 0,
+      "y": 12980
+    },
+    "Fill-1-Banan.dc.html": {
+      "h": 1920,
+      "title": "Банан-карамель — слои в разлёте",
+      "w": 1080,
+      "x": 1160,
+      "y": 12980
+    },
+    "Fill-2-Vishnya.dc.html": {
+      "h": 1920,
+      "title": "Вишня-шоколад — слои в разлёте",
+      "w": 1080,
+      "x": 2320,
+      "y": 12980
+    },
+    "Fill-3-Barkhat.dc.html": {
+      "h": 1920,
+      "title": "Красный бархат — слои в разлёте",
+      "w": 1080,
+      "x": 3480,
+      "y": 12980
+    },
+    "Fill-4-Limon.dc.html": {
+      "h": 1920,
+      "title": "Лимон-мак — слои в разлёте",
+      "w": 1080,
+      "x": 4640,
+      "y": 12980
+    },
+    "Fill-5-Plombir.dc.html": {
+      "h": 1920,
+      "title": "Ягодный пломбир — слои в разлёте",
+      "w": 1080,
+      "x": 5800,
+      "y": 12980
+    },
+    "Fill-6-Snickers.dc.html": {
+      "h": 1920,
+      "title": "Сникерс — слои в разлёте",
+      "w": 1080,
+      "x": 6960,
+      "y": 12980
+    },
+    "Fill-7-Trifles.dc.html": {
+      "h": 1920,
+      "title": "Начинки — трайфлы",
+      "w": 1080,
+      "x": 8120,
+      "y": 12980
+    },
+    "Fill-Foto-1-Banan.dc.html": {
+      "h": 1920,
+      "title": "Банан-карамель — фото-история",
+      "w": 1080,
+      "x": 0,
+      "y": 15320
+    },
+    "Fill-Foto-2-Vishnya.dc.html": {
+      "h": 1920,
+      "title": "Вишня-шоколад — фото-история",
+      "w": 1080,
+      "x": 1160,
+      "y": 15320
+    },
+    "Fill-Foto-3-Barkhat.dc.html": {
+      "h": 1920,
+      "title": "Красный бархат — фото-история",
+      "w": 1080,
+      "x": 2320,
+      "y": 15320
+    },
+    "Fill-Foto-4-Limon.dc.html": {
+      "h": 1920,
+      "title": "Лимон-мак — фото-история",
+      "w": 1080,
+      "x": 3480,
+      "y": 15320
+    },
+    "Fill-Foto-5-Plombir.dc.html": {
+      "h": 1920,
+      "title": "Ягодный пломбир — фото-история",
+      "w": 1080,
+      "x": 4640,
+      "y": 15320
+    },
+    "Fill-Foto-6-Snickers.dc.html": {
+      "h": 1920,
+      "title": "Сникерс — фото-история",
+      "w": 1080,
+      "x": 5800,
+      "y": 15320
+    },
+    "Fill-Post-1-Banan.dc.html": {
+      "h": 2351,
+      "title": "Банан-карамель — слайд карусели",
+      "w": 1429,
+      "x": -349,
+      "y": 16659
+    },
+    "Fill-Post-2-Vishnya.dc.html": {
+      "h": 1350,
+      "title": "Вишня-шоколад — слайд карусели",
+      "w": 1080,
+      "x": 1160,
+      "y": 17660
+    },
+    "Fill-Post-3-Barkhat.dc.html": {
+      "h": 1350,
+      "title": "Красный бархат — слайд карусели",
+      "w": 1080,
+      "x": 2320,
+      "y": 17660
+    },
+    "Fill-Post-4-Limon.dc.html": {
+      "h": 3690,
+      "title": "Лимон-мак — слайд карусели",
+      "w": 1863,
+      "x": 2697,
+      "y": 15320
+    },
+    "Fill-Post-5-Plombir.dc.html": {
+      "h": 1350,
+      "title": "Ягодный пломбир — слайд карусели",
+      "w": 1080,
+      "x": 4640,
+      "y": 17660
+    },
+    "Fill-Post-6-Snickers.dc.html": {
+      "h": 1350,
+      "title": "Сникерс — слайд карусели",
+      "w": 1080,
+      "x": 5800,
+      "y": 17660
+    },
+    "Logo-1-Classic.dc.html": {
+      "h": 1080,
+      "title": "Логотип — классика (какао)",
+      "w": 1080,
+      "x": 0,
+      "y": 4020
+    },
+    "Logo-2-Cherry.dc.html": {
+      "h": 1080,
+      "title": "Логотип — вишнёвый (как сейчас)",
+      "w": 1080,
+      "x": 1160,
+      "y": 4020
+    },
+    "Logo-3-Script.dc.html": {
+      "h": 1080,
+      "title": "Логотип — рукописный",
+      "w": 1080,
+      "x": 2320,
+      "y": 4020
+    },
+    "Logo-4-Stamp.dc.html": {
+      "h": 1080,
+      "title": "Логотип — штамп",
+      "w": 1080,
+      "x": 3480,
+      "y": 4020
+    },
+    "Logo-5-Mono.dc.html": {
+      "h": 1080,
+      "title": "Логотип — монограмма",
+      "w": 1080,
+      "x": 4640,
+      "y": 4020
+    },
+    "Logo-6-Dark.dc.html": {
+      "h": 1080,
+      "title": "Логотип — тёмный",
+      "w": 1080,
+      "x": 5800,
+      "y": 4020
+    },
+    "Logo-7-Avatar.dc.html": {
+      "h": 1080,
+      "title": "Аватар — знак без подписи",
+      "w": 1080,
+      "x": 6960,
+      "y": 4020
+    },
+    "Logo-8-Doily.dc.html": {
+      "h": 1080,
+      "title": "Аватар — кружевная салфетка (Pinterest)",
+      "w": 1080,
+      "x": 8120,
+      "y": 4020
+    },
+    "Main.dc.html": {
+      "h": 2610,
+      "title": "Профиль — как будет выглядеть страница",
+      "w": 1080,
+      "x": 0,
+      "y": 0
+    },
+    "Promo.dc.html": {
+      "expand": "fill",
+      "h": 3600,
+      "title": "Продвижение без бизнес-аккаунта",
+      "w": 1280,
+      "x": 2320,
+      "y": 0
+    },
+    "Style.dc.html": {
+      "h": 2380,
+      "title": "Фирменный стиль",
+      "w": 1080,
+      "x": 1160,
+      "y": 0
+    },
+    "Tpl-1-Rabota-primer.dc.html": {
+      "h": 1920,
+      "title": "Работы — пример",
+      "w": 1080,
+      "x": 0,
+      "y": 19430
+    },
+    "Tpl-2-Rabota-pustoy.dc.html": {
+      "h": 1920,
+      "title": "Работы — пустой фон",
+      "w": 1080,
+      "x": 1160,
+      "y": 19430
+    },
+    "Tpl-3-Otzyv.dc.html": {
+      "h": 1920,
+      "title": "Отзыв — фон под скриншот",
+      "w": 1080,
+      "x": 2320,
+      "y": 19430
+    },
+    "Tpl-4-Novaya-nachinka.dc.html": {
+      "h": 1920,
+      "title": "Новая начинка — шаблон",
+      "w": 1080,
+      "x": 3480,
+      "y": 19430
+    },
+    "Tpl-5-Skoro.dc.html": {
+      "h": 1920,
+      "title": "Скоро — тизер новинки",
+      "w": 1080,
+      "x": 4640,
+      "y": 19430
+    },
+    "Tpl-6-Reels-oblozhka.dc.html": {
+      "h": 1920,
+      "title": "Обложка Reels",
+      "w": 1080,
+      "x": 5800,
+      "y": 19430
+    },
+    "Vazhno-1-Kak-zakazat.dc.html": {
+      "h": 1920,
+      "title": "Важно 01 — как заказать",
+      "w": 1080,
+      "x": 0,
+      "y": 10640
+    },
+    "Vazhno-2-Chto-napisat.dc.html": {
+      "h": 1920,
+      "title": "Важно 02 — что указать",
+      "w": 1080,
+      "x": 1160,
+      "y": 10640
+    },
+    "Vazhno-3-Sroki.dc.html": {
+      "h": 1920,
+      "title": "Важно 03 — сроки",
+      "w": 1080,
+      "x": 2320,
+      "y": 10640
+    },
+    "Vazhno-4-Khranenie.dc.html": {
+      "h": 1920,
+      "title": "Важно 04 — хранение (по желанию)",
+      "w": 1080,
+      "x": 3480,
+      "y": 10640
+    },
+    "Logo-9-Vanilla.dc.html": {
+      "x": 0,
+      "y": 5220,
+      "w": 1080,
+      "h": 1080,
+      "title": "Логотип — Vanilla, светлый"
+    },
+    "Logo-10-Vanilla-karamel.dc.html": {
+      "x": 1160,
+      "y": 5220,
+      "w": 1080,
+      "h": 1080,
+      "title": "Логотип — Vanilla, карамельный"
+    },
+    "Logo-11-Caramel.dc.html": {
+      "x": 2320,
+      "y": 5220,
+      "w": 1080,
+      "h": 1080,
+      "title": "Логотип — Caramel"
+    },
+    "Logo-12-Line.dc.html": {
+      "x": 3480,
+      "y": 5220,
+      "w": 1080,
+      "h": 1080,
+      "title": "Логотип — линейный"
+    },
+    "Logo-13-Word-in-cake.dc.html": {
+      "x": 4640,
+      "y": 5220,
+      "w": 1080,
+      "h": 1080,
+      "title": "Логотип — надпись в торте"
+    },
+    "Pin-1-Zakaz.dc.html": {
+      "x": 0,
+      "y": 21770,
+      "w": 1080,
+      "h": 1440,
+      "title": "Закреп 1 — обложка «Заказ и доставка»"
+    },
+    "Pin-1b-Zakaz-kak.dc.html": {
+      "x": 1160,
+      "y": 21770,
+      "w": 1080,
+      "h": 1440,
+      "title": "Заказ — как заказать"
+    },
+    "Pin-1c-Zakaz-sroki.dc.html": {
+      "x": 2320,
+      "y": 21770,
+      "w": 1080,
+      "h": 1440,
+      "title": "Заказ — сроки и получение"
+    },
+    "Pin-2-Ceny.dc.html": {
+      "x": 0,
+      "y": 23330,
+      "w": 1080,
+      "h": 1440,
+      "title": "Закреп 2 — обложка «Цены и начинки»"
+    },
+    "Pin-2b-Ceny-torty.dc.html": {
+      "x": 1160,
+      "y": 23330,
+      "w": 1080,
+      "h": 1440,
+      "title": "Цены — торты"
+    },
+    "Pin-2c-Ceny-bento.dc.html": {
+      "x": 2320,
+      "y": 23330,
+      "w": 1080,
+      "h": 1440,
+      "title": "Цены — бенто и трайфлы"
+    },
+    "Pin-2d-Ceny-nachinki.dc.html": {
+      "x": 3480,
+      "y": 23330,
+      "w": 1080,
+      "h": 1440,
+      "title": "Цены — начинки"
+    },
+    "Pin-3-Khranenie.dc.html": {
+      "x": 0,
+      "y": 24890,
+      "w": 1080,
+      "h": 1440,
+      "title": "Закреп 3 — обложка «Хранение и подача»"
+    },
+    "Pin-3b-Khranenie.dc.html": {
+      "x": 1160,
+      "y": 24890,
+      "w": 1080,
+      "h": 1440,
+      "title": "Хранение"
+    },
+    "Pin-3c-Podacha.dc.html": {
+      "x": 2320,
+      "y": 24890,
+      "w": 1080,
+      "h": 1440,
+      "title": "Подача"
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-10-20T09:43:29Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "view": "canvas"
+  },
+  "notes": {
+    "rowCovers": {
+      "kind": "title1",
+      "maxW": 6880,
+      "text": "Обложки актуального — кремовые, карамельные, кружевные",
+      "w": 240,
+      "x": 0,
+      "y": 6420
+    },
+    "rowFill": {
+      "kind": "title1",
+      "maxW": 8000,
+      "text": "Начинки — торты и трайфлы",
+      "w": 240,
+      "x": 0,
+      "y": 12680
+    },
+    "rowFoto": {
+      "kind": "title1",
+      "maxW": 6880,
+      "text": "Начинки — фото-карточки, сгенерированы ИИ в Figma",
+      "w": 240,
+      "x": 0,
+      "y": 15020
+    },
+    "rowLogo": {
+      "kind": "title1",
+      "maxW": 8000,
+      "text": "Логотип — 13 вариантов, второй ряд по вашим референсам",
+      "w": 240,
+      "x": 0,
+      "y": 3720
+    },
+    "rowPosts": {
+      "kind": "title1",
+      "maxW": 6880,
+      "text": "Начинки — карусель для ленты 1080×1350",
+      "w": 240,
+      "x": 0,
+      "y": 17360
+    },
+    "rowProfile": {
+      "kind": "title1",
+      "maxW": 3600,
+      "text": "Профиль, фирменный стиль и продвижение",
+      "w": 240,
+      "x": 0,
+      "y": -300
+    },
+    "rowTpl": {
+      "kind": "title1",
+      "maxW": 6880,
+      "text": "Заготовки на будущее",
+      "w": 240,
+      "x": 0,
+      "y": 19130
+    },
+    "rowVazhno": {
+      "kind": "title1",
+      "maxW": 6880,
+      "text": "Важно и цены — истории для актуального",
+      "w": 240,
+      "x": 0,
+      "y": 10340
+    },
+    "rowPinned": {
+      "x": 0,
+      "y": 21470,
+      "text": "Закреплённые посты 1080×1440 — обложка и карусель",
+      "kind": "title1",
+      "maxW": 4560,
+      "w": 240
+    }
   },
   "order": [
-    "Main.dc.html", "Style.dc.html", "Promo.dc.html", "Logo-1-Classic.dc.html", "Logo-2-Cherry.dc.html", "Logo-3-Script.dc.html", "Logo-4-Stamp.dc.html", "Logo-5-Mono.dc.html", "Logo-6-Dark.dc.html", "Logo-7-Avatar.dc.html", "Logo-8-Doily.dc.html", "Cover-Vazhno-Cream.dc.html", "Cover-Nachinki-Cream.dc.html", "Cover-Raboty-Cream.dc.html", "Cover-Otzyvy-Cream.dc.html", "Cover-Deserty-Cream.dc.html", "Cover-Nadpisi-Cream.dc.html", "Cover-Vazhno-Caramel.dc.html", "Cover-Nachinki-Caramel.dc.html", "Cover-Raboty-Caramel.dc.html", "Cover-Otzyvy-Caramel.dc.html", "Cover-Deserty-Caramel.dc.html", "Cover-Nadpisi-Caramel.dc.html", "Cover-Vazhno-Lace.dc.html", "Cover-Nachinki-Lace.dc.html", "Cover-Raboty-Lace.dc.html", "Cover-Otzyvy-Lace.dc.html", "Cover-Deserty-Lace.dc.html", "Cover-Nadpisi-Lace.dc.html", "Vazhno-1-Kak-zakazat.dc.html", "Vazhno-2-Chto-napisat.dc.html", "Vazhno-3-Sroki.dc.html", "Vazhno-4-Khranenie.dc.html", "Ceny-1-Torty.dc.html", "Ceny-2-Bento-traifly.dc.html", "Fill-0-Cakes.dc.html", "Fill-1-Banan.dc.html", "Fill-2-Vishnya.dc.html", "Fill-3-Barkhat.dc.html", "Fill-4-Limon.dc.html", "Fill-5-Plombir.dc.html", "Fill-6-Snickers.dc.html", "Fill-7-Trifles.dc.html", "Fill-Foto-1-Banan.dc.html", "Fill-Foto-2-Vishnya.dc.html", "Fill-Foto-3-Barkhat.dc.html", "Fill-Foto-4-Limon.dc.html", "Fill-Foto-5-Plombir.dc.html", "Fill-Foto-6-Snickers.dc.html", "Fill-Post-1-Banan.dc.html", "Fill-Post-2-Vishnya.dc.html", "Fill-Post-3-Barkhat.dc.html", "Fill-Post-4-Limon.dc.html", "Fill-Post-5-Plombir.dc.html", "Fill-Post-6-Snickers.dc.html", "Tpl-1-Rabota-primer.dc.html", "Tpl-2-Rabota-pustoy.dc.html", "Tpl-3-Otzyv.dc.html", "Tpl-4-Novaya-nachinka.dc.html", "Tpl-5-Skoro.dc.html", "Tpl-6-Reels-oblozhka.dc.html"
+    "Main.dc.html",
+    "Style.dc.html",
+    "Promo.dc.html",
+    "Logo-1-Classic.dc.html",
+    "Logo-2-Cherry.dc.html",
+    "Logo-3-Script.dc.html",
+    "Logo-4-Stamp.dc.html",
+    "Logo-5-Mono.dc.html",
+    "Logo-6-Dark.dc.html",
+    "Logo-7-Avatar.dc.html",
+    "Logo-8-Doily.dc.html",
+    "Logo-9-Vanilla.dc.html",
+    "Logo-10-Vanilla-karamel.dc.html",
+    "Logo-11-Caramel.dc.html",
+    "Logo-12-Line.dc.html",
+    "Logo-13-Word-in-cake.dc.html",
+    "Cover-Vazhno-Cream.dc.html",
+    "Cover-Nachinki-Cream.dc.html",
+    "Cover-Raboty-Cream.dc.html",
+    "Cover-Otzyvy-Cream.dc.html",
+    "Cover-Deserty-Cream.dc.html",
+    "Cover-Nadpisi-Cream.dc.html",
+    "Cover-Vazhno-Caramel.dc.html",
+    "Cover-Nachinki-Caramel.dc.html",
+    "Cover-Raboty-Caramel.dc.html",
+    "Cover-Otzyvy-Caramel.dc.html",
+    "Cover-Deserty-Caramel.dc.html",
+    "Cover-Nadpisi-Caramel.dc.html",
+    "Cover-Vazhno-Lace.dc.html",
+    "Cover-Nachinki-Lace.dc.html",
+    "Cover-Raboty-Lace.dc.html",
+    "Cover-Otzyvy-Lace.dc.html",
+    "Cover-Deserty-Lace.dc.html",
+    "Cover-Nadpisi-Lace.dc.html",
+    "Vazhno-1-Kak-zakazat.dc.html",
+    "Vazhno-2-Chto-napisat.dc.html",
+    "Vazhno-3-Sroki.dc.html",
+    "Vazhno-4-Khranenie.dc.html",
+    "Ceny-1-Torty.dc.html",
+    "Ceny-2-Bento-traifly.dc.html",
+    "Fill-0-Cakes.dc.html",
+    "Fill-1-Banan.dc.html",
+    "Fill-2-Vishnya.dc.html",
+    "Fill-3-Barkhat.dc.html",
+    "Fill-4-Limon.dc.html",
+    "Fill-5-Plombir.dc.html",
+    "Fill-6-Snickers.dc.html",
+    "Fill-7-Trifles.dc.html",
+    "Fill-Foto-1-Banan.dc.html",
+    "Fill-Foto-2-Vishnya.dc.html",
+    "Fill-Foto-3-Barkhat.dc.html",
+    "Fill-Foto-4-Limon.dc.html",
+    "Fill-Foto-5-Plombir.dc.html",
+    "Fill-Foto-6-Snickers.dc.html",
+    "Fill-Post-1-Banan.dc.html",
+    "Fill-Post-2-Vishnya.dc.html",
+    "Fill-Post-3-Barkhat.dc.html",
+    "Fill-Post-4-Limon.dc.html",
+    "Fill-Post-5-Plombir.dc.html",
+    "Fill-Post-6-Snickers.dc.html",
+    "Tpl-1-Rabota-primer.dc.html",
+    "Tpl-2-Rabota-pustoy.dc.html",
+    "Tpl-3-Otzyv.dc.html",
+    "Tpl-4-Novaya-nachinka.dc.html",
+    "Tpl-5-Skoro.dc.html",
+    "Tpl-6-Reels-oblozhka.dc.html",
+    "Pin-1-Zakaz.dc.html",
+    "Pin-1b-Zakaz-kak.dc.html",
+    "Pin-1c-Zakaz-sroki.dc.html",
+    "Pin-2-Ceny.dc.html",
+    "Pin-2b-Ceny-torty.dc.html",
+    "Pin-2c-Ceny-bento.dc.html",
+    "Pin-2d-Ceny-nachinki.dc.html",
+    "Pin-3-Khranenie.dc.html",
+    "Pin-3b-Khranenie.dc.html",
+    "Pin-3c-Podacha.dc.html"
   ],
-  "notes": {
-    "rowProfile": {"x": 0, "y": -300, "text": "Профиль, фирменный стиль и продвижение", "kind": "title1", "maxW": 3600},
-    "rowLogo": {"x": 0, "y": 3720, "text": "Логотип — 8 вариантов", "kind": "title1", "maxW": 9200},
-    "rowCovers": {"x": 0, "y": 5220, "text": "Обложки актуального — кремовые, карамельные, кружевные", "kind": "title1", "maxW": 6880},
-    "rowVazhno": {"x": 0, "y": 9140, "text": "Важно и цены — истории для актуального", "kind": "title1", "maxW": 6880},
-    "rowFill": {"x": 0, "y": 11480, "text": "Начинки — торты и трайфлы", "kind": "title1", "maxW": 9200},
-    "rowTpl": {"x": 0, "y": 17930, "text": "Заготовки на будущее", "kind": "title1", "maxW": 6880},
-    "rowFoto": {"x": 0, "y": 13820, "text": "Начинки — фото-карточки, сгенерированы ИИ в Figma", "kind": "title1", "maxW": 6880},
-    "rowPosts": {"x": 0, "y": 16160, "text": "Начинки — карусель для ленты 1080×1350", "kind": "title1", "maxW": 6880}
-  },
-  "designSystems": []
+  "pages": [],
+  "title": "Dessertopia — новый дизайн Instagram"
 }

@@ -7,15 +7,15 @@ from build import (CARAMEL, CARAMEL_TEXT, CHERRY, CONFETTI, CREAM, HAND, INK, PA
 
 HIGHLIGHTS = [("vazhno", "Важно"), ("nachinki", "Начинки"), ("raboty", "Работы"), ("otzyvy", "Отзывы"), ("deserty", "Десерты")]
 GRID = [
-    ("acc311caf7482b23272767a83e2e6cb5", "Пост «Торты, которые говорят за тебя»", "pin"),
+    ("005080349611d3189dfe90de2a8bd929", "Закреплённый пост «Заказ и доставка»", "pin"),
+    ("2ceec1c35d367293e7617c2252eb7139", "Закреплённый пост «Цены и начинки»", "pin"),
+    ("4c7e3755ee36408cef662a32834a595e", "Закреплённый пост «Хранение и подача»", "pin"),
+    ("f8fcf921f8e249a7b206a12603d5a9c9", "Карусель начинок", "carousel"),
     ("4e531b87e15dad19504aaaad31d66a47", "Карусель «Повод не нужен»", "carousel"),
     ("0192b5076a120dafd266790ff9ee6270", "Пост «Десерты в стаканчиках»", ""),
     ("3f2f924fea4a3947ce2a07ae1027e553", "Пост «Что написать на твоём торте?»", ""),
+    ("acc311caf7482b23272767a83e2e6cb5", "Пост «Торты, которые говорят за тебя»", ""),
     ("4053d6ba731c96bceb9810e75856a825", "Торт «время пить чай»", ""),
-    ("23b9924553f15cce9ddcde18a7004421", "Торт «Ура! это ещё не твой песок»", ""),
-    ("a1351d27dc96044b7b0c5334f5583991", "Торт с лягушками", ""),
-    ("b0573522c810f1d2a6b28ff6881de9a9", "Бенто «можно просто так»", ""),
-    ("0f4be2e274687d61f9078170b9c5f393", "Торт Happy Birthday", ""),
 ]
 BIO = [
     "Dessertopia — сладкая страна чудес",
@@ -90,12 +90,14 @@ def style_board():
         ("Cormorant Garamond", "заголовки", "font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 104px", "Повод не нужен"),
         ("Marck Script", "подписи от руки", "font-family: 'Marck Script', cursive; font-size: 72px", "для самой нежной"),
         ("Montserrat", "служебные надписи, кнопки", "font-family: 'Montserrat', sans-serif; font-weight: 500; font-size: 34px; letter-spacing: 0.3em", "СЛАДКИЙ АРХИВ"),
+        ("Great Vibes", "каллиграфия, подпись", "font-family: 'Great Vibes', cursive; font-size: 92px", "с любовью, Диана"),
+        ("Playfair Display SC", "закреплённые посты", "font-family: 'Playfair Display SC', serif; font-size: 64px; letter-spacing: 0.04em", "ХРАНЕНИЕ И ПОДАЧА"),
     ]
     fr = "".join(f"""<div style="padding: 26px 0; border-top: 2px solid {RULE}">
 <div style="font-family: 'Montserrat', sans-serif; font-weight: 500; font-size: 22px; letter-spacing: 0.24em; color: {CARAMEL_TEXT}">{n.upper()} · {r.upper()}</div>
 <div style="margin-top: 10px; line-height: 1.05; color: {INK}; {css}">{sample}</div></div>""" for n, r, css, sample in fonts)
-    body = f"""<div style="position: relative; width: 1080px; height: 2000px; overflow: hidden; background: {CREAM}; font-family: 'Cormorant Garamond', serif; color: {INK}">
-{paper_noise(1080, 2000)}
+    body = f"""<div style="position: relative; width: 1080px; height: 2380px; overflow: hidden; background: {CREAM}; font-family: 'Cormorant Garamond', serif; color: {INK}">
+{paper_noise(1080, 2380)}
 <div style="position: absolute; left: 70px; right: 70px; top: 70px; display: flex; justify-content: space-between; font-family: 'Montserrat', sans-serif; font-weight: 500; font-size: 24px; letter-spacing: 0.28em; color: #6B4A3A"><div>DESSERTOPIA</div><div>ФИРМЕННЫЙ СТИЛЬ</div></div>
 <div style="position: absolute; left: 70px; right: 70px; top: 120px; height: 2px; background: {RULE}"></div>
 <div style="position: absolute; left: 62px; top: 150px; font-style: italic; font-size: 160px; line-height: 1">Фирменный</div>
@@ -104,9 +106,10 @@ def style_board():
 <div style="position: absolute; left: 70px; right: 70px; top: 470px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 34px 30px">{sw}</div>
 <div style="position: absolute; left: 70px; top: 1150px; display: flex; gap: 18px; align-items: center"><div style="font-family: 'Marck Script', cursive; font-size: 40px; color: {HAND}">конфетти:</div>{confetti}</div>
 <div style="position: absolute; left: 70px; right: 70px; top: 1230px">{fr}</div>
-<div style="position: absolute; left: 50px; right: 50px; top: 1790px; display: flex; justify-content: space-between">{icons}</div>
+<div style="position: absolute; left: 70px; top: 2096px; font-family: 'Montserrat', sans-serif; font-weight: 500; font-size: 22px; letter-spacing: 0.24em; color: {CARAMEL_TEXT}">В ЛОГОТИПАХ ТАКЖЕ · LOBSTER · TENOR SANS</div>
+<div style="position: absolute; left: 50px; right: 50px; top: 2196px; display: flex; justify-content: space-between">{icons}</div>
 </div>"""
-    return page("Фирменный стиль", 1080, 2000, body)
+    return page("Фирменный стиль", 1080, 2380, body)
 
 
 def build_profile():

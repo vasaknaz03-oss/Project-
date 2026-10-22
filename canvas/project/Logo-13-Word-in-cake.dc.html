@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Логотип — надпись в торте</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&amp;family=Marck+Script&amp;family=Montserrat:wght@400;500;600&amp;family=Great+Vibes&amp;family=Lobster&amp;family=Playfair+Display+SC&amp;family=Tenor+Sans&amp;display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div style="position: relative; width: 1080px; height: 1080px; overflow: hidden; background: #F1E9DE; font-family: 'Cormorant Garamond', serif">
+<svg aria-hidden="true" width="1080" height="1080" style="position: absolute; left: 0; top: 0"><filter id="paper"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"></feTurbulence><feColorMatrix values="0 0 0 0 0.45  0 0 0 0 0.33  0 0 0 0 0.24  0 0 0 0.09 0"></feColorMatrix></filter><rect width="100%" height="100%" filter="url(#paper)"></rect></svg>
+<svg role="img" aria-label="Торт с надписью Dessertopia" width="1080" height="1080" style="position: absolute; left: 0; top: 0"><g transform="translate(540 390) scale(1.65)" fill="none" stroke="#4A2E24" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"><path d="M-170 0L-170 170A170 40 0 0 0 170 170L170 0" fill="#FFFCF6"></path><path d="M-170 0A170 40 0 0 1 170 0A170 40 0 0 1 -170 0Z" fill="#FFFBF4"></path><path d="M-168 10C-160 44 -140 44 -132 20C-120 62 -96 62 -86 28C-76 48 -56 48 -46 24C-34 66 -10 66 0 30C10 52 30 52 40 26C52 64 76 64 86 32C96 50 116 50 126 22C138 58 160 58 168 10"></path><path d="M-236 206C-120 240 120 240 236 206"></path><path d="M6 -66C12 -98 32 -116 54 -120"></path><circle cx="0" cy="-46" r="22" fill="#C2363B" stroke="none"></circle></g></svg>
+<div style="position: absolute; left: 0; right: 0; top: 486px; text-align: center; font-family: 'Great Vibes', cursive; font-size: 128px; line-height: 1; color: #4A2E24">Dessertopia</div>
+<div style="position: absolute; left: 0; right: 0; top: 820px; text-align: center; font-family: 'Tenor Sans', sans-serif; font-size: 36px; letter-spacing: 0.3em; color: #8A5634">КОНДИТЕРСКАЯ · МИНСК</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1080,"height":1080}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
