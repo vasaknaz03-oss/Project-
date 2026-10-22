@@ -1,4 +1,4 @@
-"""Filling stories: the cakes overview, one story per cake filling and the trifles overview.
+"""Filling stories: the cakes overview, one story per cake filling (layers «в разлёте») and the trifles overview.
 
 Data lives in tools/fillings.json. Run `python3 tools/build.py` (it calls this module).
 """
@@ -12,39 +12,11 @@ from build import (CARAMEL, CARAMEL_TEXT, CHERRY, COCOA, CREAM, HAND, INK, PAPER
 DATA = json.loads((ROOT / "tools" / "fillings.json").read_text())
 F = DATA["fillings"]
 
-SPONGE = {"vanilla": "#EDC98A", "chocolate": "#6A3E2B", "red": "#A8262F", "poppy": "#EAD9A8"}
-FILL = {"caramel": "#C98A3C", "cherry": "#7A1622", "berry": "#C73A52", "lemon": "#F0C43F", "strawberry": "#D2405A"}
+# «mystery» is the uncoloured stack of the «Скоро» teaser.
+SPONGE = {"vanilla": "#EDC98A", "chocolate": "#6A3E2B", "red": "#A8262F", "poppy": "#EAD9A8", "mystery": "#E7DCCD"}
+FILL = {"caramel": "#C98A3C", "cherry": "#7A1622", "berry": "#C73A52", "lemon": "#F0C43F", "strawberry": "#D2405A", "mystery": "#D6C6B2"}
 FROST = "#FFF6E8"
 SHADOW = "0 18px 40px rgba(74,46,36,0.16), 0 3px 8px rgba(74,46,36,0.10)"
-
-# Slice geometry, viewBox 0 0 300 262: front cut face A..B, side cut face B..C, top A-B-C.
-TOP, X0, X1, DX, DY = 96, 30, 190, 72, 48
-BANDS = [("frost", 10), ("sponge1", 28), ("cream1", 9), ("filling1", 11),
-         ("sponge2", 28), ("cream2", 9), ("filling2", 11), ("sponge3", 26)]
-
-
-def band_rows():
-    y, rows = TOP, []
-    for name, h in BANDS:
-        rows.append((name, y, y + h))
-        y += h
-    return rows
-
-
-def band_color(f, name):
-    if name.startswith("sponge"):
-        return SPONGE[f["sponge"]]
-    if name.startswith("filling"):
-        return FILL[f["filling"]]
-    return FROST
-
-
-def band_center(name):
-    for n, y1, y2 in band_rows():
-        if n == name:
-            return (y1 + y2) / 2
-    raise KeyError(name)
-
 
 def inclusion(kind, x, y):
     if kind == "banana":
@@ -100,42 +72,6 @@ def topping(kind):
     if kind == "strawberry":
         return strawberry(146, 56, 1.1) + '<ellipse cx="168" cy="64" rx="11" ry="6.5" fill="#F7EDB4" stroke="#CDB262" stroke-width="1.6"></ellipse>'
     return ""
-
-
-def slice_svg(f, width, label):
-    rnd = random.Random(f["name"])
-    rows = band_rows()
-    parts = ['<path d="M8 236C70 244 160 246 200 238C240 228 270 206 292 186" fill="none" stroke="#AD7A4F" stroke-width="3"></path>']
-    for name, y1, y2 in rows:
-        c = band_color(f, name)
-        parts.append(f'<rect x="{X0}" y="{y1}" width="{X1 - X0}" height="{y2 - y1}" fill="{c}" stroke="none"></rect>')
-        parts.append(f'<polygon points="{X1},{y1} {X1 + DX},{y1 - DY} {X1 + DX},{y2 - DY} {X1},{y2}" fill="{c}" stroke="none"></polygon>')
-    # sponge crumb texture
-    texture = []
-    for name, y1, y2 in rows:
-        if not name.startswith("sponge"):
-            continue
-        poppy = f["sponge"] == "poppy"
-        for _ in range(26 if poppy else 12):
-            x, y = rnd.uniform(X0 + 10, X1 - 6), rnd.uniform(y1 + 4, y2 - 4)
-            texture.append(f"M{x:.1f} {y:.1f}l0 0")
-        colour = "#2E2019" if poppy else "rgba(46,32,25,0.22)"
-        parts.append(f'<path d="{"".join(texture)}" stroke="{colour}" stroke-width="{2.6 if poppy else 3.2}"></path>')
-        texture = []
-    kind = f.get("inclusion", "none")
-    if kind != "none":
-        for name in ("filling1", "filling2") if kind == "cherry" else ("filling2",):
-            y = band_center(name)
-            parts += [inclusion(kind, x, y) for x in (54, 86, 118, 150, 176)]
-    parts.append(f'<rect x="{X0}" y="{TOP}" width="8" height="132" fill="{FROST}" stroke="none"></rect>')
-    parts.append(f'<polygon points="{X1},{TOP} {X1 + DX},{TOP - DY} {X1 + DX},{TOP + 132 - DY} {X1},{TOP + 132}" fill="#2E2019" opacity="0.10" stroke="none"></polygon>')
-    parts.append(f'<path d="M{X0} {TOP}L{X1} {TOP}L{X1 + DX} {TOP - DY}Q110 30 {X0} {TOP}Z" fill="{FROST}"></path>')
-    parts.append(f'<path d="M{X0} {TOP}L{X1} {TOP}L{X1} {TOP + 132}L{X0} {TOP + 132}Z M{X1} {TOP}L{X1 + DX} {TOP - DY}L{X1 + DX} {TOP + 132 - DY}L{X1} {TOP + 132}" fill="none"></path>')
-    parts.append(dollop())
-    parts.append(topping(f["topping"]))
-    h = round(width * 262 / 300)
-    return (f'<svg role="img" aria-label="{label}" viewBox="0 0 300 262" width="{width}" height="{h}" '
-            f'stroke="{COCOA}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">{"".join(parts)}</svg>')
 
 
 def cup_svg(f, slug, width, label):
@@ -208,20 +144,20 @@ def story(title, body):
 
 def cakes_overview():
     rows = []
-    y = 600
+    y = 590
     for i, slug in enumerate(DATA["cakes"]):
         f = F[slug]
-        rows.append(f"""<div style="position: absolute; left: 70px; right: 70px; top: {y}px; height: 160px; display: flex; align-items: center; gap: 34px">
-<div style="position: relative; flex: none; width: 160px">{slice_svg(f, 160, f["name"])}
-<div style="position: absolute; left: -12px; top: -8px; width: 50px; height: 50px; border-radius: 50%; background: {CARAMEL}; display: flex; align-items: center; justify-content: center; font-family: 'Montserrat', sans-serif; font-weight: 600; font-size: 20px; letter-spacing: 0.04em; color: #FBF5EC">{i + 1:02d}</div></div>
+        rows.append(f"""<div style="position: absolute; left: 70px; right: 70px; top: {y}px; height: 168px; display: flex; align-items: center; gap: 40px">
+<div style="position: relative; flex: none; width: 150px">{mini_stack(f, 150, f["name"])}
+<div style="position: absolute; left: -16px; top: 4px; width: 50px; height: 50px; border-radius: 50%; background: {CARAMEL}; display: flex; align-items: center; justify-content: center; font-family: 'Montserrat', sans-serif; font-weight: 600; font-size: 20px; letter-spacing: 0.04em; color: #FBF5EC">{i + 1:02d}</div></div>
 <div style="flex: 1; min-width: 0">
 <div style="font-family: 'Marck Script', cursive; font-size: 54px; line-height: 1.05; color: {INK}">{f["name"]}</div>
 <div style="margin-top: 4px; font-weight: 500; font-size: 30px; line-height: 1.14; color: {HAND}">{f["desc"]}</div>
 </div>
 </div>""")
         if i < len(DATA["cakes"]) - 1:
-            rows.append(f'<div style="position: absolute; left: 264px; right: 70px; top: {y + 165}px; border-top: 3px dotted rgba(173,122,79,0.55)"></div>')
-        y += 170
+            rows.append(f'<div style="position: absolute; left: 260px; right: 70px; top: {y + 170}px; border-top: 3px dotted rgba(173,122,79,0.55)"></div>')
+        y += 174
     body = f"""{header("DESSERTOPIA", "НАЧИНКИ · ТОРТЫ")}
 <div style="position: absolute; left: 62px; top: 318px; font-style: italic; font-size: 168px; line-height: 1">Начинки</div>
 <div style="position: absolute; left: 72px; top: 476px; font-size: 96px; line-height: 1">для тортов</div>
@@ -230,48 +166,6 @@ def cakes_overview():
 {"".join(rows)}
 {footer("подробнее — листайте")}"""
     return story("Начинки для тортов", body)
-
-
-# ---------------------------------------------------------------- one cake filling
-
-def filling_story(slug, index, total):
-    f = F[slug]
-    scale, sx, sy = 2.1, 362, 662
-    labels, arrows, prev_bottom = [], [], 0
-    for text, target in f["labels"]:
-        ty = sy + (band_center(target) if target != "frost" else TOP + 5) * scale
-        lines = math.ceil(len(text) / 15)
-        top = max(ty - 24, prev_bottom + 18)
-        prev_bottom = top + lines * 42
-        text = text.replace("крем-чиз", '<span style="white-space: nowrap">крем-чиз</span>')
-        labels.append(f"<div style=\"position: absolute; left: 40px; top: {top:.0f}px; width: 312px; text-align: right; font-family: 'Marck Script', cursive; "
-                      f'font-size: 38px; line-height: 1.1; color: {HAND}">{text}</div>')
-        ay = top + 22
-        arrows.append(f'<path d="M362 {ay:.0f}C392 {ay:.0f} 404 {ty:.0f} 428 {ty:.0f}M416 {ty - 9:.0f}L429 {ty:.0f}L416 {ty + 9:.0f}"></path>')
-    tags = []
-    if slug in DATA["cakes"]:
-        tags.append("в тортах")
-    if slug in DATA["trifles"]:
-        tags.append("в трайфлах")
-    tag_html = "".join(
-        f"<div style=\"padding: 10px 24px; border: 2px solid {CARAMEL}; border-radius: 999px; font-family: 'Montserrat', sans-serif; font-weight: 500; "
-        f'font-size: 22px; letter-spacing: 0.2em; color: {CARAMEL_TEXT}">{t.upper()}</div>' for t in tags)
-    title2 = f'<div style="position: absolute; left: 72px; top: 500px; font-size: 112px; line-height: 1">{f["title"][1]}</div>' if f["title"][1] else ""
-    body = f"""{header("DESSERTOPIA", f"НАЧИНКИ · {index} / {total}")}
-<div style="position: absolute; left: 62px; top: 322px; font-style: italic; font-size: 176px; line-height: 1">{f["title"][0]}</div>
-{title2}
-<div style="position: absolute; right: 70px; top: 548px; width: 400px; transform: rotate(-4deg); text-align: right; font-family: 'Marck Script', cursive; font-size: 44px; line-height: 1.15; color: {CARAMEL_TEXT}">{f["mood"]}</div>
-<div style="position: absolute; left: {sx}px; top: {sy}px">{slice_svg(f, round(300 * scale), "Разрез: " + f["name"])}</div>
-{"".join(labels)}
-<svg aria-hidden="true" width="1080" height="1920" style="position: absolute; left: 0; top: 0" fill="none" stroke="{CARAMEL}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">{"".join(arrows)}</svg>
-<div style="position: absolute; left: 70px; right: 70px; top: 1262px; padding: 44px 52px 40px; background: {PAPER}; box-shadow: {SHADOW}; transform: rotate(-1deg)">
-<div style="font-family: 'Montserrat', sans-serif; font-weight: 500; font-size: 22px; letter-spacing: 0.3em; color: {CARAMEL_TEXT}">СОСТАВ</div>
-<div style="margin-top: 12px; font-weight: 500; font-size: 40px; line-height: 1.16; color: {HAND}">{f["desc"]}</div>
-<div style="margin-top: 22px; display: flex; gap: 14px">{tag_html}</div>
-</div>
-{tape(465, 1240)}
-{footer("выбрали? пишите мне")}"""
-    return story(f"Начинка — {f['name']}", body)
 
 
 # ---------------------------------------------------------------- one cake filling, layers «в разлёте»
@@ -315,6 +209,17 @@ def disc(f, kind, y, h, cx=700, rx=250, ry=20, seed=0):
         s = 2.0
         parts.append(f'<g transform="translate({cx - 152 * s:.0f} {y - 74 * s:.0f}) scale({s})" stroke-width="1.6">{dollop()}{topping(f["topping"])}</g>')
     return "".join(parts)
+
+
+def mini_stack(f, width, label):
+    """The same floating layers, four of them, scaled down for the overview list."""
+    y, parts = 110, []
+    for i, (kind, h) in enumerate([("top", 24), ("sponge", 52), ("mixed", 46), ("sponge", 52)]):
+        parts.append(disc(f, kind, y, h, 250, 230, 32, seed=4 if kind == "mixed" else i))
+        y += h + 2 * 32 + 12
+    height = round(width * 560 / 500)
+    return (f'<svg role="img" aria-label="{label}" viewBox="0 0 500 560" width="{width}" height="{height}" stroke="{COCOA}" stroke-width="4" '
+            f'stroke-linecap="round" stroke-linejoin="round">{"".join(parts)}</svg>')
 
 
 def filling_story_layers(slug, index, total):
@@ -385,8 +290,7 @@ def build_fillings():
     (PROJECT / "Fill-0-Cakes.dc.html").write_text(cakes_overview())
     cakes = DATA["cakes"]
     for i, slug in enumerate(cakes, 1):
-        (PROJECT / f"Fill-{i}-{slug}.dc.html").write_text(filling_story(slug, i, len(cakes)))
-        (PROJECT / f"Fill-{i}b-{slug}.dc.html").write_text(filling_story_layers(slug, i, len(cakes)))
+        (PROJECT / f"Fill-{i}-{slug}.dc.html").write_text(filling_story_layers(slug, i, len(cakes)))
     (PROJECT / f"Fill-{len(cakes) + 1}-Trifles.dc.html").write_text(trifles_overview())
 
 

@@ -3,7 +3,7 @@
 Run `python3 tools/build.py` (it calls this module).
 """
 from build import CARAMEL, CARAMEL_TEXT, CHERRY, COCOA, HAND, INK, PAPER, PROJECT, heart
-from build_fillings import F, SHADOW, footer, header, slice_svg, story, tape
+from build_fillings import F, SHADOW, footer, header, mini_stack, story, tape
 
 TG = "@BMU_GS"
 MARCK = "font-family: 'Marck Script', cursive"
@@ -225,12 +225,11 @@ def tpl_new_filling():
 
 
 def tpl_soon():
-    mystery = dict(F["Banan"], sponge="vanilla", filling="caramel", inclusion="none", topping="none", name="Секрет")
-    slice_html = slice_svg(mystery, 630, "Разрез новой начинки — пока секрет").replace("#EDC98A", "#E7DCCD").replace("#C98A3C", "#D6C6B2")
+    mystery = dict(F["Banan"], sponge="mystery", filling="mystery", inclusion="none", topping="none", name="Секрет")
     body = f"""{header("DESSERTOPIA", "СКОРО")}
 {title("Скоро", "новая начинка")}
-<div style="position: absolute; left: 362px; top: 662px">{slice_html}</div>
-<div style="position: absolute; left: 520px; top: 830px; width: 300px; text-align: center; font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 260px; line-height: 1; color: {CARAMEL}">?</div>
+<div style="position: absolute; left: 290px; top: 640px">{mini_stack(mystery, 500, "Слои новой начинки — пока секрет")}</div>
+<div style="position: absolute; left: 390px; top: 800px; width: 300px; text-align: center; font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 260px; line-height: 1; color: {CARAMEL}">?</div>
 <div style="position: absolute; left: 70px; top: 1290px; width: 940px; text-align: center; {MARCK}; font-size: 58px; line-height: 1.15; color: {INK}">угадаете вкус?</div>
 <div style="position: absolute; left: 70px; top: 1372px; width: 940px; text-align: center; font-weight: 500; font-size: 38px; color: {HAND}">пишите версии в ответ на эту историю</div>
 {doodles('<path d="M180 820L196 796M206 840L232 836M172 790L168 764"></path><path d="M900 1240L916 1264M880 1260L882 1286"></path>', red_heart(240, 900, 0.9) + red_heart(930, 700, 0.7))}"""
@@ -257,31 +256,85 @@ def bow(x, y, s=1.0, colour=CHERRY, rot=0):
             '<path d="M0 0m-7 0a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" fill="' + colour + '"></path></svg>')
 
 
-def tpl_prices():
+def price_stamp(cx, cy, size, top, big, bottom, rot=0):
+    return f"""<div style="position: absolute; left: {cx - size // 2}px; top: {cy - size // 2}px; width: {size}px; height: {size}px; border-radius: 50%; background: {CARAMEL}; transform: rotate({rot}deg); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: #FBF5EC">
+<svg aria-hidden="true" width="{size}" height="{size}" style="position: absolute; left: 0; top: 0"><circle cx="{size / 2}" cy="{size / 2}" r="{size / 2 - 12}" fill="none" stroke="#FBF5EC" stroke-width="3" stroke-dasharray="10 11" stroke-linecap="round"></circle></svg>
+<div style="{MARCK}; font-size: {round(size * 0.15)}px; line-height: 1">{top}</div>
+<div style="font-family: 'Cormorant Garamond', serif; font-style: italic; font-weight: 500; font-size: {round(size * 0.36)}px; line-height: 0.95">{big}</div>
+<div style="{MARCK}; font-size: {round(size * 0.14)}px; line-height: 1">{bottom}</div>
+</div>"""
+
+
+def cake_doodle(cx, top, rx, ry, h, cherries=False):
+    """A piped vintage cake in caramel lines, with a diameter arrow above it."""
+    import math
+    beads = lambda y0, r: "".join(
+        f'<circle cx="{cx + rx * math.cos(t):.0f}" cy="{y0 + ry * math.sin(t):.0f}" r="{r}" fill="#FFFBF4"></circle>'
+        for t in [math.pi * k / 12 for k in range(13)])
+    top_beads = "".join(
+        f'<circle cx="{cx + rx * 0.86 * math.cos(t):.0f}" cy="{top + ry * 0.86 * math.sin(t):.0f}" r="9" fill="#FFFBF4"></circle>'
+        for t in [math.pi * k / 9 for k in range(10, 18)])
+    berries = "".join(f'<circle cx="{cx + dx}" cy="{top + dy}" r="11" fill="{CHERRY}" stroke="none"></circle>' for dx, dy in [(-50, -2), (0, -10), (52, -1)]) if cherries else ""
+    ay = top - ry - 64
+    return (f'<path d="M{cx - rx} {top}L{cx - rx} {top + h}A{rx} {ry} 0 0 0 {cx + rx} {top + h}L{cx + rx} {top}" fill="{PAPER}"></path>'
+            f'<ellipse cx="{cx}" cy="{top}" rx="{rx}" ry="{ry}" fill="#FFFBF4"></ellipse>{top_beads}{beads(top, 12)}{beads(top + h, 11)}{berries}'
+            f'<path d="M{cx - rx - 40} {top + h + ry + 16}C{cx - rx + 40} {top + h + ry + 36} {cx + rx - 40} {top + h + ry + 36} {cx + rx + 40} {top + h + ry + 14}"></path>'
+            f'<path d="M{cx - rx} {ay}L{cx + rx} {ay}M{cx - rx + 14} {ay - 10}L{cx - rx} {ay}L{cx - rx + 14} {ay + 10}M{cx + rx - 14} {ay - 10}L{cx + rx} {ay}L{cx + rx - 14} {ay + 10}"></path>'
+            f'<path d="M{cx - rx} {ay + 14}L{cx - rx} {top - 6}M{cx + rx} {ay + 14}L{cx + rx} {top - 6}" stroke-dasharray="2 10"></path>')
+
+
+EXTRAS = ["свежие ягоды", "шоколадные подтёки", "рисунки кремом — по сложности", "другой декор по желанию"]
+
+
+def prices_cakes():
+    extras = "".join(f"""<div style="display: flex; gap: 14px; align-items: flex-start">
+<svg aria-hidden="true" width="26" height="26" viewBox="0 0 52 52" style="flex: none; margin-top: 10px"><path d="{heart(26, 27, 0.95)}" fill="{CHERRY}"></path></svg>
+<div style="font-weight: 500; font-size: 36px; line-height: 1.15; color: {HAND}">{t}</div></div>""" for t in EXTRAS)
+    card = f"""<div style="{MARCK}; font-size: 46px; line-height: 1.1; color: {CARAMEL_TEXT}">оплачивается дополнительно</div>
+<div style="margin-top: 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 30px">{extras}</div>"""
+    sizes = [(300, 770, 128, 30, 150, "Ø 14 см", "1 кг", "от", "60 р", "за торт", -5), (765, 740, 172, 38, 180, "Ø 16–18 см", "1,5 кг", "от", "55 р", "за 1 кг", 4)]
+    doodle = "".join(cake_doodle(cx, top, rx, ry, h, cherries=(i == 1)) for i, (cx, top, rx, ry, h, *_rest) in enumerate(sizes))
+    marks = "".join(f"""<div style="position: absolute; left: {cx - 200}px; top: {top - ry - 132}px; width: 400px; text-align: center; {MARCK}; font-size: 44px; color: {CARAMEL_TEXT}">{d}</div>
+<div style="position: absolute; left: {cx - 200}px; top: 994px; width: 400px; text-align: center; {MARCK}; font-size: 64px; line-height: 1; color: {INK}">{w}</div>
+{price_stamp(cx, 1160, 200, a, b, c, r)}""" for cx, top, rx, ry, h, d, w, a, b, c, r in sizes)
+    body = f"""{header("DESSERTOPIA", "ЦЕНЫ · 1 / 2")}
+{title("Цены", "на торты")}
+<div style="position: absolute; right: 70px; top: 372px; width: 420px; transform: rotate(-4deg); text-align: right; {MARCK}; font-size: 42px; line-height: 1.15; color: {CARAMEL_TEXT}">максимальный вес — 2&#160;кг</div>
+<svg role="img" aria-label="Торт 1 кг диаметром 14 см и торт 1,5 кг диаметром 16–18 см" width="1080" height="1920" style="position: absolute; left: 0; top: 0" fill="none" stroke="{CARAMEL}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">{doodle}</svg>
+{marks}
+{paper(70, 1310, 940, card, -1, "38px 48px 40px")}
+{bow(850, 1262, 1.1, rot=12)}
+{doodles("", red_heart(300, 868, 0.9))}
+{footer("бенто и трайфлы — дальше", 1668)}"""
+    return story("Цены — торты", body)
+
+
+def size_pill(text):
+    return (f'<div style="align-self: flex-start; padding: 8px 22px; border: 2px solid {CARAMEL}; border-radius: 999px; {MONT}; font-weight: 500; '
+            f'font-size: 24px; letter-spacing: 0.16em; color: {CARAMEL_TEXT}">{text}</div>')
+
+
+def prices_bento():
     rows = [
-        ("Бенто-торт", "мини-торт с надписью"),
-        ("Торт", "за 1 кг · до 2 кг"),
-        ("Трайфл", "1 стаканчик"),
-        ("Набор трайфлов", "количество на выбор"),
-        ("Декор", "ягоды, топперы, сложная надпись"),
+        ("Бенто мини · S", ["400 Г", "Ø 10 СМ"], ("", "40 р", ""), "/_blob/43c87a7532c29142ce5b92c4407abf10", "Бенто с котом и надписью «я люблю тебя и старым»", 3),
+        ("Бенто макси · M", ["700 Г", "Ø 12 СМ"], ("", "50 р", ""), "/_blob/b86bd47934a448385ca390fc4c721a0d", "Бенто с кремовым бортиком и надписью «Будь счастлива»", -3),
+        ("Трайфлы", ["ОТ 4 ШТ"], ("", "9 р", "за штуку"), "/_blob/e7f5be81caaf56665d59f4c94ec359e5", "Трайфлы с карамелью в коробке", 2.5),
     ]
-    items = "".join(f"""<div>
-<div style="display: flex; align-items: baseline; gap: 14px">
-<div style="{MARCK}; font-size: 54px; line-height: 1.1; color: {INK}">{a}</div>
-<div style="flex: 1; border-bottom: 4px dotted rgba(173,122,79,0.6); transform: translateY(-10px)"></div>
-<div style="font-family: 'Cormorant Garamond', serif; font-style: italic; font-weight: 500; font-size: 52px; color: {INK}">[цена]</div>
-</div>
-<div style="font-weight: 500; font-size: 32px; line-height: 1.15; color: {HAND}">{b}</div>
-</div>""" for a, b in rows)
-    card = f'<div style="display: flex; flex-direction: column; gap: 30px">{items}</div>'
-    body = f"""{header("DESSERTOPIA", "ЦЕНЫ")}
-{title("Цены", "и форматы")}
-{paper(70, 630, 940, card, -1, "56px 56px 52px")}
-{bow(436, 568, 1.4)}
-<div style="position: absolute; left: 70px; top: 1390px; width: 940px; text-align: center; font-weight: 500; font-size: 38px; line-height: 1.25; color: {HAND}">точную стоимость посчитаю в переписке — зависит от веса, начинки и декора</div>
-{pill("НАПИСАТЬ В TELEGRAM", 230, 1530, 32)}
-{doodles("", red_heart(918, 1580, 1.0))}"""
-    return story("Шаблон — цены", body)
+    html = []
+    for i, (name, pills, (a, b, c), img, alt, rot) in enumerate(rows):
+        y = 626 + i * 316
+        html.append(f"""<div style="position: absolute; left: 70px; top: {y + 6}px; {MARCK}; font-size: 62px; line-height: 1.05; color: {INK}">{name}</div>
+<div style="position: absolute; left: 70px; top: {y + 104}px; display: flex; flex-direction: column; gap: 12px">{"".join(size_pill(t) for t in pills)}</div>
+{price_stamp(440, y + 186, 176, a, b, c, -4 if i % 2 else 5)}
+<div style="position: absolute; left: 650px; top: {y}px; padding: 14px; background: {PAPER}; box-shadow: {SHADOW}; transform: rotate({rot}deg)">
+<img src="{img}" alt="{alt}" style="display: block; width: 246px; height: 262px; object-fit: cover"></div>
+{tape(722, y - 18, 120, -rot * 2)}""")
+    body = f"""{header("DESSERTOPIA", "ЦЕНЫ · 2 / 2")}
+{title("Цены", "бенто и трайфлы", 176, 88)}
+{"".join(html)}
+<div style="position: absolute; left: 70px; top: 1590px; width: 940px; text-align: center; font-weight: 500; font-size: 34px; line-height: 1.22; color: {HAND}">ягоды, шоколадные подтёки, рисунки кремом и другой декор оплачиваются дополнительно</div>
+{doodles("", red_heart(986, 470, 0.8))}"""
+    return story("Цены — бенто и трайфлы", body)
 
 
 def build_stories():
@@ -290,13 +343,14 @@ def build_stories():
         "Vazhno-2-Chto-napisat": vazhno_message(),
         "Vazhno-3-Sroki": vazhno_terms(),
         "Vazhno-4-Khranenie": vazhno_storage(),
+        "Ceny-1-Torty": prices_cakes(),
+        "Ceny-2-Bento-traifly": prices_bento(),
         "Tpl-1-Rabota-primer": tpl_work(True),
         "Tpl-2-Rabota-pustoy": tpl_work(False),
         "Tpl-3-Otzyv": tpl_review(),
         "Tpl-4-Novaya-nachinka": tpl_new_filling(),
         "Tpl-5-Skoro": tpl_soon(),
         "Tpl-6-Reels-oblozhka": tpl_reels_cover(),
-        "Tpl-7-Ceny": tpl_prices(),
     }
     for name, html in out.items():
         (PROJECT / f"{name}.dc.html").write_text(html)
