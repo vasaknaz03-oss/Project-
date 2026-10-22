@@ -5,9 +5,9 @@ Run `python3 tools/build.py` (it calls this module).
 from build import CARAMEL, CARAMEL_TEXT, CHERRY, CONFETTI, CREAM, HAND, INK, PAPER, PROJECT, RULE, page, paper_noise
 
 # Highlight covers (rendered from canvas/project/Hl-*.dc.html, see assets/mockup).
-HIGHLIGHTS = [("ce08636d969a34ba96e6d5458d19851d", "Отзывы"), ("2ebeb56d7f7fb51aac198069316cb619", "Работы"),
-              ("817e40cda516cc41c44689f0266e1520", "Начинки"), ("ce32775d3e09d6fdc9b50ed0fa0094a5", "Важно"),
-              ("203d1f568f97509d0b259b0107fa23db", "Цены")]
+HIGHLIGHTS = [("ce08636d969a34ba96e6d5458d19851d", "Отзывы"), ("f9aac03fb1fd605c7ca9c84464d1e232", "Работы"),
+              ("1f54611f6eee30df684f20d3667f04f2", "Начинки"), ("d801915588370985937cc82f2c6ca19c", "Важно"),
+              ("ed17056a1d9a74ec5f4c6afcec04c608", "Цены")]
 GRID = [
     ("005080349611d3189dfe90de2a8bd929", "Закреплённый пост «Заказ и доставка»", "pin"),
     ("2ceec1c35d367293e7617c2252eb7139", "Закреплённый пост «Цены и начинки»", "pin"),
