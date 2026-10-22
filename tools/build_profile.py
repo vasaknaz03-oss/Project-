@@ -4,10 +4,10 @@ Run `python3 tools/build.py` (it calls this module).
 """
 from build import CARAMEL, CARAMEL_TEXT, CHERRY, CONFETTI, CREAM, HAND, INK, PAPER, PROJECT, RULE, page, paper_noise
 
-# Highlight covers, set A (rendered from canvas/project/Hl-A*.dc.html, see assets/mockup).
-HIGHLIGHTS = [("936dc86e4b7294856e31df0b80822a2c", "Отзывы"), ("ee03acc4f89781860405ca13865aa8c0", "Работы"),
-              ("796950df6ef1f70221e2e2d0d1ca78df", "Начинки"), ("7999d2873ee7cec572a053094090d0e2", "Важно"),
-              ("8912bc48b5b1efa146edf85c153810c6", "Цены"), ("b5ea2827d31f2897c4f9f28f212e5ac2", "Десерты")]
+# Highlight covers (rendered from canvas/project/Hl-*.dc.html, see assets/mockup).
+HIGHLIGHTS = [("ce08636d969a34ba96e6d5458d19851d", "Отзывы"), ("2ebeb56d7f7fb51aac198069316cb619", "Работы"),
+              ("817e40cda516cc41c44689f0266e1520", "Начинки"), ("ce32775d3e09d6fdc9b50ed0fa0094a5", "Важно"),
+              ("203d1f568f97509d0b259b0107fa23db", "Цены")]
 GRID = [
     ("005080349611d3189dfe90de2a8bd929", "Закреплённый пост «Заказ и доставка»", "pin"),
     ("2ceec1c35d367293e7617c2252eb7139", "Закреплённый пост «Цены и начинки»", "pin"),
@@ -68,7 +68,7 @@ def main_board():
 <div style="flex: 1; height: 84px; border-radius: 18px; background: #2A2A2A; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 31px">Подписаться</div>
 <div style="flex: 1; height: 84px; border-radius: 18px; background: #2A2A2A; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 31px">Сообщение</div>
 </div>
-<div style="position: absolute; left: 30px; right: 30px; top: 900px; display: flex; justify-content: space-between">{"".join(highlight(k, l) for k, l in HIGHLIGHTS[:5])}</div>
+<div style="position: absolute; left: 30px; right: 30px; top: 900px; display: flex; justify-content: space-between">{"".join(highlight(k, l) for k, l in HIGHLIGHTS)}</div>
 <div style="position: absolute; left: 0; right: 0; top: 1160px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px">{"".join(tile(*t) for t in GRID)}</div>
 </div>"""
     return page("Профиль — как будет выглядеть страница", 1080, 2610, body)
@@ -107,8 +107,8 @@ def style_board():
 <div style="position: absolute; left: 70px; top: 1150px; display: flex; gap: 18px; align-items: center"><div style="font-family: 'Marck Script', cursive; font-size: 40px; color: {HAND}">конфетти:</div>{confetti}</div>
 <div style="position: absolute; left: 70px; right: 70px; top: 1230px">{fr}</div>
 <div style="position: absolute; left: 70px; top: 2096px; font-family: 'Montserrat', sans-serif; font-weight: 500; font-size: 22px; letter-spacing: 0.24em; color: {CARAMEL_TEXT}">В ЛОГОТИПАХ ТАКЖЕ · LOBSTER · TENOR SANS</div>
-<div style="position: absolute; left: 70px; top: 2140px; font-family: 'Marck Script', cursive; font-size: 40px; color: {HAND}">обложки актуального, набор A:</div>
-<div style="position: absolute; left: 50px; right: 50px; top: 2206px; display: flex; justify-content: space-between">{icons}</div>
+<div style="position: absolute; left: 70px; top: 2140px; font-family: 'Marck Script', cursive; font-size: 40px; color: {HAND}">обложки актуального:</div>
+<div style="position: absolute; left: 50px; right: 50px; top: 2206px; display: flex; justify-content: space-around">{icons}</div>
 </div>"""
     return page("Фирменный стиль", 1080, 2380, body)
 
