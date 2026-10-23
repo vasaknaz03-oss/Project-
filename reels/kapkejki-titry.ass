@@ -1,0 +1,18 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Script,Great Vibes,196,&H00203B4A,&H00203B4A,&H00ECF5FB,&H00000000,0,0,0,0,100,100,0,0,1,12,0,8,40,40,0,204
+Style: Caps,Montserrat Medium,42,&H00203B4A,&H00203B4A,&H00ECF5FB,&H00000000,0,0,0,0,100,100,8,0,1,8,0,8,40,40,0,204
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:00.35,0:00:03.90,Script,,0,0,0,,{\pos(540,410)\fad(550,450)\blur10}осень в коробочке
+Dialogue: 1,0:00:00.75,0:00:03.90,Caps,,0,0,0,,{\pos(540,660)\fad(550,450)\blur6}КАПКЕЙКИ С КАРАМЕЛЬЮ
+Dialogue: 1,0:00:09.70,0:00:12.96,Script,,0,0,0,,{\pos(540,430)\fad(600,0)\blur10}заказ в Telegram
+Dialogue: 1,0:00:10.10,0:00:12.96,Caps,,0,0,0,,{\pos(540,680)\fad(600,0)\blur6}@BMU_GS · DESSERTOPIA
