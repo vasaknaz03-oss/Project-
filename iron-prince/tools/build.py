@@ -551,7 +551,8 @@ def main():
     cv = covers()
     cover_rows = [{k: v for k, v in cv.items() if k.endswith(s)} for s in COVER_STYLES]
     st = stories()
-    groups = [profile, avatars(), *cover_rows, st, p]
+    import variants
+    groups = [profile, avatars(), *cover_rows, st, p, *variants.groups()]
     names = {f"{name}.dc.html" for row in groups for name in row}
     for old in PROJECT.glob("*.dc.html"):
         if old.name not in names:

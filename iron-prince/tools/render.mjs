@@ -20,6 +20,7 @@ const fontsCss = pathToFileURL(path.join(root, 'assets/fonts/fonts.css')).href;
 const folders = [
   ['Main', '00-profil'], ['Style', '00-profil'], ['Avatar', '01-avatar'],
   ['Cover', '02-oblozhki'], ['Story', '03-istorii'], ['Post', '04-posty'],
+  ['V1-', '05-varianty/1-kollazh'], ['V2-', '05-varianty/2-kontrast'], ['V3-', '05-varianty/3-zhurnal'],
 ];
 
 const filters = process.argv.slice(2);

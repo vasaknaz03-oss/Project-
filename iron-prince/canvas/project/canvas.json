@@ -268,6 +268,384 @@
    "w": 1080,
    "h": 1440,
    "title": "Пост — пишите"
+  },
+  "V1-Profil.dc.html": {
+   "x": 0,
+   "y": 12220,
+   "w": 1080,
+   "h": 2140,
+   "title": "Коллаж — профиль"
+  },
+  "V1-Avatar.dc.html": {
+   "x": 1160,
+   "y": 12220,
+   "w": 1080,
+   "h": 1080,
+   "title": "Коллаж — аватар"
+  },
+  "V1-Cover-Obo-mne.dc.html": {
+   "x": 2320,
+   "y": 12220,
+   "w": 1080,
+   "h": 1080,
+   "title": "Коллаж — обложка «Обо мне»"
+  },
+  "V1-Cover-Uslugi.dc.html": {
+   "x": 3480,
+   "y": 12220,
+   "w": 1080,
+   "h": 1080,
+   "title": "Коллаж — обложка «Услуги»"
+  },
+  "V1-Cover-Raboty.dc.html": {
+   "x": 4640,
+   "y": 12220,
+   "w": 1080,
+   "h": 1080,
+   "title": "Коллаж — обложка «Работы»"
+  },
+  "V1-Cover-Do-posle.dc.html": {
+   "x": 5800,
+   "y": 12220,
+   "w": 1080,
+   "h": 1080,
+   "title": "Коллаж — обложка «До/после»"
+  },
+  "V1-Cover-Otzyvy.dc.html": {
+   "x": 6960,
+   "y": 12220,
+   "w": 1080,
+   "h": 1080,
+   "title": "Коллаж — обложка «Отзывы»"
+  },
+  "V1-Cover-Zakaz.dc.html": {
+   "x": 8120,
+   "y": 12220,
+   "w": 1080,
+   "h": 1080,
+   "title": "Коллаж — обложка «Как заказать»"
+  },
+  "V1-Cover-Garantiya.dc.html": {
+   "x": 9280,
+   "y": 12220,
+   "w": 1080,
+   "h": 1080,
+   "title": "Коллаж — обложка «Гарантия»"
+  },
+  "V1-Story-Uslugi.dc.html": {
+   "x": 0,
+   "y": 14700,
+   "w": 1080,
+   "h": 1920,
+   "title": "Коллаж — история «Услуги»"
+  },
+  "V1-Story-Kak-zakazat.dc.html": {
+   "x": 1160,
+   "y": 14700,
+   "w": 1080,
+   "h": 1920,
+   "title": "Коллаж — история «Как заказать»"
+  },
+  "V1-Story-Pishite.dc.html": {
+   "x": 2320,
+   "y": 14700,
+   "w": 1080,
+   "h": 1920,
+   "title": "Коллаж — история «Пишите»"
+  },
+  "V1-Post-Pishite.dc.html": {
+   "x": 3480,
+   "y": 14700,
+   "w": 1080,
+   "h": 1440,
+   "title": "Коллаж — пост «Пишите»"
+  },
+  "V1-Post-Sborka.dc.html": {
+   "x": 4640,
+   "y": 14700,
+   "w": 1080,
+   "h": 1440,
+   "title": "Коллаж — пост «Что внутри»"
+  },
+  "V1-Post-Privet.dc.html": {
+   "x": 5800,
+   "y": 14700,
+   "w": 1080,
+   "h": 1440,
+   "title": "Коллаж — пост «Знакомство»"
+  },
+  "V1-Post-Do-posle.dc.html": {
+   "x": 6960,
+   "y": 14700,
+   "w": 1080,
+   "h": 1440,
+   "title": "Коллаж — пост «До / после»"
+  },
+  "V1-Post-Priznaki.dc.html": {
+   "x": 8120,
+   "y": 14700,
+   "w": 1080,
+   "h": 1440,
+   "title": "Коллаж — пост «5 признаков»"
+  },
+  "V1-Post-Otzyv.dc.html": {
+   "x": 9280,
+   "y": 14700,
+   "w": 1080,
+   "h": 1440,
+   "title": "Коллаж — пост «Отзыв»"
+  },
+  "V2-Profil.dc.html": {
+   "x": 0,
+   "y": 16960,
+   "w": 1080,
+   "h": 2140,
+   "title": "Контраст — профиль"
+  },
+  "V2-Avatar.dc.html": {
+   "x": 1160,
+   "y": 16960,
+   "w": 1080,
+   "h": 1080,
+   "title": "Контраст — аватар"
+  },
+  "V2-Cover-Obo-mne.dc.html": {
+   "x": 2320,
+   "y": 16960,
+   "w": 1080,
+   "h": 1080,
+   "title": "Контраст — обложка «Обо мне»"
+  },
+  "V2-Cover-Uslugi.dc.html": {
+   "x": 3480,
+   "y": 16960,
+   "w": 1080,
+   "h": 1080,
+   "title": "Контраст — обложка «Услуги»"
+  },
+  "V2-Cover-Raboty.dc.html": {
+   "x": 4640,
+   "y": 16960,
+   "w": 1080,
+   "h": 1080,
+   "title": "Контраст — обложка «Работы»"
+  },
+  "V2-Cover-Do-posle.dc.html": {
+   "x": 5800,
+   "y": 16960,
+   "w": 1080,
+   "h": 1080,
+   "title": "Контраст — обложка «До/после»"
+  },
+  "V2-Cover-Otzyvy.dc.html": {
+   "x": 6960,
+   "y": 16960,
+   "w": 1080,
+   "h": 1080,
+   "title": "Контраст — обложка «Отзывы»"
+  },
+  "V2-Cover-Zakaz.dc.html": {
+   "x": 8120,
+   "y": 16960,
+   "w": 1080,
+   "h": 1080,
+   "title": "Контраст — обложка «Как заказать»"
+  },
+  "V2-Cover-Garantiya.dc.html": {
+   "x": 9280,
+   "y": 16960,
+   "w": 1080,
+   "h": 1080,
+   "title": "Контраст — обложка «Гарантия»"
+  },
+  "V2-Story-Uslugi.dc.html": {
+   "x": 0,
+   "y": 19440,
+   "w": 1080,
+   "h": 1920,
+   "title": "Контраст — история «Услуги»"
+  },
+  "V2-Story-Kak-zakazat.dc.html": {
+   "x": 1160,
+   "y": 19440,
+   "w": 1080,
+   "h": 1920,
+   "title": "Контраст — история «Как заказать»"
+  },
+  "V2-Story-Pishite.dc.html": {
+   "x": 2320,
+   "y": 19440,
+   "w": 1080,
+   "h": 1920,
+   "title": "Контраст — история «Пишите»"
+  },
+  "V2-Post-Pishite.dc.html": {
+   "x": 3480,
+   "y": 19440,
+   "w": 1080,
+   "h": 1440,
+   "title": "Контраст — пост «Пишите»"
+  },
+  "V2-Post-Sborka.dc.html": {
+   "x": 4640,
+   "y": 19440,
+   "w": 1080,
+   "h": 1440,
+   "title": "Контраст — пост «Что внутри»"
+  },
+  "V2-Post-Privet.dc.html": {
+   "x": 5800,
+   "y": 19440,
+   "w": 1080,
+   "h": 1440,
+   "title": "Контраст — пост «Знакомство»"
+  },
+  "V2-Post-Do-posle.dc.html": {
+   "x": 6960,
+   "y": 19440,
+   "w": 1080,
+   "h": 1440,
+   "title": "Контраст — пост «До / после»"
+  },
+  "V2-Post-Priznaki.dc.html": {
+   "x": 8120,
+   "y": 19440,
+   "w": 1080,
+   "h": 1440,
+   "title": "Контраст — пост «5 признаков»"
+  },
+  "V2-Post-Otzyv.dc.html": {
+   "x": 9280,
+   "y": 19440,
+   "w": 1080,
+   "h": 1440,
+   "title": "Контраст — пост «Отзыв»"
+  },
+  "V3-Profil.dc.html": {
+   "x": 0,
+   "y": 21700,
+   "w": 1080,
+   "h": 2140,
+   "title": "Журнал — профиль"
+  },
+  "V3-Avatar.dc.html": {
+   "x": 1160,
+   "y": 21700,
+   "w": 1080,
+   "h": 1080,
+   "title": "Журнал — аватар"
+  },
+  "V3-Cover-Obo-mne.dc.html": {
+   "x": 2320,
+   "y": 21700,
+   "w": 1080,
+   "h": 1080,
+   "title": "Журнал — обложка «Обо мне»"
+  },
+  "V3-Cover-Uslugi.dc.html": {
+   "x": 3480,
+   "y": 21700,
+   "w": 1080,
+   "h": 1080,
+   "title": "Журнал — обложка «Услуги»"
+  },
+  "V3-Cover-Raboty.dc.html": {
+   "x": 4640,
+   "y": 21700,
+   "w": 1080,
+   "h": 1080,
+   "title": "Журнал — обложка «Работы»"
+  },
+  "V3-Cover-Do-posle.dc.html": {
+   "x": 5800,
+   "y": 21700,
+   "w": 1080,
+   "h": 1080,
+   "title": "Журнал — обложка «До/после»"
+  },
+  "V3-Cover-Otzyvy.dc.html": {
+   "x": 6960,
+   "y": 21700,
+   "w": 1080,
+   "h": 1080,
+   "title": "Журнал — обложка «Отзывы»"
+  },
+  "V3-Cover-Zakaz.dc.html": {
+   "x": 8120,
+   "y": 21700,
+   "w": 1080,
+   "h": 1080,
+   "title": "Журнал — обложка «Как заказать»"
+  },
+  "V3-Cover-Garantiya.dc.html": {
+   "x": 9280,
+   "y": 21700,
+   "w": 1080,
+   "h": 1080,
+   "title": "Журнал — обложка «Гарантия»"
+  },
+  "V3-Story-Uslugi.dc.html": {
+   "x": 0,
+   "y": 24180,
+   "w": 1080,
+   "h": 1920,
+   "title": "Журнал — история «Услуги»"
+  },
+  "V3-Story-Kak-zakazat.dc.html": {
+   "x": 1160,
+   "y": 24180,
+   "w": 1080,
+   "h": 1920,
+   "title": "Журнал — история «Как заказать»"
+  },
+  "V3-Story-Pishite.dc.html": {
+   "x": 2320,
+   "y": 24180,
+   "w": 1080,
+   "h": 1920,
+   "title": "Журнал — история «Пишите»"
+  },
+  "V3-Post-Pishite.dc.html": {
+   "x": 3480,
+   "y": 24180,
+   "w": 1080,
+   "h": 1440,
+   "title": "Журнал — пост «Пишите»"
+  },
+  "V3-Post-Sborka.dc.html": {
+   "x": 4640,
+   "y": 24180,
+   "w": 1080,
+   "h": 1440,
+   "title": "Журнал — пост «Что внутри»"
+  },
+  "V3-Post-Privet.dc.html": {
+   "x": 5800,
+   "y": 24180,
+   "w": 1080,
+   "h": 1440,
+   "title": "Журнал — пост «Знакомство»"
+  },
+  "V3-Post-Do-posle.dc.html": {
+   "x": 6960,
+   "y": 24180,
+   "w": 1080,
+   "h": 1440,
+   "title": "Журнал — пост «До / после»"
+  },
+  "V3-Post-Priznaki.dc.html": {
+   "x": 8120,
+   "y": 24180,
+   "w": 1080,
+   "h": 1440,
+   "title": "Журнал — пост «5 признаков»"
+  },
+  "V3-Post-Otzyv.dc.html": {
+   "x": 9280,
+   "y": 24180,
+   "w": 1080,
+   "h": 1440,
+   "title": "Журнал — пост «Отзыв»"
   }
  },
  "order": [
@@ -307,7 +685,61 @@
   "Post-3-Temperatury.dc.html",
   "Post-4-Otzyv.dc.html",
   "Post-5-Sborka.dc.html",
-  "Post-6-Pishite.dc.html"
+  "Post-6-Pishite.dc.html",
+  "V1-Profil.dc.html",
+  "V1-Avatar.dc.html",
+  "V1-Cover-Obo-mne.dc.html",
+  "V1-Cover-Uslugi.dc.html",
+  "V1-Cover-Raboty.dc.html",
+  "V1-Cover-Do-posle.dc.html",
+  "V1-Cover-Otzyvy.dc.html",
+  "V1-Cover-Zakaz.dc.html",
+  "V1-Cover-Garantiya.dc.html",
+  "V1-Story-Uslugi.dc.html",
+  "V1-Story-Kak-zakazat.dc.html",
+  "V1-Story-Pishite.dc.html",
+  "V1-Post-Pishite.dc.html",
+  "V1-Post-Sborka.dc.html",
+  "V1-Post-Privet.dc.html",
+  "V1-Post-Do-posle.dc.html",
+  "V1-Post-Priznaki.dc.html",
+  "V1-Post-Otzyv.dc.html",
+  "V2-Profil.dc.html",
+  "V2-Avatar.dc.html",
+  "V2-Cover-Obo-mne.dc.html",
+  "V2-Cover-Uslugi.dc.html",
+  "V2-Cover-Raboty.dc.html",
+  "V2-Cover-Do-posle.dc.html",
+  "V2-Cover-Otzyvy.dc.html",
+  "V2-Cover-Zakaz.dc.html",
+  "V2-Cover-Garantiya.dc.html",
+  "V2-Story-Uslugi.dc.html",
+  "V2-Story-Kak-zakazat.dc.html",
+  "V2-Story-Pishite.dc.html",
+  "V2-Post-Pishite.dc.html",
+  "V2-Post-Sborka.dc.html",
+  "V2-Post-Privet.dc.html",
+  "V2-Post-Do-posle.dc.html",
+  "V2-Post-Priznaki.dc.html",
+  "V2-Post-Otzyv.dc.html",
+  "V3-Profil.dc.html",
+  "V3-Avatar.dc.html",
+  "V3-Cover-Obo-mne.dc.html",
+  "V3-Cover-Uslugi.dc.html",
+  "V3-Cover-Raboty.dc.html",
+  "V3-Cover-Do-posle.dc.html",
+  "V3-Cover-Otzyvy.dc.html",
+  "V3-Cover-Zakaz.dc.html",
+  "V3-Cover-Garantiya.dc.html",
+  "V3-Story-Uslugi.dc.html",
+  "V3-Story-Kak-zakazat.dc.html",
+  "V3-Story-Pishite.dc.html",
+  "V3-Post-Pishite.dc.html",
+  "V3-Post-Sborka.dc.html",
+  "V3-Post-Privet.dc.html",
+  "V3-Post-Do-posle.dc.html",
+  "V3-Post-Priznaki.dc.html",
+  "V3-Post-Otzyv.dc.html"
  ],
  "notes": {}
 }

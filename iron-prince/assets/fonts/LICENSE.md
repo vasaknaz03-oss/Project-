@@ -4,3 +4,4 @@ Lora и Poppins скачаны с Google Fonts и распространяютс
 
 - Poppins Light — только латиница: логотип «IRON PRINCE», как на визитке.
 - Lora — все русские тексты: курсив для заголовков, прямой для текста, вразрядку для надзаголовков.
+- Manrope, Unbounded — SIL Open Font License 1.1 (Google Fonts)
