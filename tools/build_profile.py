@@ -6,7 +6,7 @@ from build import CARAMEL, CARAMEL_TEXT, CHERRY, CONFETTI, CREAM, HAND, INK, PAP
 
 # Highlight covers (rendered from canvas/project/Hl-*.dc.html, see assets/mockup).
 HIGHLIGHTS = [("ce08636d969a34ba96e6d5458d19851d", "Отзывы"), ("f9aac03fb1fd605c7ca9c84464d1e232", "Работы"),
-              ("1f54611f6eee30df684f20d3667f04f2", "Начинки"), ("d801915588370985937cc82f2c6ca19c", "Важно"),
+              ("d09aca8f5b96277a0e80c05f695de105", "Начинки"), ("c9ebaddcdbba65889f16bcb586f94765", "Важно"),
               ("ed17056a1d9a74ec5f4c6afcec04c608", "Цены")]
 GRID = [
     ("005080349611d3189dfe90de2a8bd929", "Закреплённый пост «Заказ и доставка»", "pin"),

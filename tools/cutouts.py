@@ -26,6 +26,7 @@ SOURCES = {
     "bento": ("assets/photos/bento-budh-schastliva.jpg", None, (0, 0)),
     "tort-chai": ("assets/photos/cake-vremya-pit-chai.jpg", None, (0, 0)),
     "trifly-karamel": ("assets/photos/trifle-karamel-box.jpg", None, (0, 0)),
+    "shokolad-kusok": ("assets/ai/shokolad-kusok.jpg", None, (0, 0)),
 }
 FULL_FRAME = {"tort-chai-full": "assets/photos/cake-vremya-pit-chai.jpg"}
 

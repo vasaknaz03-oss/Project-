@@ -1,7 +1,7 @@
 """Highlight covers, 1080×1080. «Отзывы» follows the original cover (word on top, berries below on a clean
 background); the others each use their own way to get depth instead of a cut-out on a flat background:
-«Работы» — the word set behind the cake in the real photo, «Начинки» — a still life with depth of field,
-«Важно» — a slice on a fork under a spotlight on cocoa, «Цены» — a sharp kraft price tag over blurred caramel trifles.
+«Работы» — the word set behind the cake in the real photo, «Начинки» — a cake taken apart into floating layers (three photo alternatives),
+«Важно» — a chocolate slice on a fork under a spotlight on cocoa, «Цены» — a sharp kraft price tag over blurred caramel trifles.
 
 Cut-outs come from tools/cutouts.py. Run `python3 tools/build.py` (it calls this module).
 """
@@ -11,8 +11,13 @@ CUT = {
     "malina": "/_blob/6e337375aa197f5ae76500d2a2c56f08", "barkhat": "/_blob/aa09a6fc09ca924ef383f077895fb3af",
     "banan": "/_blob/d67acf0d705c6ffc2d5a67853c319c83", "trifl": "/_blob/1b632c4ee3f7a61c0409caf9cd45dc04",
     "bento": "/_blob/458622d8f8bc36bd55cb9fe424af4ed3", "chai-full": "/_blob/27fe42987e573e2f936c47136d3bec8f",
+    "shokolad": "/_blob/6cc559022b96d0a9dbe8a769308995fa",
 }
-PHOTO = {"chai": "/_blob/4053d6ba731c96bceb9810e75856a825", "trifly": "/_blob/e7f5be81caaf56665d59f4c94ec359e5"}
+PHOTO = {
+    "chai": "/_blob/4053d6ba731c96bceb9810e75856a825", "trifly": "/_blob/e7f5be81caaf56665d59f4c94ec359e5",
+    "kapkejk": "/_blob/339c8b88aa959a2aa969a1ba936be3d5", "razlet": "/_blob/8f0ee5d520d153d1e73b9c0891cb9ca2",
+    "flatlay": "/_blob/c8cc432e1a071cfd25cf0b8436c25b18", "lozhka": "/_blob/28b75628e4c7758b70ac3bed327d8a37",
+}
 IVORY = "#FAF7F2"
 CREAM = "#F6EBDD"
 CONDENSED = "font-family: 'Oranienbaum', 'Playfair Display', serif"
@@ -57,35 +62,49 @@ def raboty():
     return cover("Обложка — Работы", "#EDE9E4", body)
 
 
+def nachinki_photo(key, alt, title, word="", word_top=96, word_colour=COCOA, glow=CREAM):
+    """A full-bleed photo; optionally «начинки» in script on top, with a soft halo so it reads on any tone."""
+    text = ""
+    if word:
+        text = (f'<div style="position: absolute; left: 0; right: 0; top: {word_top}px; text-align: center; {VIBES}; font-size: 236px; '
+                f'line-height: 1; color: {word_colour}; text-shadow: 0 0 22px {glow}, 0 0 10px {glow}, 0 0 3px {glow}">{word}</div>')
+    body = f"""<img src="{PHOTO[key]}" alt="{alt}" style="position: absolute; left: 0; top: 0; width: 1080px; height: 1080px; object-fit: cover; {WARM}">
+{text}"""
+    return cover(f"Обложка — Начинки, {title}", "#E9DFD2", body)
+
+
 def nachinki():
-    """A small still life: the trifle sharp in front, two slices showing their layers behind it, out of focus,
-    all standing on the same table."""
-    room = ("radial-gradient(circle at 22% 18%, rgba(255,250,242,0.95) 0%, rgba(255,250,242,0) 46%), "
-            "linear-gradient(180deg, #EFE6DA 0%, #E9DDCD 55%, #DCCAB4 58%, #E3D3BF 100%)")
-    contact = lambda cx, cy, rx, o: (f'<div style="position: absolute; left: {cx - rx}px; top: {cy - rx // 8}px; width: {rx * 2}px; height: {rx // 4}px; '
-                                     f'border-radius: 50%; background: rgba(60,36,24,{o}); filter: blur(10px)"></div>')
-    soft = "filter: blur(5px) brightness(0.97)"
-    body = f"""{contact(318, 728, 150, 0.30)}{contact(778, 728, 160, 0.30)}
-{cut("barkhat", "Срез красного бархата", 168, 300, 300, -2, soft)}
-{cut("banan", "Срез торта банан-карамель", 618, 262, 320, 2, soft)}
-{contact(560, 1040, 300, 0.36)}
-{cut("trifl", "Трайфл со сливочным кремом", 262, 190, 600)}"""
-    return cover("Обложка — Начинки", room, body)
+    """A cake taken apart into its layers, floating — the same idea as the «в разлёте» filling stories."""
+    return nachinki_photo("razlet", "Торт, разобранный на слои в воздухе", "слои в разлёте")
 
 
-def vazhno():
-    """A red velvet slice on a gold fork under a spotlight; «важно» in cream script behind its top edge."""
-    light = "radial-gradient(circle at 50% 44%, #7A5141 0%, #4E3126 34%, #331E17 66%, #22130E 100%)"
+NACHINKI_VARIANTS = {
+    "karamel": lambda: nachinki_photo("lozhka", "Карамель стекает с ложки на капкейк", "карамель с ложки"),
+    "flatlay": lambda: nachinki_photo("flatlay", "Ингредиенты начинок в пиалах вокруг кусочка торта", "ингредиенты"),
+    "kapkejk": lambda: nachinki_photo("kapkejk", "Капкейк в разрезе с карамельной начинкой", "ваш капкейк в разрезе"),
+}
+
+
+def vazhno(light="radial-gradient(circle at 50% 44%, #8A5B45 0%, #57372A 34%, #351F17 66%, #22130E 100%)", word=CREAM, title="Обложка — Важно"):
+    """A chocolate cake slice on a gold fork under a spotlight; «важно» in cream script behind its top edge."""
     gold = "linear-gradient(90deg, #8E6A2E, #F1DCA6 45%, #A98642)"
     tines = "".join(f'<div style="position: absolute; left: {470 + i * 38}px; top: 850px; width: 16px; height: 120px; border-radius: 8px; background: {gold}"></div>'
                     for i in range(4))
     fork = (f'{tines}<div style="position: absolute; left: 470px; top: 950px; width: 130px; height: 46px; border-radius: 0 0 60px 60px; background: {gold}"></div>'
             f'<div style="position: absolute; left: 518px; top: 980px; width: 34px; height: 140px; border-radius: 17px; background: {gold}"></div>')
-    rim = "filter: drop-shadow(0 0 1px rgba(255,236,214,0.6)) drop-shadow(0 30px 36px rgba(0,0,0,0.55))"
-    body = f"""<div style="position: absolute; left: 0; right: 0; top: 150px; text-align: center; {VIBES}; font-size: 262px; line-height: 1; color: {CREAM}; text-shadow: 0 6px 24px rgba(0,0,0,0.35)">важно</div>
+    # a warm rim of light around the dark slice keeps it apart from the cocoa background
+    rim = ("filter: drop-shadow(0 0 2px rgba(255,226,190,0.85)) drop-shadow(0 0 14px rgba(255,214,170,0.35)) "
+           "drop-shadow(0 30px 36px rgba(0,0,0,0.55))")
+    body = f"""<div style="position: absolute; left: 0; right: 0; top: 150px; text-align: center; {VIBES}; font-size: 262px; line-height: 1; color: {word}; text-shadow: 0 6px 24px rgba(0,0,0,0.35)">важно</div>
 {fork}
-{cut("barkhat", "Кусок красного бархата на вилке", 336, 318, 404, -4, rim)}"""
-    return cover("Обложка — Важно", light, body)
+{cut("shokolad", "Кусок шоколадного торта на вилке", 382, 286, 316, -4, rim)}"""
+    return cover(title, light, body)
+
+
+VAZHNO_VARIANTS = {
+    "karamel": lambda: vazhno("radial-gradient(circle at 50% 44%, #E9CFAE 0%, #C99A6E 40%, #9C6C46 75%, #7A5236 100%)", "#FFF7EC",
+                              "Обложка — Важно, карамельный фон"),
+}
 
 
 def ceny():
@@ -112,6 +131,11 @@ def build_highlights():
         old.unlink()
     for i, (slug, fn) in enumerate(COVERS, 1):
         (PROJECT / f"Hl-{i}-{slug}.dc.html").write_text(fn())
+    # alternatives to choose from, shown next to the main cover on the canvas
+    for letter, (name, fn) in zip("bcd", NACHINKI_VARIANTS.items()):
+        (PROJECT / f"Hl-3{letter}-Nachinki-{name}.dc.html").write_text(fn())
+    for letter, (name, fn) in zip("b", VAZHNO_VARIANTS.items()):
+        (PROJECT / f"Hl-4{letter}-Vazhno-{name}.dc.html").write_text(fn())
 
 
 if __name__ == "__main__":
