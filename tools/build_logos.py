@@ -1,5 +1,6 @@
 """Logo variants after the user's references: «Vanilla» (bold script + flourishes, two colourways),
 «Caramel» (large calligraphy over the drawing) and the line set («ТарталеТ», «Сластье»).
+Avatar-* are the user's original avatar (tools/trace_logo.py) with a brown outline on the drawing.
 
 Run `python3 tools/build.py` (it calls this module).
 """
@@ -78,9 +79,27 @@ def word_in_cake():
     return logo("Логотип — надпись в торте", CREAM, body)
 
 
+# The original avatar, traced by tools/trace_logo.py: (board, uploaded SVG, title).
+ORIGINAL = [
+    ("Avatar-1-Original", "40e456d973bbe798fa40267721322cb3", "Исходный аватар — без обводки"),
+    ("Avatar-2-Obvodka-svetlo", "f3bf22635566b25df4959fb9a16acb20", "Исходный аватар — светло-коричневая обводка линий"),
+    ("Avatar-3-Obvodka-temno", "ffce97f8f971d8519bfadd54c91ea5e4", "Исходный аватар — тёмно-коричневая обводка линий"),
+    ("Avatar-4-Kontur-svetlo", "9a9caa5424327baf56da9864a110f052", "Исходный аватар — светло-коричневый контур вокруг торта"),
+    ("Avatar-5-Kontur-temno", "66cdbb2cca1f6a3b26f7d8424bc06f8d", "Исходный аватар — тёмно-коричневый контур вокруг торта"),
+    ("Avatar-6-Linii-svetlo", "dbc08c9df67ed1a70a4af86d93e42b0b", "Исходный аватар — рисунок светло-коричневый"),
+    ("Avatar-7-Linii-temno", "34df67dbe9bf7aa29a8f00149a94022d", "Исходный аватар — рисунок тёмно-коричневый"),
+]
+
+
+def original(blob, title):
+    return page(title, 1080, 1080, f'<div style="position: relative; width: 1080px; height: 1080px; overflow: hidden; background: #E9E4E3">'
+                f'<img src="/_blob/{blob}" alt="Торт-сердце и надпись dessertopia" style="display: block; width: 1080px; height: 1080px"></div>')
+
+
 def build_logos():
     out = {"Logo-9-Vanilla": vanilla(False), "Logo-10-Vanilla-karamel": vanilla(True), "Logo-11-Caramel": caramel(),
            "Logo-12-Line": tartalet(), "Logo-13-Word-in-cake": word_in_cake()}
+    out.update({name: original(blob, title) for name, blob, title in ORIGINAL})
     for name, html in out.items():
         (PROJECT / f"{name}.dc.html").write_text(html)
 

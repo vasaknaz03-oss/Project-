@@ -4,6 +4,8 @@ Run `python3 tools/build.py` (it calls this module).
 """
 from build import CARAMEL, CARAMEL_TEXT, CHERRY, CONFETTI, CREAM, HAND, INK, PAPER, PROJECT, RULE, page, paper_noise
 
+# The original avatar with a light-brown outline on the drawing (assets/logo/original-obvodka-svetlo.svg).
+AVATAR = "f3bf22635566b25df4959fb9a16acb20"
 # Highlight covers (rendered from canvas/project/Hl-*.dc.html, see assets/mockup).
 HIGHLIGHTS = [("ce08636d969a34ba96e6d5458d19851d", "Отзывы"), ("f9aac03fb1fd605c7ca9c84464d1e232", "Работы"),
               ("d09aca8f5b96277a0e80c05f695de105", "Начинки"), ("c9ebaddcdbba65889f16bcb586f94765", "Важно"),
@@ -57,8 +59,8 @@ def main_board():
 <svg aria-hidden="true" width="34" height="56" viewBox="0 0 17 28" fill="none" stroke="#F5F5F5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3L3 14L14 25"></path></svg>
 <div style="font-weight: 600; font-size: 46px">desserto.pia</div>
 </div>
-<div style="position: absolute; left: 44px; top: 170px; width: 262px; height: 262px; border-radius: 50%; overflow: hidden; background: {CREAM}">
-<img src="/_blob/a9eac0041f17fa83168692c9ca4fcb63" alt="Аватар: торт-сердце" style="position: absolute; left: 42px; top: 46px; width: 178px">
+<div style="position: absolute; left: 44px; top: 170px; width: 262px; height: 262px; border-radius: 50%; overflow: hidden">
+<img src="/_blob/{AVATAR}" alt="Аватар: торт-сердце и надпись dessertopia" style="display: block; width: 262px; height: 262px">
 </div>
 <div style="position: absolute; left: 350px; top: 178px; right: 40px; font-weight: 600; font-size: 34px; line-height: 1.25">Диана | торты · бенто · трайфлы | Минск</div>
 <div style="position: absolute; left: 350px; top: 296px; right: 60px; display: flex; justify-content: space-between">{stats}</div>
