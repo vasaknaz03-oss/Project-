@@ -81,13 +81,13 @@ def word_in_cake():
 
 # The original avatar, traced by tools/trace_logo.py: (board, uploaded SVG, title).
 ORIGINAL = [
-    ("Avatar-1-Original", "40e456d973bbe798fa40267721322cb3", "Исходный аватар — без обводки"),
-    ("Avatar-2-Obvodka-svetlo", "f3bf22635566b25df4959fb9a16acb20", "Исходный аватар — светло-коричневая обводка линий"),
-    ("Avatar-3-Obvodka-temno", "ffce97f8f971d8519bfadd54c91ea5e4", "Исходный аватар — тёмно-коричневая обводка линий"),
-    ("Avatar-4-Kontur-svetlo", "9a9caa5424327baf56da9864a110f052", "Исходный аватар — светло-коричневый контур вокруг торта"),
-    ("Avatar-5-Kontur-temno", "66cdbb2cca1f6a3b26f7d8424bc06f8d", "Исходный аватар — тёмно-коричневый контур вокруг торта"),
-    ("Avatar-6-Linii-svetlo", "dbc08c9df67ed1a70a4af86d93e42b0b", "Исходный аватар — рисунок светло-коричневый"),
-    ("Avatar-7-Linii-temno", "34df67dbe9bf7aa29a8f00149a94022d", "Исходный аватар — рисунок тёмно-коричневый"),
+    ("Avatar-1-Original", "afe733936097d2411c28a108a25cc858", "Исходный аватар — без обводки"),
+    ("Avatar-2-Obvodka-svetlo", "af08334c81b7818a59d94dd626c83a54", "Исходный аватар — светло-коричневая обводка линий"),
+    ("Avatar-3-Obvodka-temno", "b6476198a6bf1bb5f070719c8ccef823", "Исходный аватар — тёмно-коричневая обводка линий"),
+    ("Avatar-4-Kontur-svetlo", "ba184de64e256a3a970545c0bc901e3e", "Исходный аватар — светло-коричневый контур вокруг торта"),
+    ("Avatar-5-Kontur-temno", "76e9aab6fc42fc9b6b574cd836c7e39d", "Исходный аватар — тёмно-коричневый контур вокруг торта"),
+    ("Avatar-6-Linii-svetlo", "65f6e2172d86a27064ab6cb35a1dd5d2", "Исходный аватар — рисунок светло-коричневый"),
+    ("Avatar-7-Linii-temno", "c31df35e2d02c161f7ef88355cccb121", "Исходный аватар — рисунок тёмно-коричневый"),
 ]
 
 

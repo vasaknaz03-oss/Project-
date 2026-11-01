@@ -50,6 +50,12 @@ def main(screenshot):
     drawing[split:] = False
     text = ink > 150
     text[:split] = False
+    # the screenshot's dark page shows in the corners around the round avatar: keep only the circle
+    yy, xx = np.ogrid[:a.shape[0], :a.shape[1]]
+    r = a.shape[0] / 2
+    inside = (yy - r) ** 2 + (xx - r) ** 2 < (r - 8 * SCALE) ** 2
+    drawing &= inside
+    text &= inside
     # potrace treats True as background here, as in tools/build.py's tracer
     d_draw, d_text = to_path(~drawing), to_path(~text)
 

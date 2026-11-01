@@ -5,7 +5,7 @@ Run `python3 tools/build.py` (it calls this module).
 from build import CARAMEL, CARAMEL_TEXT, CHERRY, CONFETTI, CREAM, HAND, INK, PAPER, PROJECT, RULE, page, paper_noise
 
 # The original avatar with a light-brown outline on the drawing (assets/logo/original-obvodka-svetlo.svg).
-AVATAR = "f3bf22635566b25df4959fb9a16acb20"
+AVATAR = "af08334c81b7818a59d94dd626c83a54"
 # Highlight covers (rendered from canvas/project/Hl-*.dc.html, see assets/mockup).
 HIGHLIGHTS = [("ce08636d969a34ba96e6d5458d19851d", "Отзывы"), ("f9aac03fb1fd605c7ca9c84464d1e232", "Работы"),
               ("d09aca8f5b96277a0e80c05f695de105", "Начинки"), ("c9ebaddcdbba65889f16bcb586f94765", "Важно"),
