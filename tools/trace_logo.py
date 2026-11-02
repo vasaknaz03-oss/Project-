@@ -6,6 +6,7 @@ from the first profile screenshot, and writes it with a brown outline on the dra
 Writes assets/logo/original-*.svg: the drawing and the lettering as separate paths, so the outline goes only
 around the drawing. Two outline kinds: «line» — a thin edge along every stroke of the drawing,
 «contour» — one line around the whole heart-cake silhouette. «linii» repaints the drawing itself brown.
+Also «bez-fona» (no background) and «risunok» (the drawing alone) for the menu.
 """
 import sys
 from pathlib import Path
@@ -74,6 +75,10 @@ def main(screenshot):
     base = f'<rect width="{size}" height="{size}" fill="{BG}"/>'
     text_el = f'<path fill="{WINE}" fill-rule="evenodd" d="{d_text}"/>'
     (out / "original.svg").write_text(f'{head}{base}<path fill="{WINE}" fill-rule="evenodd" d="{d_draw}"/>{text_el}</svg>')
+    # without the background, for the menu: the whole mark, and the drawing alone as a watermark
+    (out / "original-bez-fona.svg").write_text(f'{head}<path fill="{WINE}" fill-rule="evenodd" d="{d_draw}"/>{text_el}</svg>')
+    (out / "original-risunok.svg").write_text(
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="40 20 {size - 80} {TEXT_TOP - 10}"><path fill="{WINE}" fill-rule="evenodd" d="{d_draw}"/></svg>')
     for name, brown in BROWNS.items():
         line = (f'<path fill="{WINE}" fill-rule="evenodd" stroke="{brown}" stroke-width="6" stroke-linejoin="round" '
                 f'paint-order="stroke" d="{d_draw}"/>')

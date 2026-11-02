@@ -126,6 +126,7 @@ if __name__ == "__main__":
     import build_fillings
     import build_highlights
     import build_logos
+    import build_menu
     import build_pinned
     import build_profile
     import build_stories
@@ -136,5 +137,6 @@ if __name__ == "__main__":
     build_stories.build_stories()
     build_pinned.build_pinned()
     build_logos.build_logos()
+    build_menu.build_menu()
     build_profile.build_profile()
     print("artboards written to", PROJECT)
