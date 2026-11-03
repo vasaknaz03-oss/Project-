@@ -1,6 +1,10 @@
 {
   "cakes": ["Banan", "Vishnya", "Barkhat", "Limon", "Plombir", "Snickers"],
   "trifles": ["Banan", "Vishnya", "Barkhat", "Snickers", "Plombir", "Klubnika", "Limon"],
+  "desserts": [
+    {"name": "капкейки", "desc": "бисквит, начинка внутри и кремовая шапочка", "price": ""},
+    {"name": "трайфлы", "desc": "в стаканчике: бисквит, сливочный крем-чиз и начинка на выбор", "price": "9 р / шт · от 4 штук"}
+  ],
   "fillings": {
     "Banan": {
       "photo": "/_blob/7f92bf3c587afdaac2b128f1d2aca9a6",

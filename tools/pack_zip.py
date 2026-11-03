@@ -24,7 +24,7 @@ GROUPS = [
     ("2 Обложки актуального/Запасные варианты", ["Hl-3b-Nachinki-karamel", "Hl-3c-Nachinki-flatlay", "Hl-3d-Nachinki-kapkejk",
                                                   "Hl-4b-Vazhno-karamel"]),
     ("3 Истории в актуальное/Важно", ["Vazhno-1-Kak-zakazat", "Vazhno-2-Chto-napisat", "Vazhno-3-Sroki", "Vazhno-4-Khranenie"]),
-    ("3 Истории в актуальное/Цены — новое меню", "Menu-S"),
+    ("3 Истории в актуальное/Цены — новое меню (коричневое)", "Menu-S"),
     ("3 Истории в актуальное/Цены — прежний вариант", ["Ceny-1-Torty", "Ceny-2-Bento-traifly"]),
     ("3 Истории в актуальное/Начинки", ["Fill-0-Cakes", "Fill-1-Banan", "Fill-2-Vishnya", "Fill-3-Barkhat", "Fill-4-Limon",
                                         "Fill-5-Plombir", "Fill-6-Snickers", "Fill-7-Trifles"]),
@@ -33,7 +33,7 @@ GROUPS = [
     ("4 Закреплённые посты/1 Заказ и доставка", ["Pin-1-Zakaz", "Pin-1b-Zakaz-kak", "Pin-1c-Zakaz-sroki"]),
     ("4 Закреплённые посты/2 Цены и начинки", ["Pin-2-Ceny", "Pin-2b-Ceny-torty", "Pin-2c-Ceny-bento", "Pin-2d-Ceny-nachinki"]),
     ("4 Закреплённые посты/3 Хранение и подача", ["Pin-3-Khranenie", "Pin-3b-Khranenie", "Pin-3c-Podacha"]),
-    ("5 Пост-карусель «Меню» — новый образец", "Menu-[0-9]"),
+    ("5 Пост-карусель «Меню и начинки»", "Menu-[0-9]"),
     ("5 Пост-карусель «Начинки» — прежний вариант", ["Fill-Post-1-Banan", "Fill-Post-2-Vishnya", "Fill-Post-3-Barkhat", "Fill-Post-4-Limon",
                                    "Fill-Post-5-Plombir", "Fill-Post-6-Snickers"]),
     ("6 Заготовки на будущее", ["Tpl-1-Rabota-primer", "Tpl-2-Rabota-pustoy", "Tpl-3-Otzyv", "Tpl-4-Novaya-nachinka",
@@ -82,7 +82,7 @@ Dessertopia — сладкая страна чудес
    Music: «Autumn Day» Kevin MacLeod (incompetech.com), CC BY 4.0
    Хотите трендовый звук из Instagram — берите версию без музыки и выбирайте звук в редакторе.
 
-«5 Пост-карусель «Меню»» — меню для ленты, 4:5: торты, десерты, начинки в разрезе, десерты на фото.
+«5 Пост-карусель «Меню и начинки»» — для ленты, 4:5: обложка, торты, десерты, «Начинки», начинки в разрезе, десерты на фото.
    Его можно закрепить вместо «Цены и начинки». «Начинки — прежний вариант» — карусель с фото-коллажами.
 «8 Другие варианты логотипа» — новые логотипы, если когда-нибудь захотите сменить.
 «9 Как будет выглядеть» — макет готового профиля и фирменный стиль: цвета и шрифты.

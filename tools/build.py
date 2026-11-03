@@ -27,7 +27,8 @@ FONTS = (
     '<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500'
     '&amp;family=Marck+Script&amp;family=Montserrat:wght@400;500;600&amp;family=Great+Vibes&amp;family=Lobster'
     '&amp;family=Playfair+Display+SC&amp;family=Tenor+Sans&amp;family=Playfair+Display:wght@400'
-    '&amp;family=Bodoni+Moda:opsz,wght@96,400;96,800&amp;family=Oranienbaum&amp;display=swap" rel="stylesheet">'
+    '&amp;family=Bodoni+Moda:opsz,wght@96,400;96,800&amp;family=Oranienbaum'
+    '&amp;family=Montserrat+Alternates:ital,wght@1,700&amp;display=swap" rel="stylesheet">'
 )
 
 

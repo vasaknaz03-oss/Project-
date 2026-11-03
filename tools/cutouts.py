@@ -1,12 +1,13 @@
 """Cuts the food out of its background for the highlight covers, into assets/cutouts/*.png.
 
     pip install rembg onnxruntime scipy
-    python3 tools/cutouts.py
+    python3 tools/cutouts.py [name ...]      # all, or only the named cut-outs
 
 Uses rembg with the isnet-general-use model (downloaded to ~/.u2net on first run), then keeps only the main
 object: faint alpha is dropped, the largest connected piece is kept, and optional boxes trim the rest.
 FULL_FRAME cut-outs keep the source size, so they line up exactly over the photo (text-behind-object covers).
 """
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -39,10 +40,12 @@ def main_object(a):
     return a
 
 
-def main():
+def main(only):
     OUT.mkdir(parents=True, exist_ok=True)
     session = new_session("isnet-general-use")
     for name, (src, box, (top, bottom)) in SOURCES.items():
+        if only and name not in only:
+            continue
         a = np.asarray(remove(Image.open(ROOT / src).convert("RGB"), session=session)).copy()
         if box:
             x0, y0, x1, y1 = box
@@ -56,10 +59,12 @@ def main():
         im.save(OUT / f"{name}.png", optimize=True)
         print(name, im.size)
     for name, src in FULL_FRAME.items():
+        if only and name not in only:
+            continue
         a = np.asarray(remove(Image.open(ROOT / src).convert("RGB"), session=session)).copy()
         Image.fromarray(main_object(a)).save(OUT / f"{name}.png", optimize=True)
         print(name, "full frame")
 
 
 if __name__ == "__main__":
-    main()
+    main(set(sys.argv[1:]))

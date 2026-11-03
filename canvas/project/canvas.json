@@ -577,9 +577,9 @@
       "x": 1160,
       "y": 5790
     },
-    "Menu-S3-Bento-traifly.dc.html": {
+    "Menu-S3-Kapkejki-traifly.dc.html": {
       "h": 1920,
-      "title": "Меню — бенто и трайфлы (история)",
+      "title": "Меню — капкейки и трайфлы (история)",
       "w": 1080,
       "x": 2320,
       "y": 5790
@@ -680,7 +680,7 @@
       "w": 240,
       "x": 0,
       "y": 3720,
-      "text": "Меню по новому образцу — карусель для ленты 1080×1350"
+      "text": "Меню и начинки по образцу — карусель для ленты 1080×1350"
     },
     "rowMenuStories": {
       "kind": "title1",
@@ -688,7 +688,7 @@
       "w": 240,
       "x": 0,
       "y": 5490,
-      "text": "Меню — истории для актуального «Цены» 1080×1920"
+      "text": "Меню — истории с ценами для актуального 1080×1920"
     }
   },
   "order": [
@@ -703,7 +703,7 @@
     "Menu-6-Deserty-foto.dc.html",
     "Menu-S1-Karta-tortov.dc.html",
     "Menu-S2-Razmery.dc.html",
-    "Menu-S3-Bento-traifly.dc.html",
+    "Menu-S3-Kapkejki-traifly.dc.html",
     "Avatar-1-Original.dc.html",
     "Avatar-2-Obvodka-svetlo.dc.html",
     "Avatar-3-Obvodka-temno.dc.html",
