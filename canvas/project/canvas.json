@@ -521,27 +521,6 @@
       "x": 6960,
       "y": 8130
     },
-    "Menu-S1-Karta-tortov.dc.html": {
-      "h": 1920,
-      "title": "Карта тортов (история)",
-      "w": 1080,
-      "x": 0,
-      "y": 5790
-    },
-    "Menu-S2-Razmery.dc.html": {
-      "h": 1920,
-      "title": "Размеры и сколько торта (история)",
-      "w": 1080,
-      "x": 1160,
-      "y": 5790
-    },
-    "Menu-S3-Kapkejki-traifly.dc.html": {
-      "h": 1920,
-      "title": "Капкейки и трайфлы (история)",
-      "w": 1080,
-      "x": 2320,
-      "y": 5790
-    },
     "Menu-1-Nachinki.dc.html": {
       "h": 1350,
       "title": "Начинки — обложка карусели",
@@ -563,19 +542,54 @@
       "x": 2320,
       "y": 4020
     },
-    "Menu-4-Deserty.dc.html": {
+    "Menu-4-Klassicheskie.dc.html": {
       "h": 1350,
-      "title": "Десерты — капкейки и трайфлы",
+      "title": "Классические торты",
       "w": 1080,
       "x": 3480,
       "y": 4020
     },
-    "Menu-5-Deserty-foto.dc.html": {
+    "Menu-5-Deserty.dc.html": {
       "h": 1350,
-      "title": "Десерты на фото",
+      "title": "Десерты — капкейки и трайфлы",
       "w": 1080,
       "x": 4640,
       "y": 4020
+    },
+    "Menu-6-Deserty-foto.dc.html": {
+      "h": 1350,
+      "title": "Десерты на фото",
+      "w": 1080,
+      "x": 5800,
+      "y": 4020
+    },
+    "Menu-S1-Karta-tortov.dc.html": {
+      "h": 1920,
+      "title": "Карта тортов (история)",
+      "w": 1080,
+      "x": 0,
+      "y": 5790
+    },
+    "Menu-S2-Klassicheskie.dc.html": {
+      "h": 1920,
+      "title": "Классические торты (история)",
+      "w": 1080,
+      "x": 1160,
+      "y": 5790
+    },
+    "Menu-S3-Razmery.dc.html": {
+      "h": 1920,
+      "title": "Размеры и сколько торта (история)",
+      "w": 1080,
+      "x": 2320,
+      "y": 5790
+    },
+    "Menu-S4-Kapkejki-traifly.dc.html": {
+      "h": 1920,
+      "title": "Капкейки и трайфлы (история)",
+      "w": 1080,
+      "x": 3480,
+      "y": 5790
     }
   },
   "createdOnFiles": {
@@ -691,11 +705,13 @@
     "Menu-1-Nachinki.dc.html",
     "Menu-2-Nachinki-krugi.dc.html",
     "Menu-3-Torty.dc.html",
-    "Menu-4-Deserty.dc.html",
-    "Menu-5-Deserty-foto.dc.html",
+    "Menu-4-Klassicheskie.dc.html",
+    "Menu-5-Deserty.dc.html",
+    "Menu-6-Deserty-foto.dc.html",
     "Menu-S1-Karta-tortov.dc.html",
-    "Menu-S2-Razmery.dc.html",
-    "Menu-S3-Kapkejki-traifly.dc.html",
+    "Menu-S2-Klassicheskie.dc.html",
+    "Menu-S3-Razmery.dc.html",
+    "Menu-S4-Kapkejki-traifly.dc.html",
     "Avatar-1-Original.dc.html",
     "Avatar-2-Obvodka-svetlo.dc.html",
     "Avatar-3-Obvodka-temno.dc.html",

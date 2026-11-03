@@ -4,8 +4,9 @@
 - the price stories (1080×1920) follow the price-card reference: a gilded Latin signature over a caps title, centred
   lists, line icons of the cake sizes, a portion guide and a faded logo at the bottom.
 
-Run `python3 tools/build.py` (it calls this module). Fillings and desserts come from tools/fillings.json: a new filling
-with a photo and a "circle" crop centre shows up in the lists and the circle grid; past six the grid gets another slide.
+Run `python3 tools/build.py` (it calls this module). Everything on the slides comes from the "menu" part of
+tools/fillings.json: a cake listed there with a photo and a "circle" crop centre shows up in the lists and the circle
+grid (eight circles to a slide, then another slide).
 """
 import json
 
@@ -38,12 +39,13 @@ MARCK = "font-family: 'Marck Script', cursive"
 MONT = "font-family: 'Montserrat', sans-serif"
 
 FILL = json.loads((ROOT / "tools" / "fillings.json").read_text())
-CAKES = [FILL["fillings"][k] for k in FILL["cakes"]]
-TRIFLES = [FILL["fillings"][k]["name"].lower() for k in FILL["trifles"]]
-DESSERTS = FILL["desserts"]
+MENU = FILL["menu"]
+CAKES = [FILL["fillings"][k] for k in MENU["cakes"]]
+CLASSIC = MENU["classic"]
+TRIFLES = [t.lower() for t in MENU["trifles"]]
+CUPCAKES = MENU["cupcakes"]
+ASSORTMENT = MENU["assortment"]
 
-# Prices as in the old price list (see build_stories.py).
-DECOR = "ягоды, шоколадные подтёки, рисунки кремом и другой декор оплачиваются отдельно"
 
 
 def gold(text, css, foil=BRONZE):
@@ -133,13 +135,14 @@ def circle(f, d):
 
 
 def fillings_grid(items, part, parts):
-    cells = "".join(f"""<div style="display: flex; flex-direction: column; align-items: center; gap: 20px">
-{circle(f, 236)}
-<div style="{MONT}; font-weight: 500; font-size: 34px; line-height: 1; color: {CHOC}">{f["name"].lower()}</div></div>""" for f in items)
+    d, gap = (236, 34) if len(items) <= 6 else (186, 22)
+    cells = "".join(f"""<div style="display: flex; flex-direction: column; align-items: center; gap: {gap - 4}px">
+{circle(f, d)}
+<div style="{MONT}; font-weight: 500; font-size: {34 if d > 200 else 31}px; line-height: 1; color: {CHOC}">{f["name"].lower()}</div></div>""" for f in items)
     inner = f"""{watermark(540, 700, 900, 0.08)}
 {sign()}
 {divider(196, 1080)}
-<div style="position: absolute; left: 90px; right: 90px; top: 206px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 34px">{cells}</div>"""
+<div style="position: absolute; left: 90px; right: 90px; top: 206px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: {gap}px">{cells}</div>"""
     return carousel("Начинки в разрезе" + (f" {part}/{parts}" if parts > 1 else ""), vignette(1080, 1350, inner))
 
 
@@ -155,18 +158,39 @@ def menu_list(items, top, gap):
     return f'<div style="position: absolute; left: 140px; right: 150px; top: {top}px; display: flex; flex-direction: column; gap: {gap}px">{rows}</div>'
 
 
+def assortment(top):
+    return f'<div style="position: absolute; left: 0; right: 0; top: {top}px; text-align: center; {MONT}; font-weight: 500; font-size: 23px; letter-spacing: 0.04em; color: {CARAMEL}">{ASSORTMENT}</div>'
+
+
 def cakes():
     inner = f"""{watermark(540, 720, 820, 0.10)}
-{title("Торты")}
-{menu_list([(f["name"].lower(), f["desc"]) for f in CAKES], 300, 30)}"""
+{title("Торты", 112)}
+{assortment(236)}
+{menu_list([(f["name"].lower(), f["desc"]) for f in CAKES], 300, 20)}"""
     return carousel("Торты — начинки и состав", framed(1080, 1350, inner))
 
 
+def classic():
+    rows = "".join(f'<div style="{MARCK}; font-size: 72px; line-height: 1; color: {CHOC}">{n.lower()}</div>' for n in CLASSIC)
+    inner = f"""{watermark(540, 720, 820, 0.10)}
+{title("Классические", 112)}
+{assortment(236)}
+<div style="position: absolute; left: 140px; right: 140px; top: 470px; display: flex; flex-direction: column; gap: 118px">{rows}</div>"""
+    return carousel("Классические торты", framed(1080, 1350, inner))
+
+
 def desserts():
-    items = [(d["name"], d["desc"]) for d in DESSERTS] + [("вкусы трайфлов", " · ".join(TRIFLES))]
+    cupcakes = "".join(f"""<div><div style="{MONT}; font-weight: 500; font-size: 31px; line-height: 1.2; color: {CHOC}">{c["name"]}</div>
+{f'<div style="margin-top: 4px; {MONT}; font-size: 23px; line-height: 1.35; color: {MILK}">{c["desc"]}</div>' if c["desc"] else ""}</div>""" for c in CUPCAKES)
     inner = f"""{watermark(540, 720, 820, 0.10)}
 {title("Десерты")}
-{menu_list(items, 400, 150)}"""
+<div style="position: absolute; left: 140px; right: 150px; top: 330px; display: flex; flex-direction: column; gap: 18px">
+<div style="{MARCK}; font-size: 66px; line-height: 1.05; color: {CHOC}">капкейки</div>
+<div style="display: flex; flex-direction: column; gap: 26px">{cupcakes}</div>
+<div style="margin-top: 96px; {MARCK}; font-size: 66px; line-height: 1.05; color: {CHOC}">трайфлы</div>
+<div style="{MONT}; font-size: 23px; line-height: 1.35; color: {MILK}">{MENU["trifle_desc"]}</div>
+<div style="margin-top: 10px; {MONT}; font-weight: 500; font-size: 28px; line-height: 1.6; color: {CHOC}">{" · ".join(TRIFLES)}</div>
+</div>"""
     return carousel("Десерты — капкейки и трайфлы", framed(1080, 1350, inner))
 
 
@@ -243,11 +267,22 @@ def centred_list(items, top, gap, name_size=34):
 
 def story_cakes():
     inner = f"""{corner_drawing()}
-{heading("КАРТА ТОРТОВ", "Cakes", 260)}
-{sub("(ОТ 55 Р / КГ)", 372)}
-{centred_list([(f["name"], f["desc"]) for f in CAKES], 500, 46)}
-{logo(1700)}"""
+{heading("КАРТА ТОРТОВ", "Cakes", 250)}
+{sub("(ОТ 55 Р / КГ)", 362)}
+{assortment(418)}
+{centred_list([(f["name"], f["desc"]) for f in CAKES], 510, 30)}
+{logo(1710)}"""
     return story("Карта тортов (история)", inner)
+
+
+def story_classic():
+    rows = "".join(f'<div style="{TENOR}; font-size: 44px; letter-spacing: 0.06em; line-height: 1.1; color: {CHOC}">{n.upper()}</div>' for n in CLASSIC)
+    inner = f"""{corner_drawing()}
+{heading("КЛАССИЧЕСКИЕ", "Classic", 250)}
+{assortment(380)}
+<div style="position: absolute; left: 120px; right: 120px; top: 640px; display: flex; flex-direction: column; align-items: center; gap: 130px; text-align: center">{rows}</div>
+{logo(1710)}"""
+    return story("Классические торты (история)", inner)
 
 
 def line_cake(cx, base, w, h):
@@ -308,32 +343,33 @@ def story_sizes():
 
 
 def story_desserts():
-    cupcakes, trifles = DESSERTS
+    price = MENU["cupcake_price"]
     inner = f"""{corner_drawing()}
-{heading("КАПКЕЙКИ", "Cupcakes", 260)}
-{sub(f"({cupcakes['price'].upper()})", 372) if cupcakes["price"] else ""}
-<div style="position: absolute; left: 150px; right: 150px; top: {470 if cupcakes['price'] else 400}px; text-align: center; {MONT}; font-size: 25px; line-height: 1.4; color: {MILK}">{cupcakes["desc"]}</div>
-{heading("ТРАЙФЛЫ", "Trifles", 740)}
-{sub(f"({trifles['price'].upper()})", 852)}
-<div style="position: absolute; left: 150px; right: 150px; top: 930px; text-align: center; {MONT}; font-size: 25px; line-height: 1.4; color: {MILK}">{trifles["desc"]}</div>
-{centred_list([(t, "") for t in TRIFLES], 1040, 22, 30)}
-<div style="position: absolute; left: 150px; right: 150px; top: 1570px; text-align: center; {MONT}; font-size: 22px; line-height: 1.4; color: {MILK}">{DECOR}</div>
-{logo(1700)}"""
+{heading("КАПКЕЙКИ", "Cupcakes", 250)}
+{sub(f"({price.upper()})", 362) if price else ""}
+{centred_list([(c["name"], c["desc"]) for c in CUPCAKES], 440 if price else 390, 24, 30)}
+{heading("ТРАЙФЛЫ", "Trifles", 900)}
+{sub(f"({MENU['trifle_price'].upper()})", 1012)}
+<div style="position: absolute; left: 150px; right: 150px; top: 1076px; text-align: center; {MONT}; font-size: 23px; line-height: 1.4; color: {MILK}">{MENU["trifle_desc"]}</div>
+{centred_list([(t, "") for t in TRIFLES], 1146, 12, 28)}
+{logo(1730)}"""
     return story("Капкейки и трайфлы (история)", inner)
 
 
 def build_menu():
     out = {"Menu-1-Nachinki": fillings_cover()}
     with_photo = [f for f in CAKES if "circle" in f]
-    parts = [with_photo[i:i + 6] for i in range(0, len(with_photo), 6)]
+    parts = [with_photo[i:i + 8] for i in range(0, len(with_photo), 8)]
     for i, items in enumerate(parts, 1):
         out[f"Menu-2{'abcdefgh'[i - 1] if len(parts) > 1 else ''}-Nachinki-krugi"] = fillings_grid(items, i, len(parts))
     out["Menu-3-Torty"] = cakes()
-    out["Menu-4-Deserty"] = desserts()
-    out["Menu-5-Deserty-foto"] = desserts_photos()
+    out["Menu-4-Klassicheskie"] = classic()
+    out["Menu-5-Deserty"] = desserts()
+    out["Menu-6-Deserty-foto"] = desserts_photos()
     out["Menu-S1-Karta-tortov"] = story_cakes()
-    out["Menu-S2-Razmery"] = story_sizes()
-    out["Menu-S3-Kapkejki-traifly"] = story_desserts()
+    out["Menu-S2-Klassicheskie"] = story_classic()
+    out["Menu-S3-Razmery"] = story_sizes()
+    out["Menu-S4-Kapkejki-traifly"] = story_desserts()
     for name, html in out.items():
         (PROJECT / f"{name}.dc.html").write_text(html)
     return list(out)

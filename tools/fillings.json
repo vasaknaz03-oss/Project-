@@ -1,10 +1,22 @@
 {
   "cakes": ["Banan", "Vishnya", "Barkhat", "Limon", "Plombir", "Snickers"],
   "trifles": ["Banan", "Vishnya", "Barkhat", "Snickers", "Plombir", "Klubnika", "Limon"],
-  "desserts": [
-    {"name": "капкейки", "desc": "бисквит, начинка внутри и кремовая шапочка", "price": ""},
-    {"name": "трайфлы", "desc": "в стаканчике: бисквит, сливочный крем-чиз и начинка на выбор", "price": "9 р / шт · от 4 штук"}
-  ],
+  "menu": {
+    "assortment": "бенто-торты 400/700 г · Ø 10/12 см  |  торты до 2 кг",
+    "cakes": ["Fistashka", "Banan", "Vishnya", "Barkhat", "Limon", "Plombir", "Snickers", "Morkov"],
+    "classic": ["Молочная девочка", "Медовик", "Молочный ломтик", "Наполеон"],
+    "trifles": ["Банан-карамель", "Вишня-шоколад", "Красный бархат", "Сникерс", "Ягодный пломбир", "Клубника-банан", "Лимон-мак",
+                "Баунти-райское наслаждение", "Морковные"],
+    "trifle_desc": "в стаканчике: бисквит, сливочный крем-чиз и начинка на выбор",
+    "trifle_price": "9 р / шт · от 4 штук",
+    "cupcakes": [
+      {"name": "черничные", "desc": ""},
+      {"name": "шоколадные и ванильные", "desc": "с начинкой на выбор: вишня, клубника, малина или фундучный ганаш"},
+      {"name": "банановые", "desc": ""},
+      {"name": "морковные", "desc": ""}
+    ],
+    "cupcake_price": ""
+  },
   "fillings": {
     "Banan": {
       "photo": "/_blob/7f92bf3c587afdaac2b128f1d2aca9a6",
@@ -65,6 +77,18 @@
       "mood": "для любителей орешков",
       "sponge": "chocolate", "filling": "caramel", "inclusion": "peanut", "topping": "peanuts",
       "labels": [["сливочный крем-чиз", "frost"], ["солёная карамель", "filling1"], ["жареный арахис", "filling2"], ["шоколадный бисквит", "sponge3"]]
+    },
+    "Fistashka": {
+      "photo": "/_blob/d1cf810327d8f9bdfb23d4977ecac47a",
+      "circle": [0.5, 0.5],
+      "name": "Фисташка-малина",
+      "desc": ""
+    },
+    "Morkov": {
+      "photo": "/_blob/225f96f472ab3d88d3e221380de1b0cf",
+      "circle": [0.5, 0.5],
+      "name": "Морковный",
+      "desc": ""
     },
     "Klubnika": {
       "name": "Клубника-банан",
