@@ -1,4 +1,4 @@
-Cormorant Garamond, Marck Script, Montserrat, Great Vibes, Lobster, Playfair Display SC, Tenor Sans, Playfair Display, Bodoni Moda, Oranienbaum and Montserrat Alternates are distributed by Google Fonts under the
+Cormorant Garamond, Marck Script, Montserrat, Great Vibes, Lobster, Playfair Display SC, Tenor Sans, Playfair Display, Bodoni Moda, Oranienbaum, Parisienne and Ms Madi are distributed by Google Fonts under the
 SIL Open Font License 1.1: https://openfontlicense.org/open-font-license-official-text/
 
 - Cormorant Garamond — https://fonts.google.com/specimen/Cormorant+Garamond
@@ -11,4 +11,5 @@ SIL Open Font License 1.1: https://openfontlicense.org/open-font-license-officia
 - Playfair Display — https://fonts.google.com/specimen/Playfair+Display
 - Bodoni Moda — https://fonts.google.com/specimen/Bodoni+Moda
 - Oranienbaum — https://fonts.google.com/specimen/Oranienbaum
-- Montserrat Alternates — https://fonts.google.com/specimen/Montserrat+Alternates
+- Parisienne — https://fonts.google.com/specimen/Parisienne
+- Ms Madi — https://fonts.google.com/specimen/Ms+Madi

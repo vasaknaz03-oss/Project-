@@ -521,68 +521,61 @@
       "x": 6960,
       "y": 8130
     },
-    "Menu-1-Oblozhka.dc.html": {
-      "h": 1350,
-      "title": "Меню — обложка карусели",
-      "w": 1080,
-      "x": 0,
-      "y": 4020
-    },
-    "Menu-2-Torty.dc.html": {
-      "h": 1350,
-      "title": "Меню — торты",
-      "w": 1080,
-      "x": 1160,
-      "y": 4020
-    },
-    "Menu-3-Deserty.dc.html": {
-      "h": 1350,
-      "title": "Меню — десерты",
-      "w": 1080,
-      "x": 2320,
-      "y": 4020
-    },
-    "Menu-4-Nachinki.dc.html": {
-      "h": 1350,
-      "title": "Меню — обложка «Начинки»",
-      "w": 1080,
-      "x": 3480,
-      "y": 4020
-    },
-    "Menu-5-Nachinki-krugi.dc.html": {
-      "h": 1350,
-      "title": "Меню — начинки в разрезе",
-      "w": 1080,
-      "x": 4640,
-      "y": 4020
-    },
-    "Menu-6-Deserty-foto.dc.html": {
-      "h": 1350,
-      "title": "Меню — десерты на фото",
-      "w": 1080,
-      "x": 5800,
-      "y": 4020
-    },
     "Menu-S1-Karta-tortov.dc.html": {
       "h": 1920,
-      "title": "Меню — карта тортов (история)",
+      "title": "Карта тортов (история)",
       "w": 1080,
       "x": 0,
       "y": 5790
     },
     "Menu-S2-Razmery.dc.html": {
       "h": 1920,
-      "title": "Меню — размеры и сколько торта (история)",
+      "title": "Размеры и сколько торта (история)",
       "w": 1080,
       "x": 1160,
       "y": 5790
     },
     "Menu-S3-Kapkejki-traifly.dc.html": {
       "h": 1920,
-      "title": "Меню — капкейки и трайфлы (история)",
+      "title": "Капкейки и трайфлы (история)",
       "w": 1080,
       "x": 2320,
       "y": 5790
+    },
+    "Menu-1-Nachinki.dc.html": {
+      "h": 1350,
+      "title": "Начинки — обложка карусели",
+      "w": 1080,
+      "x": 0,
+      "y": 4020
+    },
+    "Menu-2-Nachinki-krugi.dc.html": {
+      "h": 1350,
+      "title": "Начинки в разрезе",
+      "w": 1080,
+      "x": 1160,
+      "y": 4020
+    },
+    "Menu-3-Torty.dc.html": {
+      "h": 1350,
+      "title": "Торты — начинки и состав",
+      "w": 1080,
+      "x": 2320,
+      "y": 4020
+    },
+    "Menu-4-Deserty.dc.html": {
+      "h": 1350,
+      "title": "Десерты — капкейки и трайфлы",
+      "w": 1080,
+      "x": 3480,
+      "y": 4020
+    },
+    "Menu-5-Deserty-foto.dc.html": {
+      "h": 1350,
+      "title": "Десерты на фото",
+      "w": 1080,
+      "x": 4640,
+      "y": 4020
     }
   },
   "createdOnFiles": {
@@ -680,7 +673,7 @@
       "w": 240,
       "x": 0,
       "y": 3720,
-      "text": "Меню и начинки по образцу — карусель для ленты 1080×1350"
+      "text": "Начинки и меню — карусель для ленты 1080×1350"
     },
     "rowMenuStories": {
       "kind": "title1",
@@ -695,12 +688,11 @@
     "Main.dc.html",
     "Style.dc.html",
     "Promo.dc.html",
-    "Menu-1-Oblozhka.dc.html",
-    "Menu-2-Torty.dc.html",
-    "Menu-3-Deserty.dc.html",
-    "Menu-4-Nachinki.dc.html",
-    "Menu-5-Nachinki-krugi.dc.html",
-    "Menu-6-Deserty-foto.dc.html",
+    "Menu-1-Nachinki.dc.html",
+    "Menu-2-Nachinki-krugi.dc.html",
+    "Menu-3-Torty.dc.html",
+    "Menu-4-Deserty.dc.html",
+    "Menu-5-Deserty-foto.dc.html",
     "Menu-S1-Karta-tortov.dc.html",
     "Menu-S2-Razmery.dc.html",
     "Menu-S3-Kapkejki-traifly.dc.html",

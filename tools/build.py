@@ -28,7 +28,7 @@ FONTS = (
     '&amp;family=Marck+Script&amp;family=Montserrat:wght@400;500;600&amp;family=Great+Vibes&amp;family=Lobster'
     '&amp;family=Playfair+Display+SC&amp;family=Tenor+Sans&amp;family=Playfair+Display:wght@400'
     '&amp;family=Bodoni+Moda:opsz,wght@96,400;96,800&amp;family=Oranienbaum'
-    '&amp;family=Montserrat+Alternates:ital,wght@1,700&amp;display=swap" rel="stylesheet">'
+    '&amp;family=Parisienne&amp;family=Ms+Madi&amp;display=swap" rel="stylesheet">'
 )
 
 
