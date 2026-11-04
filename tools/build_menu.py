@@ -151,10 +151,10 @@ def title(word, top=126):
             f'{gold(word, f"{MONT}; font-weight: 500; font-size: 108px; line-height: 1")}</div>')
 
 
-def menu_list(items, top, gap):
+def menu_list(items, top, gap, name_size=54, desc_size=22):
     rows = "".join(f"""<div>
-<div style="{MARCK}; font-size: 54px; line-height: 1.05; color: {CHOC}">{name}</div>
-<div style="margin-top: 4px; {MONT}; font-size: 22px; line-height: 1.35; color: {MILK}">{desc}</div></div>""" for name, desc in items)
+<div style="{MARCK}; font-size: {name_size}px; line-height: 1.05; color: {CHOC}">{name}</div>
+<div style="margin-top: 4px; {MONT}; font-size: {desc_size}px; line-height: 1.35; color: {MILK}">{desc}</div></div>""" for name, desc in items)
     return f'<div style="position: absolute; left: 140px; right: 150px; top: {top}px; display: flex; flex-direction: column; gap: {gap}px">{rows}</div>'
 
 
@@ -166,16 +166,15 @@ def cakes():
     inner = f"""{watermark(540, 720, 820, 0.10)}
 {title("Торты", 112)}
 {assortment(236)}
-{menu_list([(f["name"].lower(), f["desc"]) for f in CAKES], 300, 20)}"""
+{menu_list([(f["name"].lower(), f["desc"]) for f in CAKES], 288, 12, 46, 20)}"""
     return carousel("Торты — начинки и состав", framed(1080, 1350, inner))
 
 
 def classic():
-    rows = "".join(f'<div style="{MARCK}; font-size: 72px; line-height: 1; color: {CHOC}">{n.lower()}</div>' for n in CLASSIC)
     inner = f"""{watermark(540, 720, 820, 0.10)}
 {title("Классические", 112)}
 {assortment(236)}
-<div style="position: absolute; left: 140px; right: 140px; top: 470px; display: flex; flex-direction: column; gap: 118px">{rows}</div>"""
+{menu_list([(c["name"].lower(), c["desc"]) for c in CLASSIC], 400, 104)}"""
     return carousel("Классические торты", framed(1080, 1350, inner))
 
 
@@ -276,11 +275,10 @@ def story_cakes():
 
 
 def story_classic():
-    rows = "".join(f'<div style="{TENOR}; font-size: 44px; letter-spacing: 0.06em; line-height: 1.1; color: {CHOC}">{n.upper()}</div>' for n in CLASSIC)
     inner = f"""{corner_drawing()}
 {heading("КЛАССИЧЕСКИЕ", "Classic", 250)}
 {assortment(380)}
-<div style="position: absolute; left: 120px; right: 120px; top: 640px; display: flex; flex-direction: column; align-items: center; gap: 130px; text-align: center">{rows}</div>
+{centred_list([(c["name"], c["desc"]) for c in CLASSIC], 560, 80, 40)}
 {logo(1710)}"""
     return story("Классические торты (история)", inner)
 
