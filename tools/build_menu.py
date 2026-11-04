@@ -48,6 +48,12 @@ ASSORTMENT = MENU["assortment"]
 
 
 
+def no_widow(text):
+    """Glues the last two words, so a composition never ends on a line of one word."""
+    head, sep, tail = text.rpartition(" ")
+    return f"{head}&#160;{tail}" if sep else text
+
+
 def gold(text, css, foil=BRONZE):
     """Gilded text: the gradient is clipped to the letters; the padding keeps script swashes inside the gilt."""
     return (f'<span style="display: inline-block; padding: 0.3em 0.45em; margin: -0.3em -0.45em; background: {foil}; '
@@ -154,7 +160,7 @@ def title(word, top=126):
 def menu_list(items, top, gap, name_size=54, desc_size=22):
     rows = "".join(f"""<div>
 <div style="{MARCK}; font-size: {name_size}px; line-height: 1.05; color: {CHOC}">{name}</div>
-<div style="margin-top: 4px; {MONT}; font-size: {desc_size}px; line-height: 1.35; color: {MILK}">{desc}</div></div>""" for name, desc in items)
+<div style="margin-top: 4px; {MONT}; font-size: {desc_size}px; line-height: 1.35; color: {MILK}">{no_widow(desc)}</div></div>""" for name, desc in items)
     return f'<div style="position: absolute; left: 140px; right: 150px; top: {top}px; display: flex; flex-direction: column; gap: {gap}px">{rows}</div>'
 
 
@@ -180,7 +186,7 @@ def classic():
 
 def desserts():
     cupcakes = "".join(f"""<div><div style="{MONT}; font-weight: 500; font-size: 31px; line-height: 1.2; color: {CHOC}">{c["name"]}</div>
-{f'<div style="margin-top: 4px; {MONT}; font-size: 23px; line-height: 1.35; color: {MILK}">{c["desc"]}</div>' if c["desc"] else ""}</div>""" for c in CUPCAKES)
+{f'<div style="margin-top: 4px; {MONT}; font-size: 23px; line-height: 1.35; color: {MILK}">{no_widow(c["desc"])}</div>' if c["desc"] else ""}</div>""" for c in CUPCAKES)
     inner = f"""{watermark(540, 720, 820, 0.10)}
 {title("Десерты")}
 <div style="position: absolute; left: 140px; right: 150px; top: 330px; display: flex; flex-direction: column; gap: 18px">
@@ -260,7 +266,7 @@ def corner_drawing():
 def centred_list(items, top, gap, name_size=34):
     rows = "".join(f"""<div style="text-align: center">
 <div style="{TENOR}; font-size: {name_size}px; letter-spacing: 0.06em; line-height: 1.15; color: {CHOC}">{n.upper()}</div>
-{f'<div style="margin: 8px auto 0; max-width: 760px; {MONT}; font-size: 23px; line-height: 1.35; color: {MILK}">{d}</div>' if d else ""}</div>""" for n, d in items)
+{f'<div style="margin: 8px auto 0; max-width: 760px; {MONT}; font-size: 23px; line-height: 1.35; color: {MILK}">{no_widow(d)}</div>' if d else ""}</div>""" for n, d in items)
     return f'<div style="position: absolute; left: 120px; right: 120px; top: {top}px; display: flex; flex-direction: column; gap: {gap}px">{rows}</div>'
 
 

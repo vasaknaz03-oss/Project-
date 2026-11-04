@@ -136,4 +136,4 @@
 
 - `canvas/project/*.dc.html` — макеты канваса, `canvas/project/canvas.json` — их раскладка.
 - `tools/build.py` и `tools/build_*.py` собирают повторяющиеся макеты: обложки, начинки, «Важно», заготовки, профиль. Логотипы и страница «Продвижение» написаны вручную.
-- `tools/render.mjs` рендерит макеты в PNG через Playwright с локальными шрифтами из `assets/fonts`. Ссылки `/_blob/…` на загруженные фото сопоставлены с `assets/photos` в `tools/assets.json`.
+- `tools/render.mjs` рендерит макеты в PNG через Playwright с локальными шрифтами из `assets/fonts`. `node tools/render.mjs --scale 2 --out папка Menu-` — то же в двойном размере (2160×2700) в одну папку, например чтобы показать заказчику. Ссылки `/_blob/…` на загруженные фото сопоставлены с `assets/photos` в `tools/assets.json`.

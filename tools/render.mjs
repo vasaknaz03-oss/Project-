@@ -2,6 +2,7 @@
 //
 //   node tools/render.mjs                 # every artboard
 //   node tools/render.mjs Cover- Logo-1   # only artboards whose name starts with one of these
+//   node tools/render.mjs --scale 2 --out dir Menu-   # at twice the size, all into one folder
 //
 // Artboards are static markup, so the Design runtime is not needed: the <x-dc> body is
 // lifted into a plain page, Google Fonts are swapped for assets/fonts and /_blob/<id>
@@ -22,7 +23,14 @@ const folders = [
   ['Fill', '04-nachinki'], ['Tpl', '05-zagotovki'], ['Pin', '06-zakreplennye'], ['Menu', '08-menyu'],
 ];
 
-const filters = process.argv.slice(2);
+const args = process.argv.slice(2);
+const option = (name, fallback) => {
+  const i = args.indexOf(name);
+  return i < 0 ? fallback : args.splice(i, 2)[1];
+};
+const scale = Number(option('--scale', 1));
+const outFlat = option('--out', '');
+const filters = args;
 const files = fs.readdirSync(projectDir)
   .filter((f) => f.endsWith('.dc.html'))
   .filter((f) => !filters.length || filters.some((p) => f.startsWith(p)))
@@ -52,17 +60,17 @@ for (const file of files) {
   if (file.startsWith('Promo')) continue; // a scrolling page, not an export
   const name = file.replace('.dc.html', '');
   const folder = (folders.find(([p]) => name.startsWith(p)) || [, 'other'])[1];
-  const outDir = path.join(root, 'export', folder);
+  const outDir = outFlat ? path.resolve(outFlat) : path.join(root, 'export', folder);
   fs.mkdirSync(outDir, { recursive: true });
   const tmp = path.join(projectDir, `.${name}.render.html`);
   fs.writeFileSync(tmp, toPage(src));
   const viewport = size(src);
-  const page = await browser.newPage({ viewport, deviceScaleFactor: 1 });
+  const page = await browser.newPage({ viewport, deviceScaleFactor: scale });
   await page.goto(pathToFileURL(tmp).href, { waitUntil: 'load' });
   await page.evaluate(() => document.fonts.ready);
   await page.screenshot({ path: path.join(outDir, `${name}.png`), clip: { x: 0, y: 0, ...viewport } });
   await page.close();
   fs.unlinkSync(tmp);
-  console.log(`${folder}/${name}.png  ${viewport.width}×${viewport.height}`);
+  console.log(`${outFlat || folder}/${name}.png  ${viewport.width * scale}×${viewport.height * scale}`);
 }
 await browser.close();
