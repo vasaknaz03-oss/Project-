@@ -590,6 +590,13 @@
       "w": 1080,
       "x": 3480,
       "y": 5790
+    },
+    "Menu-V1-Vazhno.dc.html": {
+      "h": 1920,
+      "title": "Важно — как заказать (история)",
+      "w": 1080,
+      "x": 4640,
+      "y": 5790
     }
   },
   "createdOnFiles": {
@@ -695,7 +702,7 @@
       "w": 240,
       "x": 0,
       "y": 5490,
-      "text": "Меню — истории с ценами для актуального 1080×1920"
+      "text": "Меню и «Важно» — истории для актуального 1080×1920"
     }
   },
   "order": [
@@ -712,6 +719,7 @@
     "Menu-S2-Klassicheskie.dc.html",
     "Menu-S3-Razmery.dc.html",
     "Menu-S4-Kapkejki-traifly.dc.html",
+    "Menu-V1-Vazhno.dc.html",
     "Avatar-1-Original.dc.html",
     "Avatar-2-Obvodka-svetlo.dc.html",
     "Avatar-3-Obvodka-temno.dc.html",

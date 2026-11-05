@@ -273,9 +273,8 @@ def centred_list(items, top, gap, name_size=34):
 def story_cakes():
     inner = f"""{corner_drawing()}
 {heading("КАРТА ТОРТОВ", "Cakes", 250)}
-{sub("(ОТ 55 Р / КГ)", 362)}
-{assortment(418)}
-{centred_list([(f["name"], f["desc"]) for f in CAKES], 510, 30)}
+{assortment(380)}
+{centred_list([(f["name"], f["desc"]) for f in CAKES], 500, 32)}
 {logo(1710)}"""
     return story("Карта тортов (история)", inner)
 
@@ -341,7 +340,7 @@ def story_sizes():
 <div style="position: absolute; left: 150px; right: 150px; top: 1400px; text-align: center; {MONT}; font-size: 24px; line-height: 1.4; color: {MILK}">например, 8 гостей × 200 г = 1,6 кг</div>
 <div style="position: absolute; left: 350px; top: 1484px; width: 380px; height: 92px; border-radius: 999px; padding: 3px; box-sizing: border-box; background: {GILT}; box-shadow: 0 10px 24px rgba(59,36,25,0.22)">
 <div style="width: 100%; height: 100%; border-radius: 999px; background: linear-gradient(180deg, #B39181 0%, {MOCHA} 55%, #7A5646 100%); display: flex; align-items: center; justify-content: center; {MONT}; font-weight: 600; font-size: 32px; letter-spacing: 0.08em; color: {CREAM}">ОТ 55 Р / КГ</div></div>
-<div style="position: absolute; left: 150px; right: 150px; top: 1610px; text-align: center; {MONT}; font-size: 22px; line-height: 1.4; color: {MILK}">декор оплачивается отдельно<br>самовывоз: м. Аэродромная (Минск Мир)</div>
+<div style="position: absolute; left: 150px; right: 150px; top: 1610px; text-align: center; {MONT}; font-size: 22px; line-height: 1.4; color: {MILK}">декор оплачивается отдельно</div>
 {logo(1730)}"""
     return story("Размеры и сколько торта (история)", inner)
 
@@ -360,6 +359,44 @@ def story_desserts():
     return story("Капкейки и трайфлы (история)", inner)
 
 
+def gilt_pill(text, top, width=520):
+    return f"""<div style="position: absolute; left: {540 - width // 2}px; top: {top}px; width: {width}px; height: 96px; border-radius: 999px; padding: 3px; box-sizing: border-box; background: {GILT}; box-shadow: 0 10px 24px rgba(59,36,25,0.22)">
+<div style="width: 100%; height: 100%; border-radius: 999px; background: linear-gradient(180deg, #B39181 0%, {MOCHA} 55%, #7A5646 100%); display: flex; align-items: center; justify-content: center; {TENOR}; font-size: 38px; letter-spacing: 0.06em; color: {CREAM}">{text}</div></div>"""
+
+
+def ornament(top):
+    """A short gold rule with a small heart in the middle, between the sections."""
+    return (f'<div style="position: absolute; left: 0; right: 0; top: {top}px; display: flex; align-items: center; justify-content: center; gap: 18px">'
+            f'<div style="width: 120px; height: 1.5px; background: {GILT}"></div>'
+            f'<svg aria-hidden="true" width="26" height="24" viewBox="-26 -26 52 48"><path d="{heart(0, 0, 1)}" fill="{CARAMEL}"></path></svg>'
+            f'<div style="width: 120px; height: 1.5px; background: {GILT}"></div></div>')
+
+
+def section(text, top):
+    return f'<div style="position: absolute; left: 0; right: 0; top: {top}px; text-align: center; {TENOR}; font-size: 40px; letter-spacing: 0.06em; color: {ESPRESSO}">{text}</div>'
+
+
+def story_important():
+    """«Важно» in the same style: how to write, what to tell, how early to order."""
+    order = ["дата и время", "вес", "начинка — выбрать можно<br>в актуальном «Начинки»", "декор", "доставка или самовывоз"]
+    rows = "".join(f'<div style="{MONT}; font-size: 29px; line-height: 1.3; color: {CHOC}">{t}</div>' for t in order)
+    inner = f"""{corner_drawing()}
+{heading("ВАЖНО", "Important", 290, 96)}
+{section("НАПИШИТЕ МНЕ", 470)}
+{gilt_pill("TG  @BMU_GS", 540)}
+<div style="position: absolute; left: 0; right: 0; top: 662px; text-align: center; {MONT}; font-size: 23px; color: {MILK}">ссылка на чат — в шапке профиля</div>
+{ornament(748)}
+{section("ИНФОРМАЦИЯ ДЛЯ ЗАКАЗА", 806)}
+<div style="position: absolute; left: 120px; right: 120px; top: 884px; display: flex; flex-direction: column; align-items: center; gap: 20px; text-align: center">{rows}</div>
+{ornament(1268)}
+{section("СРОКИ", 1326)}
+<div style="position: absolute; left: 0; right: 0; top: 1396px; text-align: center; {MONT}; font-size: 27px; color: {MILK}">оптимальное время для заказа</div>
+<div style="position: absolute; left: 0; right: 0; top: 1444px; text-align: center">{gold("3–4 дня", f"{TENOR}; font-size: 78px; line-height: 1")}</div>
+<div style="position: absolute; left: 0; right: 0; top: 1540px; text-align: center; {MONT}; font-size: 27px; color: {MILK}">до нужной даты</div>
+{logo(1690)}"""
+    return story("Важно — как заказать (история)", inner)
+
+
 def build_menu():
     out = {"Menu-1-Nachinki": fillings_cover()}
     with_photo = [f for f in CAKES if "circle" in f]
@@ -374,6 +411,7 @@ def build_menu():
     out["Menu-S2-Klassicheskie"] = story_classic()
     out["Menu-S3-Razmery"] = story_sizes()
     out["Menu-S4-Kapkejki-traifly"] = story_desserts()
+    out["Menu-V1-Vazhno"] = story_important()
     for name, html in out.items():
         (PROJECT / f"{name}.dc.html").write_text(html)
     return list(out)
