@@ -249,6 +249,7 @@ function renderResults() {
 function card(it) {
   const isOnliner = it.source === 'onliner';
   const slot = isOnliner ? CAT_TO_SLOT[it.category] : null;
+  const setupSlot = isOnliner && !slot && Catalog.setupById[it.category] ? it.category : null;
   const inCompare = state.compare.some((c) => c.id === it.id && c.source === it.source);
   const p = money.both(it.price);
   return el('div.pcard',
@@ -271,6 +272,12 @@ function card(it) {
       el('div.pcard-actions',
         isOnliner && it.offers ? el('button.icon-btn', { title: 'Цены в магазинах', onclick: () => showShops(it) }, icon('store')) : null,
         el('button.icon-btn', { title: inCompare ? 'Убрать из сравнения' : 'Добавить к сравнению', style: inCompare ? { color: 'var(--accent)' } : null, onclick: () => toggleCompare(it) }, icon('scale')),
+        setupSlot && it.price && hasActiveBuild() ? el('button.btn.btn-sm', {
+          title: 'Добавить в сетап текущей сборки',
+          onclick: () => {
+            if (replaceFromSearch(it, setupSlot, true)) document.dispatchEvent(new CustomEvent('goto-page', { detail: 'build' }));
+          },
+        }, 'В сетап') : null,
         slot && it.price && hasActiveBuild() ? el('button.btn.btn-sm', {
           title: 'Заменить в текущей сборке', onclick: () => {
             if (replaceFromSearch(it, S.replaceSlot && CAT_TO_SLOT[it.category] === S.replaceSlot ? S.replaceSlot : slot)) {

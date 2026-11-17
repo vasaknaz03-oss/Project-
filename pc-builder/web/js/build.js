@@ -4,6 +4,9 @@ import { state, SLOTS, specChips, shopLinks, linkFor, slim, saveBuilds, buildTex
 import { openFacetModal, loadFacets, summarize, countActive } from './facets.js';
 
 const Compat = window.Compat;
+const Catalog = window.Catalog;
+// Пункты сетапа как «слоты» сборки
+const SETUP_SLOTS = Catalog.SETUP.map((x) => ({ key: x.id, label: x.label, icon: x.icon, cat: x.id, setup: true }));
 
 const PURPOSES = [
   { id: 'gaming', title: 'Игры', text: 'Максимум FPS: упор на видеокарту', icon: 'gamepad' },
@@ -24,7 +27,7 @@ const HAVE = [
 
 const DEFAULT_FORM = {
   budget: 3500, currency: 'BYN', purpose: 'gaming', cpuBrand: 'any', gpuBrand: 'any', ram: 'auto', storage: 'auto',
-  hdd: 0, platform: 'any', form: 'any', wifi: false, trustedOnly: false, have: {}, advOpen: false, filters: {},
+  hdd: 0, platform: 'any', form: 'any', wifi: false, trustedOnly: false, have: {}, advOpen: false, filters: {}, setup: [],
 };
 
 // Фильтры Onliner по комплектующим: [категория Onliner, название, иконка, ключ «у меня уже есть»]
@@ -59,7 +62,13 @@ const usedCache = {}; // id -> items
 
 export function initBuild(container, savedForm) {
   root = container;
-  if (savedForm) form = { ...DEFAULT_FORM, ...savedForm, have: { ...(savedForm.have || {}) }, filters: JSON.parse(JSON.stringify(savedForm.filters || {})) };
+  if (savedForm) {
+    form = {
+      ...DEFAULT_FORM, ...savedForm, have: { ...(savedForm.have || {}) },
+      filters: JSON.parse(JSON.stringify(savedForm.filters || {})),
+      setup: Array.isArray(savedForm.setup) ? savedForm.setup.filter((id) => Catalog.setupById[id]) : [],
+    };
+  }
   if (state.settings.currency && !savedForm) form.currency = state.settings.currency;
   money.currency = form.currency;
   render();
@@ -94,6 +103,7 @@ function renderForm() {
       const v = parseFloat(e.target.value.replace(/\s/g, '').replace(',', '.'));
       form.budget = isNaN(v) ? 0 : v;
       persistForm();
+      if (form.setup.length) refreshSetupBlock();
     },
     onkeydown: (e) => e.key === 'Enter' && submit(),
   });
@@ -188,6 +198,7 @@ function renderForm() {
 
   const submitBtn = el('button.btn.btn-primary.btn-lg#buildBtn', { type: 'button', onclick: submit }, icon('sparkles'), 'Подобрать сборку');
   const filtersBlock = renderFilters();
+  const setupBlock = renderSetupBlock();
 
   return el('div.card.hero',
     el('h1', 'Соберём компьютер под ваш бюджет'),
@@ -196,6 +207,7 @@ function renderForm() {
       el('div.field', el('label', 'Бюджет'), el('div.budget-input', budgetInput, curSelect)),
       el('div.field', el('label', 'Быстрый выбор'), presets)),
     purposeGrid,
+    setupBlock,
     filtersBlock,
     advBtn,
     adv,
@@ -204,9 +216,14 @@ function renderForm() {
 
 // ------------------------------------------------------------------ фильтры Onliner
 
+/** Категории с фильтрами: комплектующие ПК + выбранные пункты сетапа. */
+function filterSlots() {
+  return FILTER_SLOTS.concat(form.setup.map((id) => [id, Catalog.setupById[id].label, Catalog.setupById[id].icon]));
+}
+
 function renderFilters() {
   const total = Object.values(form.filters || {}).reduce((n, f) => n + countActive(f), 0);
-  const buttons = FILTER_SLOTS.filter(([cat]) => cat !== 'hdd' || Number(form.hdd) > 0 || countActive(form.filters.hdd)).map(([cat, label, ic, haveKey]) => {
+  const buttons = filterSlots().filter(([cat]) => cat !== 'hdd' || Number(form.hdd) > 0 || countActive(form.filters.hdd)).map(([cat, label, ic, haveKey]) => {
     const n = countActive(form.filters[cat]);
     const owned = haveKey && form.have[haveKey];
     return el('button.btn.btn-sm.filter-btn', {
@@ -240,7 +257,7 @@ function refreshFilters() {
 }
 
 async function fillSummary(box) {
-  const active = FILTER_SLOTS.filter(([cat]) => countActive(form.filters[cat]));
+  const active = filterSlots().filter(([cat]) => countActive(form.filters[cat]));
   if (!active.length) return;
   const rows = [];
   for (const [cat, label] of active) {
@@ -257,6 +274,37 @@ async function fillSummary(box) {
       }, icon('x'))));
   }
   box.replaceChildren(...rows);
+}
+
+// ------------------------------------------------------------------ сетап целиком
+
+function renderSetupBlock() {
+  const budgetByn = money.fromCur(form.budget || 0, form.currency);
+  const chips = Catalog.SETUP.map((x) => {
+    const on = form.setup.includes(x.id);
+    return el('button.chip.toggle-chip.setup-chip', {
+      type: 'button', class: on ? 'on' : '',
+      title: `Примерно ${money.fmt(Catalog.setupTarget(x.id, budgetByn), form.currency, { round: true })} из бюджета`,
+      onclick: () => {
+        form.setup = on ? form.setup.filter((id) => id !== x.id) : form.setup.concat(x.id);
+        persistForm();
+        refreshSetupBlock();
+        refreshFilters();
+      },
+    }, icon(x.icon), x.label);
+  });
+  const reserve = form.setup.reduce((sum, id) => sum + Catalog.setupTarget(id, budgetByn), 0);
+  return el('div.setup-block#setupBlock',
+    el('div.row.wrap', { style: { justifyContent: 'space-between' } },
+      el('div', el('div.label', 'Сетап целиком'),
+        el('div.dim.small', 'Отметьте, что купить вместе с компьютером. Бюджет разделится, монитор подберётся под мощность видеокарты.')),
+      form.setup.length ? el('div.small.muted', `На сетап ≈ ${money.fmt(reserve, form.currency, { round: true })}, на ПК ≈ ${money.fmt(Math.max(0, budgetByn - reserve), form.currency, { round: true })}`) : null),
+    el('div.row.wrap.setup-chips', chips));
+}
+
+function refreshSetupBlock() {
+  const old = document.getElementById('setupBlock');
+  if (old) old.replaceWith(renderSetupBlock());
 }
 
 // ------------------------------------------------------------------ запрос
@@ -304,7 +352,16 @@ function current() {
 }
 
 function totalOf(parts) {
-  return Object.values(parts).reduce((s, it) => s + (it ? it.price || 0 : 0), 0);
+  return Object.values(parts || {}).reduce((s, it) => s + (it ? it.price || 0 : 0), 0);
+}
+
+/** Итог: компьютер + сетап. */
+function fullTotal(b) {
+  return totalOf(b.parts) + totalOf(b.setup);
+}
+
+function hasSetup(b) {
+  return !!(b.setup && (Object.keys(b.setup).length || Object.keys(b.setupAlternatives || {}).length));
 }
 
 function renderResults() {
@@ -315,7 +372,7 @@ function renderResults() {
       el('p.muted', 'Приложение подберёт три варианта сборки: экономный, оптимальный и с запасом. Всё можно поменять вручную.'))];
   }
   const out = [];
-  const usedFilters = state.lastBuildForm && state.lastBuildForm.filters ? FILTER_SLOTS.filter(([cat]) => countActive(state.lastBuildForm.filters[cat])) : [];
+  const usedFilters = state.lastBuildForm && state.lastBuildForm.filters ? filterSlots().filter(([cat]) => countActive(state.lastBuildForm.filters[cat])) : [];
   if (usedFilters.length && r.variants.some((v) => v.id !== 'saved')) {
     out.push(el('div.notice.info', { style: { marginBottom: '12px' } }, icon('info'),
       el('div', 'Учтены ваши фильтры: ', usedFilters.map(([cat, label]) => `${label} (${countActive(state.lastBuildForm.filters[cat])})`).join(', '), '.')));
@@ -340,7 +397,7 @@ function renderVariants() {
   const r = state.result;
   const box = el('div.variants', r.variants.map((v) => {
     const b = v.build;
-    const total = b ? totalOf(b.parts) : null;
+    const total = b ? fullTotal(b) : null;
     return el('button.variant', {
       type: 'button', class: v.id === state.variant ? 'on' : '', disabled: !b,
       onclick: () => {
@@ -363,7 +420,9 @@ function renderBuild(v) {
   const b = v.build;
   const have = (state.lastBuildForm && state.lastBuildForm.have) || form.have || {};
   const parts = b.parts;
-  const total = totalOf(parts);
+  const total = fullTotal(b);
+  const pcTotal = totalOf(parts);
+  const setupTotal = totalOf(b.setup);
   const idx = Compat.indices(parts, have.gpu);
   const checks = Compat.check(parts, have);
   const budgetByn = state.result.budget;
@@ -374,18 +433,31 @@ function renderBuild(v) {
     el('div.sum-total',
       el('div.dim.small', `${state.result.purposeLabel} · ${v.label.toLowerCase()}`),
       el('div.t', t.main),
-      el('div.s', t.sub ? t.sub + ' · ' : '', left >= 0 ? `остаток от бюджета ${money.fmt(left)}` : `больше бюджета на ${money.fmt(-left)}`)),
+      el('div.s', t.sub ? t.sub + ' · ' : '', left >= 0 ? `остаток от бюджета ${money.fmt(left)}` : `больше бюджета на ${money.fmt(-left)}`),
+      hasSetup(b) ? el('div.s', `компьютер ${money.fmt(pcTotal)} + сетап ${money.fmt(setupTotal)}`) : null),
     meter('Игровой индекс', idx.gaming, 300, idx.tier),
     meter('Рабочий индекс', idx.work, 300, 'монтаж, рендер, компиляция'),
     el('div.sum-actions',
       el('button.btn', { onclick: () => saveCurrent(v) }, icon('save'), 'Сохранить'),
-      el('button.btn', { onclick: () => copyText(buildText(textTitle(v), parts, total)) }, icon('copy'), 'Копировать список'),
-      el('button.btn', { onclick: () => download(`Сборка ${new Date().toLocaleDateString('ru-RU')}.txt`, buildText(textTitle(v), parts, total)) }, icon('download'), 'В файл .txt')));
+      el('button.btn', { onclick: () => copyText(buildText(textTitle(v), parts, total, '', b.setup)) }, icon('copy'), 'Копировать список'),
+      el('button.btn', { onclick: () => download(`Сборка ${new Date().toLocaleDateString('ru-RU')}.txt`, buildText(textTitle(v), parts, total, '', b.setup)) }, icon('download'), 'В файл .txt')));
 
   const partsBox = el('div.parts', SLOTS.map((s) => renderPart(s, v)).filter(Boolean));
   if (b.original) {
     partsBox.prepend(el('div.notice.info', icon('info'), el('div.grow', 'Сборка изменена вручную. Совместимость и итог пересчитаны.'),
       el('button.btn.btn-sm', { onclick: () => { b.parts = { ...b.original }; delete b.original; rerenderResults(); } }, 'Вернуть как было')));
+  }
+  // Сетап: монитор, периферия, рабочее место
+  if (hasSetup(b)) {
+    const rows = SETUP_SLOTS.filter((sl) => (b.setup && b.setup[sl.key]) || (b.setupAlternatives && b.setupAlternatives[sl.key])).map((sl) => renderPart(sl, v)).filter(Boolean);
+    partsBox.append(el('div.setup-head',
+      el('h3', icon('monitor'), 'Сетап: периферия и рабочее место'),
+      el('span.price', money.fmt(setupTotal))));
+    partsBox.append(...rows);
+    if (b.originalSetup) {
+      partsBox.append(el('div.notice.info', icon('info'), el('div.grow', 'Сетап изменён вручную.'),
+        el('button.btn.btn-sm', { onclick: () => { b.setup = { ...b.originalSetup }; delete b.originalSetup; rerenderResults(); } }, 'Вернуть как было')));
+    }
   }
 
   const need = Compat.psuNeed(parts.cpu, parts.gpu, have.gpu ? 250 : 0);
@@ -431,11 +503,25 @@ function rerenderResults() {
 
 // ------------------------------------------------------------------ строка детали
 
+function altsOf(b, slot) {
+  if (slot.setup) return (b.setupAlternatives && b.setupAlternatives[slot.key]) || [];
+  return (b.alternatives && b.alternatives[slot.key]) || [];
+}
+
 function renderPart(slot, v) {
   const b = v.build;
-  const it = b.parts[slot.key];
+  const it = slot.setup ? (b.setup || {})[slot.key] : b.parts[slot.key];
   const have = (state.lastBuildForm && state.lastBuildForm.have) || form.have || {};
-  const alts = (b.alternatives && b.alternatives[slot.key]) || [];
+  const alts = altsOf(b, slot);
+  if (!it && slot.setup) {
+    const row = el('div.part.empty',
+      el('div.part-main',
+        el('div.thumb.ph', icon(slot.icon)),
+        el('div', el('div.part-kind', icon(slot.icon), slot.label), el('div.part-name.muted', 'Убрано из сетапа')),
+        el('div.part-side', alts.length ? el('button.btn.btn-sm', { onclick: () => togglePanel(slot.key, 'alts') }, icon('plus'), 'Вернуть') : null)));
+    if (panels[slot.key] === 'alts') row.append(el('div.part-panel', renderAlts(slot, v)));
+    return row;
+  }
   if (!it) {
     if (slot.key === 'hdd') return null;
     if (slot.key === 'cooler' && !Compat.coolerNeed(b.parts.cpu)) return null;
@@ -450,7 +536,8 @@ function renderPart(slot, v) {
     return row;
   }
   const p = money.both(it.price);
-  const changed = b.original && b.original[slot.key] !== it;
+  const changed = slot.setup ? b.originalSetup && b.originalSetup[slot.key] !== it : b.original && b.original[slot.key] !== it;
+  const note = slot.setup && b.setupNotes && b.setupNotes[slot.key] && !changed ? b.setupNotes[slot.key] : null;
   const openBtn = (kind, ic, label) => el('button.btn.btn-sm', { class: panels[slot.key] === kind ? 'on' : '', onclick: () => togglePanel(slot.key, kind) }, icon(ic), label);
 
   const row = el('div.part', { class: changed ? 'changed' : '' },
@@ -460,17 +547,18 @@ function renderPart(slot, v) {
         el('div.part-kind', icon(slot.icon), slot.label, it.perf && it.perf.score ? el('span.chip', { style: { marginLeft: '6px' } }, `индекс ${it.perf.score}`) : null,
           it.perf && it.perf.gaming ? el('span.chip', { style: { marginLeft: '6px' } }, `игры ${it.perf.gaming} · многопоток ${it.perf.multi}`) : null),
         el('div.part-name', el('a', { href: it.url, target: '_blank', rel: 'noopener' }, it.name)),
-        el('div.part-specs', specChips(slot.cat, it))),
+        el('div.part-specs', note ? el('span.chip.ok', note) : null, specChips(slot.cat, it),
+          slot.setup && it.reviews ? el('span.chip', `★ ${it.rating.toFixed(1)} · ${it.reviews} ${plural(it.reviews, 'отзыв', 'отзыва', 'отзывов')}`) : null)),
       el('div.part-side',
         el('div.price', p.main),
         p.sub ? el('div.price-sub', p.sub) : null,
         el('div.price-sub', it.offers ? `${it.offers} ${plural(it.offers, 'предложение', 'предложения', 'предложений')}` : ''))),
     el('div.part-actions',
       it.source === 'onliner' ? openBtn('shops', 'store', 'Магазины') : null,
-      alts.length || (slot.key === 'gpu' && b.alternatives.gpuSame && b.alternatives.gpuSame.length) ? openBtn('alts', 'swap', `Альтернативы (${alts.length + ((slot.key === 'gpu' && b.alternatives.gpuSame) ? b.alternatives.gpuSame.length : 0)})`) : null,
+      alts.length || (slot.key === 'gpu' && b.alternatives && b.alternatives.gpuSame && b.alternatives.gpuSame.length) ? openBtn('alts', 'swap', `Альтернативы (${alts.length + ((slot.key === 'gpu' && b.alternatives && b.alternatives.gpuSame) ? b.alternatives.gpuSame.length : 0)})`) : null,
       openBtn('used', 'recycle', 'Б/у на Kufar'),
       el('a.btn.btn-sm.btn-ghost', { href: it.url, target: '_blank', rel: 'noopener' }, icon('external'), 'Открыть'),
-      el('button.btn.btn-sm.btn-ghost', { title: 'Убрать из сборки', onclick: () => replacePart(slot.key, null) }, icon('trash'))));
+      el('button.btn.btn-sm.btn-ghost', { title: 'Убрать из сборки', onclick: () => replacePart(slot.key, null, slot.setup) }, icon('trash'))));
   const kind = panels[slot.key];
   if (kind) {
     const panel = el('div.part-panel');
@@ -487,21 +575,28 @@ function togglePanel(slot, kind) {
   rerenderResults();
 }
 
-function replacePart(slotKey, item) {
+function replacePart(slotKey, item, isSetup = false) {
   const v = current();
   if (!v || !v.build) return;
   const b = v.build;
-  if (!b.original) b.original = { ...b.parts };
-  b.parts = { ...b.parts, [slotKey]: item };
+  if (isSetup) {
+    if (!b.setup) b.setup = {};
+    if (!b.originalSetup) b.originalSetup = { ...b.setup };
+    b.setup = { ...b.setup, [slotKey]: item };
+    if (!item) delete b.setup[slotKey];
+  } else {
+    if (!b.original) b.original = { ...b.parts };
+    b.parts = { ...b.parts, [slotKey]: item };
+  }
   panels[slotKey] = null;
   rerenderResults();
-  toast(item ? 'Деталь заменена' : 'Деталь убрана из сборки');
+  toast(item ? (isSetup ? 'Добавлено в сетап' : 'Деталь заменена') : 'Убрано из сборки');
 }
 
-export function replaceFromSearch(item, slotKey) {
+export function replaceFromSearch(item, slotKey, isSetup = false) {
   const v = current();
   if (!v || !v.build) return false;
-  replacePart(slotKey, item);
+  replacePart(slotKey, item, isSetup);
   return true;
 }
 
@@ -539,14 +634,14 @@ function altRow(slot, a, cur, onPick) {
 
 function renderAlts(slot, v) {
   const b = v.build;
-  const cur = b.parts[slot.key];
-  const alts = (b.alternatives && b.alternatives[slot.key]) || [];
+  const cur = slot.setup ? (b.setup || {})[slot.key] : b.parts[slot.key];
+  const alts = altsOf(b, slot);
   const box = el('div');
   if (alts.length) {
-    box.append(el('div.panel-title', slot.key === 'gpu' ? 'Другие видеокарты' : 'Совместимые альтернативы'),
-      el('div.alt-list', alts.map((a) => altRow(slot, a, cur, () => replacePart(slot.key, a.item)))));
+    box.append(el('div.panel-title', slot.key === 'gpu' ? 'Другие видеокарты' : slot.setup ? 'Другие варианты с хорошими отзывами' : 'Совместимые альтернативы'),
+      el('div.alt-list', alts.map((a) => altRow(slot, a, cur, () => replacePart(slot.key, a.item, slot.setup)))));
   }
-  if (slot.key === 'gpu' && b.alternatives.gpuSame && b.alternatives.gpuSame.length) {
+  if (slot.key === 'gpu' && b.alternatives && b.alternatives.gpuSame && b.alternatives.gpuSame.length) {
     box.append(el('div.panel-title', { style: { marginTop: '12px' } }, 'Тот же чип у других производителей'),
       el('div.alt-list', b.alternatives.gpuSame.map((a) => altRow(slot, a, cur, () => replacePart(slot.key, a.item)))));
   }
@@ -679,17 +774,18 @@ async function prefetchUsed() {
 function compareVariants() {
   const vs = state.result.variants.filter((v) => v.build);
   const head = el('tr', el('th', ''), vs.map((v) => el('th', v.label)));
-  const rows = SLOTS.map((s) => {
-    if (!vs.some((v) => v.build.parts[s.key])) return null;
+  const rows = SLOTS.concat(SETUP_SLOTS).map((s) => {
+    const src = (v) => (s.setup ? v.build.setup || {} : v.build.parts);
+    if (!vs.some((v) => src(v)[s.key])) return null;
     return el('tr', el('td', el('b', s.label)), vs.map((v) => {
-      const it = v.build.parts[s.key];
+      const it = src(v)[s.key];
       return el('td', it ? [el('div', it.name), el('div.dim.small', money.fmt(it.price))] : el('span.dim', '—'));
     }));
   });
   const have = (state.lastBuildForm && state.lastBuildForm.have) || {};
   const idxRow = (label, fn) => el('tr', el('td', el('b', label)), vs.map((v) => el('td', fn(v))));
   const table = el('table.tbl.compare-table', el('thead', head), el('tbody', rows,
-    idxRow('Итого', (v) => el('b', money.fmt(totalOf(v.build.parts)))),
+    idxRow('Итого', (v) => el('b', money.fmt(fullTotal(v.build)))),
     idxRow('Игровой индекс', (v) => String(Compat.indices(v.build.parts, have.gpu).gaming ?? '—')),
     idxRow('Рабочий индекс', (v) => String(Compat.indices(v.build.parts, have.gpu).work)),
     idxRow('Уровень', (v) => Compat.indices(v.build.parts, have.gpu).tier)));
@@ -697,11 +793,13 @@ function compareVariants() {
 }
 
 async function saveCurrent(v) {
-  const total = totalOf(v.build.parts);
+  const total = fullTotal(v.build);
   const name = await promptText('Сохранить сборку', 'Название', `${state.result.purposeLabel} за ${money.fmt(total, money.currency, { round: true })}`);
   if (!name) return;
   const parts = {};
   for (const s of SLOTS) parts[s.key] = slim(v.build.parts[s.key]);
+  const setup = {};
+  for (const [id, it] of Object.entries(v.build.setup || {})) if (it) setup[id] = slim(it);
   state.builds.unshift({
     id: Date.now().toString(36),
     name,
@@ -710,6 +808,7 @@ async function saveCurrent(v) {
     purposeLabel: state.result.purposeLabel,
     total,
     parts,
+    setup,
     have: (state.lastBuildForm && state.lastBuildForm.have) || {},
   });
   await saveBuilds();
@@ -722,7 +821,7 @@ export function openSaved(saved) {
     budget: saved.total,
     purpose: saved.purpose,
     purposeLabel: saved.purposeLabel || 'Сохранённая',
-    variants: [{ id: 'saved', label: saved.name, hint: '', budget: saved.total, build: { parts: { ...saved.parts }, alternatives: {}, index: Compat.indices(saved.parts, saved.have && saved.have.gpu) } }],
+    variants: [{ id: 'saved', label: saved.name, hint: '', budget: saved.total, build: { parts: { ...saved.parts }, setup: { ...(saved.setup || {}) }, alternatives: {}, setupAlternatives: {}, index: Compat.indices(saved.parts, saved.have && saved.have.gpu) } }],
     warnings: [],
     stats: { ms: 0, cpus: 0, gpus: 0, boards: 0 },
   };

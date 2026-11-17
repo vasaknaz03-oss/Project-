@@ -180,17 +180,21 @@ export function updateSavedCount() {
 /** Облегчённая копия товара для сохранения. */
 export function slim(it) {
   if (!it) return null;
-  const { id, source, category, name, price, url, pricesUrl, image, specs, perf, offers, noname } = it;
-  return { id, source, category, name, price, url, pricesUrl, image, specs, perf, offers, noname };
+  const { id, source, category, name, price, url, pricesUrl, image, specs, perf, offers, noname, rating, reviews, description } = it;
+  return { id, source, category, name, price, url, pricesUrl, image, specs, perf, offers, noname, rating, reviews, description };
 }
 
-export function buildText(title, parts, total, extra = '') {
+export function buildText(title, parts, total, extra = '', setup = null) {
   const lines = [title, ''];
-  for (const s of SLOTS) {
-    const it = parts[s.key];
-    if (!it) continue;
-    lines.push(`${s.label}: ${it.name} — ${money.fmt(it.price)}${money.currency !== 'BYN' ? ` (${money.fmt(it.price, 'BYN')})` : ''}`);
+  const line = (label, it) => {
+    lines.push(`${label}: ${it.name} — ${money.fmt(it.price)}${money.currency !== 'BYN' ? ` (${money.fmt(it.price, 'BYN')})` : ''}`);
     if (it.url) lines.push(`   ${it.url}`);
+  };
+  for (const s of SLOTS) if (parts[s.key]) line(s.label, parts[s.key]);
+  const setupItems = window.Catalog.SETUP.filter((x) => setup && setup[x.id]);
+  if (setupItems.length) {
+    lines.push('', 'Сетап:');
+    for (const x of setupItems) line(x.label, setup[x.id]);
   }
   lines.push('', `Итого: ${money.fmt(total)}${money.currency !== 'BYN' ? ` (${money.fmt(total, 'BYN')})` : ''}`);
   if (extra) lines.push(extra);

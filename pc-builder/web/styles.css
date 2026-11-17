@@ -484,3 +484,11 @@ html.mac-os .select { padding-right: 32px; }
 .section-group .label { margin-bottom: 6px; }
 .section-group .row { gap: 6px; }
 .search-bar .select optgroup { font-weight: 700; }
+
+/* ---------- сетап ---------- */
+.setup-block { margin-top: 18px; padding: 14px 16px; border: 1px solid var(--border-2); border-radius: 14px; background: var(--bg-2); }
+.setup-chips { gap: 8px; margin-top: 12px; }
+.setup-chip [data-icon] { width: 15px; height: 15px; }
+.setup-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; padding: 4px 4px 0; }
+.setup-head h3 { display: flex; align-items: center; gap: 8px; font-size: 16px; }
+.setup-head h3 [data-icon] { width: 18px; height: 18px; color: var(--accent-2); }

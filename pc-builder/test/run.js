@@ -215,6 +215,36 @@ test('каталог: у каждого раздела есть источник
   assert.strictEqual(C.setupTarget('display', 100000), 3500);
 });
 
+console.log('Сетап');
+test('класс монитора по мощности видеокарты', () => {
+  const Setup = require('../server/setup');
+  assert.deepStrictEqual(Setup.monitorClasses('gaming', 80, 600)[0], 'fhd144');
+  assert.deepStrictEqual(Setup.monitorClasses('gaming', 150, 900)[0], 'qhd144');
+  assert.deepStrictEqual(Setup.monitorClasses('gaming', 220, 2000)[0], 'qhd240');
+  assert.deepStrictEqual(Setup.monitorClasses('office', 10, 400), ['office']);
+});
+test('выбор пунктов сетапа: монитор под видеокарту, игровые наушники для игрового ПК', () => {
+  const Setup = require('../server/setup');
+  const mon = (id, price, desc, rating = 45, reviews = 20) => ({ id, name: id, price, description: desc, rating: rating / 10, reviews, offers: 5, specs: parseSpecs('display', desc) });
+  const pools = {
+    display: [
+      mon('fhd60', 300, '24", 1920x1080, 16:9, IPS, 75 Гц'),
+      mon('fhd165', 420, '24", 1920x1080, 16:9, IPS, 165 Гц'),
+      mon('qhd180', 700, '27", 2560x1440, 16:9, IPS, 180 Гц'),
+    ],
+    headphones: [
+      { id: 'tws', name: 'TWS', price: 150, description: 'беспроводные, внутриканальные, TWS', rating: 4.9, reviews: 100, offers: 9 },
+      { id: 'headset', name: 'Headset', price: 170, description: 'мониторные (охватывающие), геймерские', rating: 4.2, reviews: 10, offers: 4 },
+    ],
+  };
+  const weak = Setup.choose(['display', 'headphones'], pools, 4000, 'gaming', 80);
+  assert.strictEqual(weak.items.display.id, 'fhd165');
+  assert.strictEqual(weak.items.headphones.id, 'headset');
+  const strong = Setup.choose(['display'], pools, 6000, 'gaming', 160);
+  assert.strictEqual(strong.items.display.id, 'qhd180');
+  assert.ok(strong.total === 700);
+});
+
 console.log('Оптимизатор (подставные данные)');
 test('подбирает совместимую сборку в рамках бюджета', () => {
   const onliner = require('../server/providers/onliner');
