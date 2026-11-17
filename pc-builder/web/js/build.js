@@ -529,7 +529,7 @@ async function loadUsed(panel, slot, it) {
         el('div',
           el('div.alt-name', el('a', { href: u.url, target: '_blank', rel: 'noopener' }, u.name)),
           el('div.alt-note', [u.condition, u.location, u.date ? new Date(u.date).toLocaleDateString('ru-RU') : null, u.company ? 'магазин' : 'частное лицо'].filter(Boolean).join(' · '))),
-        el('div.alt-price', el('b', money.fmt(u.price)), el('span.diff.down', `−${Math.round((1 - u.price / it.price) * 100)}%`)),
+        el('div.alt-price', el('b', money.fmt(u.price)), savingTag(u.price, it.price)),
         el('a.btn.btn-sm', { href: u.url, target: '_blank', rel: 'noopener' }, icon('external'), 'Открыть')))),
       el('p.dim.small', 'Б/у покупайте с проверкой: тесты, отсутствие следов вскрытия, по возможности — с остатком гарантии.'));
   } catch (e) {
@@ -538,6 +538,12 @@ async function loadUsed(panel, slot, it) {
 }
 
 // ------------------------------------------------------------------ б/у сводка
+
+function savingTag(used, fresh) {
+  const pct = Math.round((1 - used / fresh) * 100);
+  if (!fresh || pct < 1) return el('span.diff', 'как новая');
+  return el('span.diff.down', `−${pct}%`);
+}
 
 function renderUsedSummary(v) {
   const card = el('div.card#usedSummary', el('h3', 'Б/у на Kufar'));
@@ -554,7 +560,7 @@ function renderUsedSummary(v) {
       rows.push(el('div.row.small',
         el('span.muted.grow', label),
         el('a', { href: '#', onclick: (e) => { e.preventDefault(); panels[key] = 'used'; rerenderResults(); } }, `от ${money.fmt(best.price)}`),
-        el('span.diff.down', `−${Math.round((1 - best.price / it.price) * 100)}%`)));
+        savingTag(best.price, it.price)));
     }
   }
   if (!rows.length) return null;

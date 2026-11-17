@@ -147,6 +147,21 @@ async function route(req, res, url) {
     return send(res, 200, { offers: await onliner.offers(key) });
   }
 
+  if (pathname === '/api/refresh' && req.method === 'POST') {
+    const body = await readBody(req);
+    const list = (Array.isArray(body.items) ? body.items : []).slice(0, 16);
+    const out = {};
+    await Promise.all(list.map(async (it) => {
+      if (!it || !/^[\w.-]+$/.test(String(it.id || '')) || !PC_SCHEMAS.has(it.category)) return;
+      try {
+        out[it.id] = await onliner.product(it.id, it.category);
+      } catch (e) {
+        out[it.id] = { error: e.message };
+      }
+    }));
+    return send(res, 200, { items: out });
+  }
+
   if (pathname === '/api/used') {
     const kind = p.get('kind');
     const key = p.get('key');

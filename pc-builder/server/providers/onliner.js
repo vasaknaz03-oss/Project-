@@ -104,6 +104,12 @@ async function search(query, page = 1) {
   };
 }
 
+/** Актуальные данные одного товара (для обновления цен в сохранённых сборках). */
+async function product(key, category) {
+  const data = await getJSON(`https://catalog.api.onliner.by/products/${encodeURIComponent(key)}`, { ttl: 5 * 60 * 1000 });
+  return normalize({ ...data, schema: data.schema || { key: category, name: CATEGORIES[category] || '' } });
+}
+
 /** Предложения всех магазинов для товара (сравнение цен). */
 async function offers(productKey) {
   const url = `${SHOP_API}/products/${encodeURIComponent(productKey)}/positions`;
@@ -130,4 +136,4 @@ async function offers(productKey) {
   return list;
 }
 
-module.exports = { CATEGORIES, category, categoryPage, search, offers, normalize, enrich };
+module.exports = { CATEGORIES, category, categoryPage, search, offers, product, normalize, enrich };

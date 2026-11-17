@@ -212,7 +212,6 @@ function preparePools(raw, opts, B) {
   const strict = !!opts.trustedOnly;
   const gpus = (raw.gpus || []).filter((g) => inStock(g) && g.perf && g.perf.score >= 9).map((g) => ((g.noname = NONAME_GPU.test(g.name)), g)).filter((g) => !(strict && g.noname));
   pools.gpuAll = gpus;
-  pools.gpus = cheapestBy(gpus, (g) => g.perf.key + ':' + (g.specs.vramGb || ''));
   // убираем видеокарты, которые и дороже, и слабее другой
   const eff = (g) => g.perf.score * (g.noname ? 0.92 : 1);
   pools.gpus = cheapestBy(gpus, (g) => g.perf.key + ':' + (g.specs.vramGb || '') + (g.noname ? ':nn' : ''));
