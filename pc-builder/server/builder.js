@@ -7,6 +7,8 @@
 
 const onliner = require('./providers/onliner');
 const filters = require('./filters');
+const Setup = require('./setup');
+const Catalog = require('../web/catalog');
 const Compat = require('../web/compat');
 
 const ALL_SOCKETS = ['am4', 'am5', 'lga1700', 'lga1851', 'lga1200'];
@@ -611,14 +613,32 @@ async function build(opts) {
   const budget = Number(opts.budgetByn);
   if (!(budget > 0)) throw new Error('Укажите бюджет');
   const t0 = Date.now();
-  const { raw, warnings, sockets, F } = await gather(opts, budget * 1.15);
+  // Сетап: что добавить к ПК (монитор, клавиатура, …)
+  const setupIds = (Array.isArray(opts.setup) ? opts.setup : []).filter((id) => Catalog.setupById[id]);
+  const setupWarnings = [];
+  const [{ raw, warnings, sockets, F }, setupPools] = await Promise.all([
+    gather(opts, budget * 1.15),
+    setupIds.length ? Setup.gather(setupIds, budget * 1.15, opts.filters, setupWarnings) : Promise.resolve({}),
+  ]);
+  warnings.push(...setupWarnings);
   const pools = preparePools(raw, opts, budget * 1.15, F);
   if (!pools.cpus.length) throw new Error('Не удалось загрузить процессоры с Onliner. Проверьте интернет и попробуйте ещё раз.');
 
   const variants = [];
   for (const v of VARIANTS) {
     const b = Math.round(budget * v.k);
-    const best = optimize(pools, opts, b);
+    let best;
+    let setup = null;
+    if (setupIds.length) {
+      // 1) ПК на бюджет за вычетом примерной доли сетапа; 2) сетап (монитор — под получившуюся видеокарту);
+      // 3) ПК заново на точный остаток
+      const first = optimize(pools, opts, b - Setup.reserve(setupIds, b));
+      const idx = first ? Compat.indices(first.parts, opts.have && opts.have.gpu) : { gaming: 0 };
+      setup = Setup.choose(setupIds, setupPools, b, opts.purpose, idx.gaming);
+      best = optimize(pools, opts, b - setup.total) || first;
+    } else {
+      best = optimize(pools, opts, b);
+    }
     if (!best) {
       variants.push({ id: v.id, label: v.label, hint: v.hint, budget: b, build: null });
       continue;
@@ -631,10 +651,17 @@ async function build(opts) {
       checks: Compat.check(best.parts, opts.have),
     };
     result.alternatives = alternatives(result, pools, opts);
+    if (setup) {
+      result.setup = setup.items;
+      result.setupNotes = setup.notes;
+      result.setupTotal = Math.round(setup.total * 100) / 100;
+      result.setupAlternatives = {};
+      for (const [id, it] of Object.entries(setup.items)) result.setupAlternatives[id] = Setup.alternatives(setupPools[id] || [], it);
+    }
     variants.push({ id: v.id, label: v.label, hint: v.hint, budget: b, build: result });
   }
   // Убираем одинаковые варианты
-  const sig = (v) => (v.build ? Object.values(v.build.parts).map((x) => (x ? x.id : '-')).join('|') : '');
+  const sig = (v) => (v.build ? Object.values(v.build.parts).concat(Object.values(v.build.setup || {})).map((x) => (x ? x.id : '-')).join('|') : '');
   const opt = variants.find((v) => v.id === 'optimal');
   for (const v of variants) if (v.id !== 'optimal' && v.build && sig(v) === sig(opt)) v.same = true;
 

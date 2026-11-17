@@ -206,8 +206,20 @@ function videocard(desc) {
   return spec;
 }
 
+function display(desc) {
+  const d = desc || '';
+  const res = d.match(/(\d{3,4})x(\d{3,4})/);
+  return {
+    diagonal: num((d.match(/^([\d.,]+)"/) || [])[1]),
+    resW: res ? num(res[1]) : null,
+    resH: res ? num(res[2]) : null,
+    hz: num((d.match(/(\d{2,3})\s*Гц/) || [])[1]),
+    matrix: (d.match(/\b(IPS|VA|TN|OLED|QD-OLED)\b/i) || [])[1] || null,
+  };
+}
+
 const BY_SCHEMA = {
-  cpu, motherboard, dram, ssd, hdd, powersupply, chassis, fan: cooler, videocard,
+  cpu, motherboard, dram, ssd, hdd, powersupply, chassis, fan: cooler, videocard, display,
 };
 
 function parseSpecs(schema, desc, name) {
