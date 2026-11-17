@@ -1,0 +1,240 @@
+'use strict';
+// Тесты без сети: разбор описаний, распознавание моделей, совместимость, оптимизатор на подставных данных.
+// Запуск: npm test        (добавьте --live, чтобы прогнать подбор на живых данных Onliner)
+
+const assert = require('assert');
+const { parseSpecs } = require('../server/parsers');
+const perf = require('../server/perfdb');
+const Compat = require('../web/compat');
+
+let passed = 0;
+let failed = 0;
+const pending = [];
+function test(name, fn) {
+  const ok = () => {
+    passed++;
+    console.log('  ✓ ' + name);
+  };
+  const fail = (e) => {
+    failed++;
+    console.log('  ✗ ' + name + '\n    ' + e.message);
+  };
+  try {
+    const r = fn();
+    if (r && typeof r.then === 'function') pending.push(r.then(ok, fail));
+    else ok();
+  } catch (e) {
+    fail(e);
+  }
+}
+
+console.log('Разбор описаний');
+test('процессор AMD', () => {
+  const s = parseSpecs('cpu', '2022 г, Vermeer (Zen 3), сокет AM4, 6 ядер, 12 потоков, частота 4.4/3.5 ГГц, кэш 3 МБ + 32 МБ, техпроцесс 7 нм, поддержка DDR4, TDP 65W, OEM (без коробки, без кулера)', 'AMD Ryzen 5 5600');
+  assert.strictEqual(s.socket, 'AM4');
+  assert.strictEqual(s.cores, 6);
+  assert.strictEqual(s.threads, 12);
+  assert.strictEqual(s.boostGhz, 4.4);
+  assert.deepStrictEqual(s.mem, ['DDR4']);
+  assert.strictEqual(s.tdp, 65);
+  assert.strictEqual(s.l3, 32);
+  assert.strictEqual(s.hasIgpu, false);
+  assert.strictEqual(s.withCooler, false);
+});
+test('процессор Intel с DDR4/DDR5 и BOX с кулером', () => {
+  const s = parseSpecs('cpu', '2024 г, Raptor Lake-R, сокет LGA1700, 4 ядра, 8 потоков, частота 4.7/3.5 ГГц, кэш 5 МБ + 12 МБ, техпроцесс 10 нм, поддержка DDR5/DDR4, TDP 60W, BOX (в цветной коробке, с кулером)', 'Intel Core i3-14100 (BOX)');
+  assert.strictEqual(s.socket, 'LGA1700');
+  assert.deepStrictEqual(s.mem.sort(), ['DDR4', 'DDR5']);
+  assert.strictEqual(s.withCooler, true);
+  assert.strictEqual(s.hasIgpu, true);
+});
+test('AM5 без F — со встроенной графикой, с F — без', () => {
+  assert.strictEqual(parseSpecs('cpu', 'сокет AM5, 6 ядер', 'AMD Ryzen 5 7600').hasIgpu, true);
+  assert.strictEqual(parseSpecs('cpu', 'сокет AM5, 6 ядер', 'AMD Ryzen 5 7500F').hasIgpu, false);
+  assert.strictEqual(parseSpecs('cpu', 'сокет AM4, 6 ядер', 'AMD Ryzen 5 5600GT').hasIgpu, true);
+});
+test('материнская плата', () => {
+  const s = parseSpecs('motherboard', 'mATX, сокет AMD AM5, чипсет AMD B850, память 4xDDR5, слоты: 2xPCIe x16 5.0, 2xM.2, 802.11ax (Wi-Fi 6)+Bluetooth 5.3, 12+2+1 фаз питания');
+  assert.strictEqual(s.form, 'mATX');
+  assert.strictEqual(s.socket, 'AM5');
+  assert.strictEqual(s.chipset, 'B850');
+  assert.strictEqual(s.mem, 'DDR5');
+  assert.strictEqual(s.memSlots, 4);
+  assert.strictEqual(s.m2, 2);
+  assert.strictEqual(s.wifi, true);
+});
+test('память и SO-DIMM', () => {
+  const s = parseSpecs('dram', '32 ГБ, 2 модуля DDR5 DIMM по 16 ГБ, частота 6000 МГц, CL 36T, тайминги 36-38-38-86, напряжение 1.35 В');
+  assert.strictEqual(s.totalGb, 32);
+  assert.strictEqual(s.modules, 2);
+  assert.strictEqual(s.type, 'DDR5');
+  assert.strictEqual(s.form, 'DIMM');
+  assert.strictEqual(s.mhz, 6000);
+  assert.strictEqual(parseSpecs('dram', '8 ГБ, 1 модуль DDR4 SO-DIMM, частота 3200 МГц').form, 'SO-DIMM');
+});
+test('SSD, БП, корпус, кулер, видеокарта', () => {
+  const ssd = parseSpecs('ssd', '1 ТБ, M.2 2280, PCI Express 4.0 x4, последовательный доступ: 7400/6000 МБайт/с');
+  assert.strictEqual(ssd.capacityGb, 1000);
+  assert.strictEqual(ssd.iface, 'NVMe');
+  assert.strictEqual(ssd.read, 7400);
+  const psu = parseSpecs('powersupply', 'ATX 850 Вт, золотой сертификат 80 Plus, модульный, 1x 12В 70.9А, 1x PCIe Gen5');
+  assert.strictEqual(psu.watts, 850);
+  assert.strictEqual(psu.cert, 4);
+  assert.strictEqual(psu.modular, 'full');
+  const c = parseSpecs('chassis', 'Mid Tower, БП отсутствует, для плат ATX/micro-ATX/mini-ITX, с 6 вентиляторами в комплекте, окно: закаленное стекло, видеокарта до 410 мм, охлаждение ЦП до 165 мм');
+  assert.deepStrictEqual(c.boards, ['ATX', 'mATX', 'ITX']);
+  assert.strictEqual(c.psuIncluded, false);
+  assert.strictEqual(c.gpuMaxMm, 410);
+  assert.strictEqual(c.fans, 6);
+  const m = parseSpecs('chassis', 'Mini Tower, БП отсутствует, для плат micro-ATX/mini-ITX');
+  assert.deepStrictEqual(m.boards, ['mATX', 'ITX']);
+  const cool = parseSpecs('fan', 'рассеивание до 220 Вт, высота 154 мм, вентилятор 120 мм');
+  assert.strictEqual(cool.tdp, 220);
+  assert.strictEqual(cool.heightMm, 154);
+  const g = parseSpecs('videocard', '16 ГБ GDDR7, 2300 МГц / 2452 МГц, 8960sp, 70 RT-ядер, трассировка лучей, 256 бит, 2.5 слота, питание 16 pin (12V-2x6), HDMI, DisplayPort');
+  assert.strictEqual(g.vramGb, 16);
+  assert.strictEqual(g.vramType, 'GDDR7');
+});
+
+console.log('Распознавание моделей');
+test('видеокарты', () => {
+  const cases = {
+    'MSI GeForce RTX 4060 Ti Gaming X Slim 8G': 'rtx4060ti',
+    'Palit GeForce RTX 5070 Ti GamingPro-S NE7507T019T2-GB2031U': 'rtx5070ti',
+    'PNY GeForce RTX 5060 8GB Overclocked Dual Fan': 'rtx5060',
+    'ASUS Dual Radeon RX 7600 EVO OC Edition 8GB': 'rx7600',
+    'Sapphire Pulse Radeon RX 7900 XTX': 'rx7900xtx',
+    'Gigabyte Radeon RX 9070 GRE Gaming OC 12G': 'rx9070gre',
+    'ASRock Intel Arc B580 Challenger 12GB OC': 'arcb580',
+    'PCWINMAX GeForce GTX 1660 Super 6GB GDDR6': 'gtx1660super',
+    'GeForce RTX 4070 Ti SUPER': 'rtx4070tisuper',
+    'PNY RTX A400 VCNRTXA400-SB': null,
+  };
+  for (const [name, key] of Object.entries(cases)) assert.strictEqual(perf.gpuKey(name), key, name);
+});
+test('процессоры', () => {
+  const cases = {
+    'AMD Ryzen 5 5600': 'r5600', 'AMD Ryzen 5 5600 (BOX)': 'r5600', 'AMD Ryzen 7 7800X3D': 'r7800x3d',
+    'AMD Ryzen 5 7500F': 'r7500f', 'AMD Ryzen 5 7400': 'r7400f', 'AMD Ryzen 7 Pro 5750G': 'r5750g',
+    'Intel Core i5-12400F': 'i12400', 'Intel Core i5-13600KF': 'i13600k', 'Intel Core i9-14900KS': 'i14900k',
+    'Intel Core Ultra 7 265KF': 'u265k', 'Intel Core Ultra 5 225F': 'u225', 'Intel Pentium Gold G7400': 'pg7400',
+    'AMD Athlon 3000G (BOX)': 'a3000g',
+  };
+  for (const [name, key] of Object.entries(cases)) assert.strictEqual(perf.cpuKey(name), key, name);
+});
+test('Kufar-заголовки распознаются', () => {
+  assert.strictEqual(perf.gpuKey('Rtx 4060 palit 8 gb'), 'rtx4060');
+  assert.strictEqual(perf.gpuKey('видеокарта rtx 4060 ti'), 'rtx4060ti');
+  assert.strictEqual(perf.cpuKey('Процессор AMD Ryzen 5 7500F, AM5'), 'r7500f');
+  assert.strictEqual(perf.cpuKey('ryzen 5 7500f 25года'), 'r7500f');
+});
+
+console.log('Совместимость');
+const cpu = { name: 'AMD Ryzen 5 7500F', price: 400, specs: { socket: 'AM5', mem: ['DDR5'], tdp: 65, hasIgpu: false }, perf: { gaming: 125, multi: 135, igpu: 0 } };
+const mbAm4 = { name: 'B550M', price: 250, specs: { socket: 'AM4', mem: 'DDR4', form: 'mATX', memSlots: 2, m2: 1, chipset: 'B550' } };
+const mbAm5 = { name: 'B650M', price: 300, specs: { socket: 'AM5', mem: 'DDR5', form: 'mATX', memSlots: 2, m2: 1, chipset: 'B650' } };
+const ram = { name: 'DDR5 2x16', price: 500, specs: { type: 'DDR5', form: 'DIMM', modules: 2, totalGb: 32 } };
+test('сокет не совпадает — ошибка', () => {
+  const r = Compat.check({ cpu, motherboard: mbAm4, ram }, {});
+  assert.ok(r.some((c) => c.level === 'error' && /Сокет/.test(c.text)));
+});
+test('нет видеокарты и встроенной графики — ошибка', () => {
+  const r = Compat.check({ cpu, motherboard: mbAm5, ram }, {});
+  assert.ok(r.some((c) => c.level === 'error' && /встроенной графики/.test(c.text)));
+});
+test('слабый БП — ошибка, нормальный — ок', () => {
+  const gpu = { name: 'RTX 5070', perf: { watts: 250, score: 172 }, specs: {} };
+  const weak = Compat.check({ cpu, motherboard: mbAm5, ram, gpu, psu: { specs: { watts: 300 } } }, {});
+  assert.ok(weak.some((c) => c.level === 'error' && /Блок питания/.test(c.text)));
+  const need = Compat.psuNeed(cpu, gpu);
+  assert.ok(need.rec >= 550 && need.rec <= 650, 'рекомендация ' + need.rec);
+  const ok = Compat.check({ cpu, motherboard: mbAm5, ram, gpu, psu: { specs: { watts: need.rec } } }, {});
+  assert.ok(ok.some((c) => c.level === 'ok' && /Блок питания/.test(c.text)));
+});
+test('ATX-плата в mATX-корпус не влезает', () => {
+  assert.strictEqual(Compat.boardFitsCase('ATX', { specs: { boards: ['mATX', 'ITX'] } }), false);
+  assert.strictEqual(Compat.boardFitsCase('mATX', { specs: { boards: ['ATX', 'mATX'] } }), true);
+});
+test('индексы: RTX 4060 + Ryzen 5 5600 ≈ 100', () => {
+  const i = Compat.indices({ cpu: { perf: { gaming: 100, multi: 100, igpu: 0 } }, gpu: { perf: { score: 100 } }, ram: { specs: { totalGb: 32, modules: 2 } } });
+  assert.strictEqual(i.gaming, 100);
+  assert.strictEqual(i.work, 100);
+});
+
+console.log('Оптимизатор (подставные данные)');
+test('подбирает совместимую сборку в рамках бюджета', () => {
+  const onliner = require('../server/providers/onliner');
+  const mk = (category, name, price, description, extra = {}) => onliner.normalize({
+    key: name.toLowerCase().replace(/\W+/g, '-'), full_name: name, schema: { key: category, name: category }, description,
+    prices: { price_min: { amount: String(price) }, offers: { count: 5 } }, html_url: 'https://catalog.onliner.by/x/' + name, ...extra,
+  });
+  const fixtures = {
+    cpu: [
+      mk('cpu', 'AMD Ryzen 5 5600', 300, '2022 г, Vermeer (Zen 3), сокет AM4, 6 ядер, 12 потоков, частота 4.4/3.5 ГГц, кэш 3 МБ + 32 МБ, поддержка DDR4, TDP 65W, OEM (без коробки, без кулера)'),
+      mk('cpu', 'AMD Ryzen 5 7500F', 450, '2023 г, Raphael (Zen 4), сокет AM5, 6 ядер, 12 потоков, частота 5/3.7 ГГц, кэш 6 МБ + 32 МБ, поддержка DDR5, TDP 65W, OEM (без коробки, без кулера)'),
+    ],
+    videocard: [
+      mk('videocard', 'Palit GeForce RTX 4060 Dual', 1100, '8 ГБ GDDR6, 128 бит, питание 8 pin'),
+      mk('videocard', 'Palit GeForce RTX 5070 GamingPro', 2600, '12 ГБ GDDR7, 192 бит, питание 16 pin'),
+    ],
+    motherboard: [
+      mk('motherboard', 'Gigabyte B550M DS3H', 260, 'mATX, сокет AMD AM4, чипсет AMD B550, память 4xDDR4, слоты: 1xPCIe x16 4.0, 2xM.2'),
+      mk('motherboard', 'ASRock B650M-HDV/M.2', 330, 'mATX, сокет AMD AM5, чипсет AMD B650, память 2xDDR5, слоты: 1xPCIe x16 4.0, 2xM.2'),
+    ],
+    dram: [
+      mk('dram', 'Kingston Fury 2x8GB DDR4 3200', 200, '16 ГБ, 2 модуля DDR4 DIMM по 8 ГБ, частота 3200 МГц, CL 16T'),
+      mk('dram', 'Kingston Fury 2x16GB DDR5 6000', 600, '32 ГБ, 2 модуля DDR5 DIMM по 16 ГБ, частота 6000 МГц, CL 36T'),
+      mk('dram', 'Kingston Fury 2x8GB DDR5 5600', 350, '16 ГБ, 2 модуля DDR5 DIMM по 8 ГБ, частота 5600 МГц, CL 36T'),
+    ],
+    ssd: [mk('ssd', 'Kingston NV3 1TB', 200, '1 ТБ, M.2 2280, PCI Express 4.0 x4, последовательный доступ: 6000/4000 МБайт/с')],
+    powersupply: [
+      mk('powersupply', 'DeepCool PK550D', 150, 'ATX 550 Вт, бронзовый сертификат 80 Plus'),
+      mk('powersupply', 'DeepCool PK750D', 220, 'ATX 750 Вт, бронзовый сертификат 80 Plus'),
+    ],
+    chassis: [mk('chassis', 'Zalman i3', 150, 'Mid Tower, БП отсутствует, для плат ATX/micro-ATX/mini-ITX, с 4 вентиляторами в комплекте')],
+    fan: [mk('fan', 'ID-Cooling SE-224-XTS', 60, 'рассеивание до 220 Вт, высота 154 мм, вентилятор 120 мм')],
+  };
+  // Подменяем загрузку из сети на подставные данные
+  onliner.category = async (schema) => ({ items: fixtures[schema] || [], total: (fixtures[schema] || []).length });
+  const builder = require('../server/builder');
+  return builder.build({ budgetByn: 3000, purpose: 'gaming' }).then((r) => {
+    const v = r.variants.find((x) => x.id === 'optimal');
+    assert.ok(v.build, 'сборка найдена');
+    const p = v.build.parts;
+    assert.ok(v.build.total <= 3000, 'в бюджете: ' + v.build.total);
+    assert.strictEqual(p.cpu.specs.socket, p.motherboard.specs.socket);
+    assert.strictEqual(p.ram.specs.type, p.motherboard.specs.mem);
+    assert.ok(p.gpu, 'для игр есть видеокарта');
+    assert.ok(p.cooler, 'OEM-процессору нужен кулер');
+    assert.ok(!v.build.checks.some((c) => c.level === 'error'), 'без ошибок совместимости');
+    console.log(`    → ${p.cpu.name} + ${p.gpu.name}, итого ${v.build.total} р.`);
+  });
+});
+
+async function live() {
+  if (!process.argv.includes('--live')) return;
+  console.log('Живой подбор (Onliner)');
+  delete require.cache[require.resolve('../server/providers/onliner')];
+  delete require.cache[require.resolve('../server/builder')];
+  const builder = require('../server/builder');
+  for (const [budget, purpose] of [[2000, 'office'], [3500, 'gaming'], [7000, 'work']]) {
+    const r = await builder.build({ budgetByn: budget, purpose });
+    const v = r.variants.find((x) => x.id === 'optimal');
+    assert.ok(v.build, `сборка на ${budget} (${purpose})`);
+    const errors = v.build.checks.filter((c) => c.level === 'error');
+    assert.strictEqual(errors.length, 0, errors.map((e) => e.text).join('; '));
+    console.log(`  ✓ ${budget} р., ${purpose}: ${v.build.total} р. — ${v.build.parts.cpu.name} / ${v.build.parts.gpu ? v.build.parts.gpu.name : 'встроенная графика'}`);
+    passed++;
+  }
+}
+
+(async () => {
+  await Promise.all(pending);
+  await live();
+  console.log(`\nПройдено: ${passed}, ошибок: ${failed}`);
+  process.exit(failed ? 1 : 0);
+})().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
+

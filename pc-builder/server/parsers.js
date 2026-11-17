@@ -1,0 +1,214 @@
+'use strict';
+// Разбор кратких описаний товаров Onliner в структурированные характеристики.
+
+const num = (s) => (s == null ? null : parseFloat(String(s).replace(',', '.')));
+
+function normSocket(raw) {
+  if (!raw) return null;
+  const s = raw.toUpperCase().replace(/^(AMD|INTEL)\s+/, '').replace(/\s+/g, ' ').trim();
+  if (/^LGA\s?1151/.test(s)) return 'LGA1151';
+  const m = s.match(/^(AM[1-5]\+?|LGA\s?\d{3,4}(?:-\d)?|FM2\+?|SP[3-6]|STR[X45]?\S*|STRX4|TR4)/);
+  return m ? m[1].replace(/\s/g, '') : s;
+}
+
+function memTypes(text) {
+  const set = new Set();
+  for (const m of String(text).matchAll(/DDR(\d)/g)) set.add('DDR' + m[1]);
+  return [...set];
+}
+
+function cpu(desc, name) {
+  const d = desc || '';
+  const spec = {};
+  const sock = d.match(/сокет\s+([^,]+)/i);
+  spec.socket = normSocket(sock && sock[1]);
+  spec.cores = num((d.match(/(\d+)\s+яд(?:ер|ра|ро)/) || [])[1]);
+  spec.threads = num((d.match(/(\d+)\s+пото/) || [])[1]);
+  const fq = d.match(/частота\s+([\d.,]+)(?:\s*\/\s*([\d.,]+))?\s*ГГц/);
+  if (fq) spec.boostGhz = num(fq[1]);
+  const arch = d.match(/^\d{4}\s*г,\s*([^,]+)/);
+  spec.arch = arch ? arch[1].trim() : '';
+  spec.year = num((d.match(/^(\d{4})\s*г/) || [])[1]);
+  const cache = d.match(/кэш\s+([\d.,]+\s*МБ(?:\s*\+\s*[\d.,]+\s*МБ)?)/);
+  if (cache) {
+    const nums = cache[1].match(/[\d.,]+/g).map(num);
+    spec.l3 = nums[nums.length - 1];
+  }
+  const sup = d.match(/поддержка\s+([^,]+(?:,\s*DDR\d[^,]*)*)/);
+  spec.mem = memTypes(sup ? sup[1] : d);
+  spec.tdp = num((d.match(/TDP\s+(\d+)\s*W/i) || [])[1]);
+  spec.box = /\bBOX\b/.test(d) || /\(BOX\)/i.test(name || '');
+  spec.withCooler = /с кулером/.test(d);
+  // Встроенная графика
+  const n = String(name || '').toLowerCase();
+  if (/intel/.test(n)) spec.hasIgpu = !/\d(f|kf)\b|xeon/.test(n);
+  else if (/ryzen|athlon/.test(n)) {
+    if (spec.socket === 'AM5') spec.hasIgpu = !/\d{4}f\b/.test(n);
+    else spec.hasIgpu = /\d{4}(g|ge|gt)\b|athlon/.test(n);
+  } else spec.hasIgpu = false;
+  return spec;
+}
+
+function motherboard(desc) {
+  const d = desc || '';
+  const spec = {};
+  const ff = d.match(/^(E-?ATX|ATX|mATX|micro-ATX|mini-ITX|miniITX|Mini-ITX|Thin Mini-ITX)/i);
+  spec.form = ff ? normForm(ff[1]) : null;
+  const sock = d.match(/сокет\s+([^,]+)/i);
+  spec.socket = normSocket(sock && sock[1]);
+  const ch = d.match(/чипсет\s+(?:AMD|Intel)?\s*([A-Za-z]?\d{2,4}[A-Za-z]?)/);
+  spec.chipset = ch ? ch[1].toUpperCase() : null;
+  const mem = d.match(/память\s+(\d+)x(DDR\d)/);
+  if (mem) {
+    spec.memSlots = num(mem[1]);
+    spec.mem = mem[2];
+  }
+  spec.m2 = num((d.match(/(\d+)xM\.2/) || [])[1]) || 0;
+  spec.wifi = /Wi-?Fi|802\.11/i.test(d);
+  const pcie = d.match(/PCIe x16\s+([\d.]+)/);
+  spec.pcie = pcie ? num(pcie[1]) : null;
+  return spec;
+}
+
+function normForm(s) {
+  const v = String(s).toLowerCase().replace(/\s+/g, '');
+  if (v.includes('itx')) return 'ITX';
+  if (v === 'matx' || v.includes('micro')) return 'mATX';
+  if (v.startsWith('e')) return 'EATX';
+  return 'ATX';
+}
+
+function dram(desc) {
+  const d = desc || '';
+  const spec = {};
+  spec.totalGb = num((d.match(/^([\d.,]+)\s*ГБ/) || [])[1]);
+  spec.modules = num((d.match(/(\d+)\s+модул/) || [])[1]) || 1;
+  const t = d.match(/(DDR\d)\s+(SO-DIMM|DIMM|CUDIMM)/);
+  spec.type = t ? t[1] : null;
+  spec.form = t ? t[2] : null;
+  spec.registered = /Registered|RDIMM|ECC/i.test(d);
+  spec.mhz = num((d.match(/частота\s+(\d+)\s*МГц/) || [])[1]);
+  spec.cl = num((d.match(/CL\s*(\d+)/) || [])[1]);
+  return spec;
+}
+
+function capacityGb(text) {
+  const m = String(text || '').match(/([\d.,]+)\s*(ТБ|TB|ГБ|GB)(?![A-Za-zА-Яа-яЁё])/i);
+  if (!m) return null;
+  const v = num(m[1]);
+  return /т|t/i.test(m[2][0]) ? Math.round(v * 1000) : v;
+}
+
+function ssd(desc, name) {
+  const d = desc || '';
+  const spec = {};
+  spec.capacityGb = capacityGb(d) || capacityGb(name);
+  if (/M\.2/.test(d)) spec.form = 'M.2';
+  else if (/2\.5"/.test(d)) spec.form = '2.5"';
+  else if (/mSATA/i.test(d)) spec.form = 'mSATA';
+  const pci = d.match(/PCI Express\s+([\d.]+)\s*x(\d)/);
+  if (pci) {
+    spec.iface = 'NVMe';
+    spec.pcie = num(pci[1]);
+    spec.lanes = num(pci[2]);
+  } else if (/SATA/.test(d)) spec.iface = 'SATA';
+  const sp = d.match(/последовательный доступ:\s*(\d+)\s*\/\s*(\d+)/);
+  if (sp) {
+    spec.read = num(sp[1]);
+    spec.write = num(sp[2]);
+  }
+  spec.qlc = /QLC/.test(d);
+  return spec;
+}
+
+function hdd(desc, name) {
+  const d = desc || '';
+  return {
+    capacityGb: capacityGb(name) || capacityGb(d),
+    rpm: num((d.match(/(\d{4,5})\s*об\/мин/) || [])[1]),
+    form: (d.match(/^(3\.5"|2\.5")/) || [])[1] || null,
+  };
+}
+
+const CERT = { 'базовый': 1, 'бронзовый': 2, 'серебряный': 3, 'золотой': 4, 'платиновый': 5, 'титановый': 6 };
+const CERT_NAMES = ['нет', '80+', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Titanium'];
+
+function powersupply(desc) {
+  const d = desc || '';
+  const spec = {};
+  spec.watts = num((d.match(/(\d{3,4})\s*Вт/) || [])[1]);
+  const f = d.match(/^(ATX|SFX-L|SFX|TFX|Flex ATX)/i);
+  spec.form = f ? f[1].toUpperCase() : null;
+  const c = d.match(/(\S+)\s+сертификат\s+80\s*Plus/i);
+  spec.cert = c ? CERT[c[1].toLowerCase()] || 1 : 0;
+  spec.certName = CERT_NAMES[spec.cert];
+  spec.modular = /полумодульный/.test(d) ? 'semi' : /модульный/.test(d) ? 'full' : null;
+  spec.pcie5 = /PCIe Gen5|12V-2x6|12VHPWR/i.test(d);
+  return spec;
+}
+
+function chassis(desc) {
+  const d = desc || '';
+  const spec = {};
+  const cls = d.match(/^(Mini Tower|Mid Tower|Full Tower|Super Tower|Dual System Tower|SFF|[^,]*горизонтальный)/i);
+  spec.class = cls ? cls[1] : null;
+  spec.psuIncluded = !/БП отсутствует/.test(d);
+  const pw = d.match(/БП\s+(\d+)\s*Вт/);
+  spec.psuWatts = pw ? num(pw[1]) : null;
+  const boards = d.match(/для плат\s+([^,]+)/);
+  const list = boards ? boards[1] : '';
+  spec.boards = [];
+  if (/(^|\/)E-?ATX/i.test(list)) spec.boards.push('EATX');
+  if (/(^|\/|\s)ATX/i.test(list.replace(/E-?ATX/gi, '').replace(/micro-ATX|mini-ITX/gi, ''))) spec.boards.push('ATX');
+  if (/micro-ATX|mATX/i.test(list)) spec.boards.push('mATX');
+  if (/mini-ITX/i.test(list)) spec.boards.push('ITX');
+  if (!boards) spec.boards = ['ATX', 'mATX', 'ITX']; // не указано — обычно стандартный ATX-корпус
+  spec.gpuMaxMm = num((d.match(/видеокарта до\s+(\d+)\s*мм/) || [])[1]);
+  spec.coolerMaxMm = num((d.match(/охлаждение ЦП до\s+(\d+)\s*мм/) || [])[1]);
+  const fans = d.match(/с\s+(\d+)\s+вентилятор/);
+  spec.fans = fans ? num(fans[1]) : 0;
+  spec.window = /окно/.test(d);
+  spec.mesh = /сетк|забором воздуха|mesh/i.test(d);
+  return spec;
+}
+
+function cooler(desc, name) {
+  const d = desc || '';
+  return {
+    tdp: num((d.match(/рассеивание до\s+(\d+)\s*Вт/) || [])[1]),
+    heightMm: num((d.match(/высота\s+([\d.]+)\s*мм/) || [])[1]),
+    fanMm: num((d.match(/вентилятор\s+(\d+)\s*мм/) || [])[1]),
+    aio: /СЖО|жидкост|AIO/i.test(d + ' ' + (name || '')),
+  };
+}
+
+function videocard(desc) {
+  const d = desc || '';
+  const spec = {};
+  const v = d.match(/^([\d.,]+)\s*ГБ\s+(\S+)/);
+  if (v) {
+    spec.vramGb = num(v[1]);
+    spec.vramType = v[2].replace(/,$/, '');
+  }
+  const pw = d.match(/питание\s+([^,]+)/);
+  spec.power = pw ? pw[1].trim() : null;
+  spec.slots = num((d.match(/([\d.,]+)\s+слот/) || [])[1]);
+  spec.rt = /трассировка/.test(d);
+  return spec;
+}
+
+const BY_SCHEMA = {
+  cpu, motherboard, dram, ssd, hdd, powersupply, chassis, fan: cooler, videocard,
+};
+
+function parseSpecs(schema, desc, name) {
+  const fn = BY_SCHEMA[schema];
+  if (!fn) return {};
+  try {
+    return fn(desc, name);
+  } catch {
+    return {};
+  }
+}
+
+module.exports = { parseSpecs, normSocket, capacityGb, CERT_NAMES };

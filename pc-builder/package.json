@@ -1,0 +1,50 @@
+{
+  "name": "pc-podbor",
+  "productName": "ПодборПК",
+  "version": "1.0.0",
+  "description": "Подбор комплектующих для ПК под бюджет по ценам Onliner и объявлениям Kufar",
+  "main": "main.js",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "web": "node start-web.js",
+    "test": "node test/run.js",
+    "dist": "electron-builder --win portable nsis"
+  },
+  "devDependencies": {
+    "electron": "45.2.1",
+    "electron-builder": "26.18.1"
+  },
+  "build": {
+    "appId": "by.podbor.pc",
+    "productName": "PodborPK",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "server/**/*",
+      "web/**/*",
+      "package.json"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "portable",
+        "nsis"
+      ],
+      "signAndEditExecutable": true
+    },
+    "portable": {
+      "artifactName": "PodborPK-${version}-portable.exe"
+    },
+    "nsis": {
+      "artifactName": "PodborPK-${version}-setup.exe",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "ПодборПК"
+    }
+  }
+}

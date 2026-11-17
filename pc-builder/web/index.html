@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ПодборПК</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="icon.svg" alt="" class="brand-logo">
+        <div>
+          <div class="brand-name">ПодборПК</div>
+          <div class="brand-sub">комплектующие в Беларуси</div>
+        </div>
+      </div>
+      <nav class="nav" id="nav">
+        <button class="nav-item active" data-page="build"><span class="nav-ico" data-icon="wand"></span>Подбор по бюджету</button>
+        <button class="nav-item" data-page="search"><span class="nav-ico" data-icon="search"></span>Поиск комплектующих</button>
+        <button class="nav-item" data-page="saved"><span class="nav-ico" data-icon="bookmark"></span>Мои сборки <span class="nav-count" id="savedCount"></span></button>
+        <button class="nav-item" data-page="settings"><span class="nav-ico" data-icon="gear"></span>Настройки</button>
+      </nav>
+      <div class="sidebar-foot">
+        <div class="rates-box" id="ratesBox">
+          <div class="rates-title">Курсы валют</div>
+          <div class="rates-list" id="ratesList">загрузка…</div>
+          <div class="rates-src" id="ratesSrc"></div>
+        </div>
+        <button class="theme-btn" id="themeBtn" title="Сменить тему"><span data-icon="moon"></span><span id="themeLabel">Тёмная тема</span></button>
+      </div>
+    </aside>
+
+    <main class="main" id="main">
+      <section class="page" id="page-build"></section>
+      <section class="page" id="page-search" hidden></section>
+      <section class="page" id="page-saved" hidden></section>
+      <section class="page" id="page-settings" hidden></section>
+    </main>
+  </div>
+
+  <div class="modal-back" id="modalBack" hidden>
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <h3 id="modalTitle"></h3>
+        <button class="icon-btn" id="modalClose" title="Закрыть" data-icon="x"></button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+  <div class="compare-tray" id="compareTray" hidden></div>
+  <div class="toasts" id="toasts"></div>
+
+  <script src="compat.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
