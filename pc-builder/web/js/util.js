@@ -41,6 +41,18 @@ export const ICONS = {
   down: P('<path d="m6 9 6 6 6-6"/>'),
   sparkles: P('<path d="M12 3 13.9 8.1 19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM19 3v4M17 5h4M5 17v4M3 19h4"/>'),
   open: P('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
+  monitor: P('<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>'),
+  keyboard: P('<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 14h6"/>'),
+  mouse: P('<rect x="6" y="2" width="12" height="20" rx="6"/><path d="M12 6v4"/>'),
+  headphones: P('<path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/>'),
+  laptop: P('<rect x="4" y="4" width="16" height="11" rx="2"/><path d="M2 19h20l-2-4H4z"/>'),
+  chair: P('<path d="M7 3h10v9H7zM5 12h14v3H5zM8 15v6M16 15v6M12 15v4"/>'),
+  desk: P('<path d="M3 8h18M5 8v12M19 8v12M15 8v6h4"/>'),
+  mic: P('<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/>'),
+  webcam: P('<circle cx="12" cy="10" r="7"/><circle cx="12" cy="10" r="3"/><path d="M8 21h8M12 17v4"/>'),
+  speaker: P('<rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="14" r="4"/><path d="M12 6h.01"/>'),
+  router: P('<rect x="2" y="13" width="20" height="8" rx="2"/><path d="M6 17h.01M10 17h.01M15 13l3-7M9 13 6 6"/>'),
+  plug: P('<path d="M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0zM12 18v4"/>'),
 };
 
 /** Создание DOM-узла: el('div.card#id', {attrs}, ...children). Текст вставляется безопасно. */

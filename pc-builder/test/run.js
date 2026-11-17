@@ -194,6 +194,27 @@ test('СЖО распознаётся, высота радиатора не пу
   assert.ok(c.tdp >= 300);
 });
 
+console.log('Kufar и каталог разделов');
+test('фильтры Kufar → параметры поиска', () => {
+  const KF = require('../server/providers/kufarFilters');
+  assert.deepStrictEqual(KF.toParams({ ccbr: ['13', '54'], rgn: ['7'], prc: { from: 500, to: 1500 }, dle: 1, ar: [] }),
+    { ccbr: 'v.or:13,54', rgn: '7', prc: 'r:50000,150000', dle: '1' });
+  assert.deepStrictEqual(KF.toParams({ prc: { to: 300 } }), { prc: 'r:,30000' });
+});
+test('каталог: у каждого раздела есть источник, сетап ссылается на разделы', () => {
+  const C = require('../web/catalog');
+  const ids = new Set();
+  for (const s of C.SECTIONS) {
+    assert.ok(!ids.has(s.id), 'повтор ' + s.id);
+    ids.add(s.id);
+    assert.ok(s.onliner || s.kufar || s.kufarQuery, 'нет источника у ' + s.id);
+    assert.ok(C.GROUPS.some((g) => g.id === s.group), 'нет группы у ' + s.id);
+  }
+  for (const x of C.SETUP) assert.ok(C.byId[x.id] && C.byId[x.id].onliner, 'сетап ' + x.id);
+  assert.strictEqual(C.setupTarget('display', 1000), 250);
+  assert.strictEqual(C.setupTarget('display', 100000), 3500);
+});
+
 console.log('Оптимизатор (подставные данные)');
 test('подбирает совместимую сборку в рамках бюджета', () => {
   const onliner = require('../server/providers/onliner');

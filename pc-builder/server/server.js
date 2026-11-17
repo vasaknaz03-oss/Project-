@@ -23,7 +23,17 @@ const TYPES = {
   '.woff2': 'font/woff2',
 };
 
+const Catalog = require('../web/catalog');
+const kufarFilters = require('./providers/kufarFilters');
 const PC_SCHEMAS = new Set(Object.keys(onliner.CATEGORIES));
+
+/** Раздел каталога по id (или категории Onliner — для подбора). */
+function sectionOf(cat) {
+  if (!cat) return null;
+  if (Catalog.byId[cat]) return Catalog.byId[cat];
+  if (Catalog.ONLINER_SCHEMAS.has(cat)) return { id: cat, onliner: cat };
+  return null;
+}
 const STORE_KEYS = new Set(['builds', 'settings', 'lastForm']);
 
 function send(res, status, body, type = 'application/json; charset=utf-8') {
@@ -86,20 +96,22 @@ async function searchOnliner(q, p) {
   const min = num(p.get('min'));
   const max = num(p.get('max'));
   const sort = p.get('sort') || '';
-  if (cat && PC_SCHEMAS.has(cat)) {
+  const section = sectionOf(cat);
+  if (section && section.onliner) {
     const f = parseFilters(p);
-    const base = { order: ONLINER_SORT[sort] || (q ? undefined : 'rating:desc'), price: { from: min, to: max } };
+    const base = { order: ONLINER_SORT[sort] || (q ? undefined : 'rating:desc'), price: { from: min, to: max }, ...(section.onlinerPreset || {}) };
     if (q) base.query = q;
-    if (cat === 'fan' && !q && !f.type_fan) base.type_fan = ['cpu', 'syslcp'];
+    if (section.onliner === 'fan' && !q && !f.type_fan) base.type_fan = ['cpu', 'syslcp'];
     const params = filters.merge(base, f);
     if (!params) return { items: [], total: 0, pages: 0 };
-    const r = await onliner.categoryPage(cat, params, page);
+    const r = await onliner.categoryPage(section.onliner, params, page);
     return { items: r.items, total: r.total, pages: r.pages };
   }
   if (!q) return { items: [], total: 0, pages: 0 };
   const r = await onliner.search(q, page);
   let items = r.items;
-  if (p.get('onlyPc') !== '0') items = items.filter((it) => PC_SCHEMAS.has(it.category));
+  // Только то, что относится к компьютерам и сетапу (без телевизоров, холодильников и т. п.)
+  if (p.get('onlyPc') !== '0') items = items.filter((it) => Catalog.ONLINER_SCHEMAS.has(it.category));
   if (min !== undefined) items = items.filter((it) => it.price && it.price >= min);
   if (max !== undefined) items = items.filter((it) => it.price && it.price <= max);
   if (sort === 'price_asc') items.sort((a, b) => (a.price || 1e9) - (b.price || 1e9));
@@ -108,10 +120,18 @@ async function searchOnliner(q, p) {
   return { items, total: r.total, pages: r.pages };
 }
 
-const KUFAR_QUERY_FOR_CAT = {
-  cpu: 'процессор', videocard: 'видеокарта', motherboard: 'материнская плата', dram: 'оперативная память',
-  ssd: 'ssd', hdd: 'жесткий диск', powersupply: 'блок питания', chassis: 'корпус', fan: 'кулер',
-};
+/** Параметры поиска Kufar для раздела: категория, тип, фильтры пользователя, запасной текстовый запрос. */
+function kufarQuery(section, q, p) {
+  const f = kufarFilters.toParams(parseFilters(p));
+  if (section && section.kufar) {
+    return { query: q || undefined, cat: section.kufar.cat, params: { ...(section.kufar.p || {}), ...f } };
+  }
+  if (section) {
+    return { query: q || section.kufarQuery || section.name || '', cat: null, params: f };
+  }
+  // Все разделы: ищем по всей «Компьютерной технике»
+  return { query: q || undefined, cat: null, parent: 16000, params: f };
+}
 
 async function route(req, res, url) {
   const p = url.searchParams;
@@ -145,30 +165,53 @@ async function route(req, res, url) {
     const q = (p.get('q') || '').trim().slice(0, 200);
     const src = p.get('src') || 'onliner';
     if (src === 'kufar') {
-      const cat = p.get('cat');
-      const query = q || (cat && KUFAR_QUERY_FOR_CAT[cat]) || '';
+      const section = sectionOf(p.get('cat'));
+      const kq = kufarQuery(section, q, p);
       const r = await kufar.search({
-        query, priceMin: num(p.get('min')), priceMax: num(p.get('max')), sort: p.get('sort') === 'rating' ? '' : p.get('sort'),
-        condition: p.get('cond') || '', size: 50,
+        ...kq, priceMin: num(p.get('min')), priceMax: num(p.get('max')), sort: p.get('sort') === 'rating' ? '' : p.get('sort'),
+        condition: p.get('cond') || '', size: 50, cursor: (p.get('cursor') || '').slice(0, 400) || undefined,
       });
-      return send(res, 200, { items: r.items, total: r.total, pages: 1 });
+      return send(res, 200, { items: r.items, total: r.total, pages: 1, next: r.next });
     }
     return send(res, 200, await searchOnliner(q, p));
   }
 
   if (pathname === '/api/facets') {
-    const cat = p.get('cat');
-    if (!PC_SCHEMAS.has(cat)) throw new Error('Неизвестная категория');
-    return send(res, 200, await filters.facets(cat));
+    const section = sectionOf(p.get('cat'));
+    if (!section || !section.onliner) throw new Error('Неизвестная категория');
+    const meta = await filters.facets(section.onliner);
+    return send(res, 200, { ...meta, preset: Object.keys(section.onlinerPreset || {}) });
+  }
+
+  // Фильтры Kufar для раздела; type — выбранный пользователем «Тип» внутри категории
+  if (pathname === '/api/kufar/facets') {
+    const section = sectionOf(p.get('cat'));
+    if (!section || !section.kufar) return send(res, 200, { source: 'kufar', groups: [], none: true });
+    const fixed = { ...(section.kufar.p || {}) };
+    const preset = { ...fixed };
+    const t = p.get('type');
+    if (t && /^[\w-]{1,20}:[\w.,:-]{1,80}$/.test(t)) {
+      const [k, v] = t.split(':');
+      preset[k] = v;
+    }
+    const meta = await kufarFilters.facets(section.kufar.cat, preset, Object.keys(fixed));
+    return send(res, 200, meta);
+  }
+
+  if (pathname === '/api/kufar/count') {
+    const section = sectionOf(p.get('cat'));
+    const q = (p.get('q') || '').trim().slice(0, 200);
+    const total = await kufar.count(kufarQuery(section, q, p));
+    return send(res, 200, { total });
   }
 
   // Сколько товаров в наличии подходит под фильтры (для кнопки «Показать N»)
   if (pathname === '/api/count') {
-    const cat = p.get('cat');
-    if (!PC_SCHEMAS.has(cat)) throw new Error('Неизвестная категория');
-    const params = filters.merge({ order: 'price:asc' }, parseFilters(p));
+    const section = sectionOf(p.get('cat'));
+    if (!section || !section.onliner) throw new Error('Неизвестная категория');
+    const params = filters.merge({ order: 'price:asc', ...(section.onlinerPreset || {}) }, parseFilters(p));
     if (!params) return send(res, 200, { total: 0 });
-    const r = await onliner.categoryPage(cat, params, 1);
+    const r = await onliner.categoryPage(section.onliner, params, 1);
     return send(res, 200, { total: r.total, min: r.items.length ? r.items[0].price : null });
   }
 
@@ -183,7 +226,7 @@ async function route(req, res, url) {
     const list = (Array.isArray(body.items) ? body.items : []).slice(0, 16);
     const out = {};
     await Promise.all(list.map(async (it) => {
-      if (!it || !/^[\w.-]+$/.test(String(it.id || '')) || !PC_SCHEMAS.has(it.category)) return;
+      if (!it || !/^[\w.-]+$/.test(String(it.id || '')) || !Catalog.ONLINER_SCHEMAS.has(it.category)) return;
       try {
         out[it.id] = await onliner.product(it.id, it.category);
       } catch (e) {

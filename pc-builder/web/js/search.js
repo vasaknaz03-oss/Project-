@@ -1,14 +1,31 @@
 // Страница «Поиск комплектующих»: Onliner (новые, цены магазинов) и Kufar (объявления).
 import { el, icon, api, money, toast, modal, thumb, plural } from './util.js';
-import { state, CATEGORIES, CAT_TO_SLOT, CAT_ICON, specChips, shopLinks, linkFor } from './state.js';
+import { state, CAT_TO_SLOT, CAT_ICON, specChips, shopLinks, linkFor } from './state.js';
 import { replaceFromSearch, hasActiveBuild } from './build.js';
-import { facetPanel, loadFacets, countActive } from './facets.js';
+import { facetPanel, loadFacets, loadKufarFacets, countActive } from './facets.js';
+
+const Catalog = window.Catalog;
 
 const S = {
   q: '', cat: '', src: 'onliner', cond: '', min: '', max: '', sort: '', page: 1,
   items: [], total: 0, pages: 0, loading: false, error: null, searched: false, replaceSlot: null,
-  filters: {}, layoutKey: '',
+  filters: {}, ktype: {}, next: null, layoutKey: '',
 };
+
+const section = () => (S.cat ? Catalog.byId[S.cat] || null : null);
+const fkey = () => S.src + '|' + S.cat;
+/** Есть ли у раздела фильтры для текущего источника. */
+function hasFilters() {
+  const sec = section();
+  if (!sec) return false;
+  return S.src === 'onliner' ? !!sec.onliner : !!sec.kufar;
+}
+/** Раздел может быть только на одном из сайтов — переключаемся на доступный. */
+function fixSource() {
+  const sec = section();
+  if (!sec) return;
+  if (S.src === 'onliner' && !sec.onliner) S.src = 'kufar';
+}
 let root;
 
 export function initSearch(container) {
@@ -29,23 +46,25 @@ export function openSearchFor(cat, slot) {
   S.sort = 'rating';
   // Те же фильтры Onliner, что были заданы в подборе
   const bf = state.lastBuildForm && state.lastBuildForm.filters && state.lastBuildForm.filters[cat];
-  if (bf && countActive(bf)) S.filters[cat] = JSON.parse(JSON.stringify(bf));
+  if (bf && countActive(bf)) S.filters['onliner|' + cat] = JSON.parse(JSON.stringify(bf));
   run(true);
 }
 
 function render() {
-  S.layoutKey = S.src + '|' + S.cat;
+  fixSource();
+  S.layoutKey = fkey() + '|' + (S.ktype[S.cat] || '');
   const results = el('div#searchResults', renderResults());
   root.replaceChildren(
-    el('div.page-head', el('div', el('h1', 'Поиск комплектующих'), el('p', 'Новые — по каталогу Onliner с ценами магазинов, б/у — по объявлениям Kufar.'))),
+    el('div.page-head', el('div', el('h1', 'Поиск'), el('p', 'Комплектующие, ноутбуки, мониторы, периферия и всё для рабочего места. Новое — по каталогу Onliner с ценами магазинов, объявления — по Kufar. Фильтры у каждого раздела свои, как на сайтах.'))),
     el('div#searchBar', renderBar()),
-    S.src === 'onliner' && S.cat ? el('div.search-layout', filtersColumn(S.cat), results) : results);
+    hasFilters() ? el('div.search-layout', filtersColumn(), results) : results);
   renderTray();
 }
 
 /** Обновление без пересборки панели фильтров (чтобы не терять раскрытые списки). */
 function refresh() {
-  const key = S.src + '|' + S.cat;
+  fixSource();
+  const key = fkey() + '|' + (S.ktype[S.cat] || '');
   if (key !== S.layoutKey || !document.getElementById('searchResults')) {
     render();
     return;
@@ -54,25 +73,51 @@ function refresh() {
   document.getElementById('searchResults').replaceChildren(...[].concat(renderResults()));
 }
 
-/** Левая колонка с фильтрами Onliner для выбранной категории. */
-function filtersColumn(cat) {
-  const n = countActive(S.filters[cat]);
+/** Левая колонка с фильтрами раздела: у Onliner и Kufar свои наборы, у каждого раздела — свои. */
+function filtersColumn() {
+  const key = fkey();
+  const cat = S.cat;
+  const isKufar = S.src === 'kufar';
+  const n = countActive(S.filters[key]);
   const host = el('div', el('div.row', el('div.spinner', { style: { width: '18px', height: '18px', borderWidth: '2px' } }), el('span.muted.small', 'Загружаем фильтры…')));
   const col = el('aside.card.filters-col',
     el('div.filters-col-head',
       el('h3', 'Фильтры', n ? el('span.badge-count', String(n)) : null),
-      n ? el('button.link-btn', { type: 'button', onclick: () => { delete S.filters[cat]; S.layoutKey = ''; run(true); } }, 'Сбросить') : null),
+      n ? el('button.link-btn', { type: 'button', onclick: () => { delete S.filters[key]; delete S.ktype[cat]; S.layoutKey = ''; run(true); } }, 'Сбросить') : null),
+    el('div.dim.small', { style: { marginBottom: '10px' } }, isKufar ? 'Фильтры Kufar для этого раздела' : 'Фильтры Onliner для этого раздела'),
     host);
   let timer;
-  loadFacets(cat).then((meta) => {
-    host.replaceChildren(facetPanel(meta, S.filters[cat], (v) => {
-      if (countActive(v)) S.filters[cat] = v;
-      else delete S.filters[cat];
+  const load = isKufar ? loadKufarFacets(cat, S.ktype[cat]) : loadFacets(cat);
+  load.then((meta) => {
+    if (isKufar && meta.none) {
+      host.replaceChildren(el('div.muted.small', 'У Kufar нет отдельной категории для этого раздела — ищем по словам.'));
+      return;
+    }
+    // Убираем фильтры, которых нет у этого набора (например, после смены «Типа» на Kufar)
+    const ids = new Set(meta.groups.flatMap((g) => g.items.map((i) => i.id)));
+    if (S.filters[key]) for (const k of Object.keys(S.filters[key])) if (!ids.has(k)) delete S.filters[key][k];
+    if (meta.partial) host.before(el('div.notice', { style: { marginBottom: '10px', fontSize: '12.5px' } }, icon('info'), el('div', 'Kufar сейчас ограничил запросы — показаны фильтры по найденным объявлениям.')));
+    host.replaceChildren(facetPanel(meta, S.filters[key], (v) => {
+      // Смена «Типа» на Kufar: у нового типа свои характеристики — перезагружаем набор фильтров
+      if (isKufar && meta.typeParam) {
+        const t = (v[meta.typeParam] || [])[0];
+        const cur = S.ktype[cat] ? S.ktype[cat].split(':')[1] : undefined;
+        if (t !== cur) {
+          if (t) S.ktype[cat] = meta.typeParam + ':' + t;
+          else delete S.ktype[cat];
+          S.filters[key] = v;
+          clearTimeout(timer);
+          run(true);
+          return;
+        }
+      }
+      if (countActive(v)) S.filters[key] = v;
+      else delete S.filters[key];
       const badge = col.querySelector('.filters-col-head h3');
       badge.replaceChildren('Фильтры', countActive(v) ? el('span.badge-count', String(countActive(v))) : '');
       clearTimeout(timer);
       timer = setTimeout(() => run(true), 450);
-    }, { compact: true }));
+    }, { compact: true, hide: meta.preset || [] }));
   }).catch((e) => host.replaceChildren(el('div.notice.err', icon('error'), el('div', e.message))));
   return col;
 }
@@ -84,17 +129,25 @@ function renderBar() {
     onkeydown: (e) => e.key === 'Enter' && run(true),
   });
   const cat = el('select.select', { onchange: (e) => { S.cat = e.target.value; S.replaceSlot = null; run(true); } },
-    CATEGORIES.map(([v, l]) => el('option', { value: v }, l)));
+    el('option', { value: '' }, 'Все разделы'),
+    Catalog.GROUPS.map((g) => el('optgroup', { label: g.name },
+      Catalog.SECTIONS.filter((x) => x.group === g.id).map((x) => el('option', { value: x.id }, x.name)))));
   cat.value = S.cat;
 
+  const sec = section();
   const src = el('div.seg', [['onliner', 'Новые · Onliner'], ['kufar', 'Объявления · Kufar']].map(([v, l]) => el('button', {
-    type: 'button', class: S.src === v ? 'on' : '', onclick: () => { S.src = v; run(true); },
+    type: 'button', class: S.src === v ? 'on' : '',
+    disabled: v === 'onliner' && sec && !sec.onliner,
+    title: v === 'onliner' && sec && !sec.onliner ? 'На Onliner нет такого раздела' : '',
+    onclick: () => { S.src = v; run(true); },
   }, l)));
 
   const cond = el('select.select', { onchange: (e) => { S.cond = e.target.value; run(true); } },
     [['', 'Любое состояние'], ['used', 'Только б/у'], ['new', 'Только новое']].map(([v, l]) => el('option', { value: v }, l)));
   cond.value = S.cond;
 
+  // У Kufar нет сортировки «популярные» — сбрасываем на «новые»
+  if (S.src === 'kufar' && S.sort === 'rating') S.sort = '';
   const sort = el('select.select', { onchange: (e) => { S.sort = e.target.value; run(true); } },
     (S.src === 'kufar'
       ? [['', 'Сначала новые объявления'], ['price_asc', 'Сначала дешёвые'], ['price_desc', 'Сначала дорогие']]
@@ -108,7 +161,7 @@ function renderBar() {
     onkeydown: (e) => e.key === 'Enter' && run(true),
   });
 
-  const query = S.q.trim() || (CATEGORIES.find(([v]) => v === S.cat) || [])[1] || '';
+  const query = S.q.trim() || (sec ? sec.name : '');
   return el('div.card',
     el('div.search-bar',
       el('div.search-input', icon('search'), q),
@@ -116,7 +169,7 @@ function renderBar() {
       el('button.btn.btn-primary', { onclick: () => run(true) }, 'Найти')),
     el('div.filters',
       src,
-      S.src === 'kufar' ? cond : null,
+      S.src === 'kufar' && !hasFilters() ? cond : null,
       el('div.row', el('span.label', `Цена, ${money.symbol()}`), priceInput('min', 'от'), el('span.dim', '—'), priceInput('max', 'до')),
       el('div.row', el('span.label', 'Сортировка'), sort)),
     query ? el('div.ext-links', el('span.dim', `Искать «${query}» также на:`),
@@ -130,6 +183,7 @@ async function run(reset) {
   if (reset) {
     S.page = 1;
     S.items = [];
+    S.next = null;
   }
   if (!S.q.trim() && !S.cat) {
     S.searched = false;
@@ -144,12 +198,14 @@ async function run(reset) {
   const params = new URLSearchParams({
     q: S.q.trim(), cat: S.cat, src: S.src, cond: S.cond, sort: S.sort, page: String(S.page), min: String(toByn(S.min)), max: String(toByn(S.max)),
   });
-  if (S.src === 'onliner' && S.cat && countActive(S.filters[S.cat])) params.set('f', JSON.stringify(S.filters[S.cat]));
+  if (hasFilters() && countActive(S.filters[fkey()])) params.set('f', JSON.stringify(S.filters[fkey()]));
+  if (S.src === 'kufar' && !reset && S.next) params.set('cursor', S.next);
   try {
     const r = await api('/api/search?' + params);
-    S.items = S.page === 1 ? r.items : S.items.concat(r.items);
+    S.items = reset ? r.items : S.items.concat(r.items);
     S.total = r.total;
     S.pages = r.pages;
+    S.next = r.next || null;
   } catch (e) {
     S.error = e.message;
   } finally {
@@ -164,15 +220,18 @@ function renderResults() {
     return el('div.card.empty-state', { style: { marginTop: '16px' } },
       icon('search', 'big-ico'),
       el('h3', 'Что ищем?'),
-      el('p.muted', 'Введите модель или выберите категорию.'),
-      el('div.row.wrap', { style: { justifyContent: 'center', marginTop: '12px' } },
-        CATEGORIES.filter(([v]) => v).map(([v, l]) => el('button.btn.btn-sm', { onclick: () => { S.cat = v; S.sort = 'rating'; run(true); } }, icon(CAT_ICON[v] || 'cpu'), l))));
+      el('p.muted', 'Введите модель или выберите раздел.'),
+      el('div.section-picker', Catalog.GROUPS.map((g) => el('div.section-group',
+        el('div.label', g.name),
+        el('div.row.wrap', Catalog.SECTIONS.filter((x) => x.group === g.id).map((x) => el('button.btn.btn-sm', {
+          onclick: () => { S.cat = x.id; S.sort = x.onliner ? 'rating' : ''; run(true); },
+        }, icon(x.icon || 'cpu'), x.name)))))));
   }
   const out = [];
   if (S.error) out.push(el('div.notice.err', { style: { marginTop: '16px' } }, icon('error'), el('div', S.error)));
   if (S.items.length) {
     out.push(el('div.dim.small', { style: { marginTop: '14px' } },
-      S.src === 'kufar' ? `Найдено объявлений: ${S.total}` : S.cat ? `Товаров в категории: ${S.total}` : 'Результаты каталога Onliner (только комплектующие ПК)'));
+      S.src === 'kufar' ? `Найдено объявлений: ${S.total.toLocaleString('ru-RU')}` : S.cat ? `Товаров в разделе: ${S.total.toLocaleString('ru-RU')}` : 'Результаты каталога Onliner: компьютеры, периферия, мониторы и всё для сетапа'));
     out.push(el('div.grid', S.items.map(card)));
   } else if (!S.loading && !S.error) {
     out.push(el('div.card.empty-state', { style: { marginTop: '16px' } }, el('h3', 'Ничего не нашлось'), el('p.muted', 'Попробуйте короче: например, «4060» вместо полного названия.')));
@@ -181,6 +240,8 @@ function renderResults() {
     out.push(el('div.grid', Array.from({ length: S.items.length ? 4 : 8 }, () => el('div.pcard', el('div.skeleton', { style: { height: '140px' } }), el('div.skeleton', { style: { height: '14px' } }), el('div.skeleton', { style: { height: '14px', width: '60%' } })))));
   } else if (S.src === 'onliner' && S.page < S.pages && S.items.length) {
     out.push(el('div.more-row', el('button.btn', { onclick: () => { S.page++; run(false); } }, 'Показать ещё')));
+  } else if (S.src === 'kufar' && S.next && S.items.length) {
+    out.push(el('div.more-row', el('button.btn', { onclick: () => run(false) }, 'Показать ещё объявления')));
   }
   return out;
 }
@@ -191,7 +252,7 @@ function card(it) {
   const inCompare = state.compare.some((c) => c.id === it.id && c.source === it.source);
   const p = money.both(it.price);
   return el('div.pcard',
-    thumb(it.image, CAT_ICON[it.category] || 'cpu'),
+    thumb(it.image, CAT_ICON[it.category] || CAT_ICON[S.cat] || 'cpu'),
     el('div.pcard-top',
       el('span.badge', { class: it.source }, isOnliner ? 'Onliner' : 'Kufar'),
       isOnliner ? el('span.chip', it.categoryName) : el('span.chip', it.condition || 'объявление'),

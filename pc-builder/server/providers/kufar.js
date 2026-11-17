@@ -66,6 +66,9 @@ async function search(opts = {}) {
   if (opts.query) params.query = opts.query;
   const cat = opts.cat === undefined ? CAT_COMPONENTS : opts.cat;
   if (cat) params.cat = cat;
+  if (opts.parent) params.prn = opts.parent;
+  Object.assign(params, opts.params || {});
+  if (opts.cursor) params.cursor = opts.cursor;
   if (opts.sort && SORTS[opts.sort]) params.sort = SORTS[opts.sort];
   if (opts.priceMin || opts.priceMax) {
     const lo = Math.round((opts.priceMin || 0) * 100);
@@ -76,7 +79,19 @@ async function search(opts = {}) {
   if (opts.condition === 'new') params.cnd = 2;
   const data = await getJSON(`${API}?${qs(params)}`, { ttl: 5 * 60 * 1000 });
   const ads = (data.ads || []).filter((a) => a.type !== 'buy');
-  return { items: ads.map(normalize), total: data.total || 0, rates: ratesFromAds(data.ads) };
+  const next = ((data.pagination && data.pagination.pages) || []).find((p) => p.label === 'next');
+  return { items: ads.map(normalize), total: data.total || 0, rates: ratesFromAds(data.ads), next: next ? next.token : null };
+}
+
+/** Сколько объявлений подходит под условия. */
+async function count(opts = {}) {
+  const params = { lang: 'ru' };
+  if (opts.query) params.query = opts.query;
+  if (opts.cat) params.cat = opts.cat;
+  if (opts.parent) params.prn = opts.parent;
+  Object.assign(params, opts.params || {});
+  const data = await getJSON(`https://api.kufar.by/search-api/v2/search/count?${qs(params)}`, { ttl: 2 * 60 * 1000 });
+  return data.count || 0;
 }
 
 // Внимание: \b в JS не работает с кириллицей, поэтому границы слов заданы явно
@@ -100,4 +115,4 @@ async function usedFor(kind, key, query, newPrice) {
   return items;
 }
 
-module.exports = { search, usedFor, ratesFromAds, CAT_COMPONENTS, CAT_COMPUTERS };
+module.exports = { search, count, usedFor, ratesFromAds, CAT_COMPONENTS, CAT_COMPUTERS };

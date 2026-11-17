@@ -26,6 +26,11 @@ export const SLOTS = [
 
 export const CAT_TO_SLOT = Object.fromEntries(SLOTS.map((s) => [s.cat, s.key]));
 export const CAT_ICON = Object.fromEntries(SLOTS.map((s) => [s.cat, s.icon]));
+// Иконки разделов каталога (мониторы, периферия, ноутбуки…)
+for (const sec of window.Catalog.SECTIONS) {
+  if (!CAT_ICON[sec.id]) CAT_ICON[sec.id] = sec.icon;
+  if (sec.onliner && !CAT_ICON[sec.onliner]) CAT_ICON[sec.onliner] = sec.icon;
+}
 
 export const CATEGORIES = [
   ['', 'Все комплектующие'],
@@ -123,7 +128,21 @@ export function specChips(cat, it) {
       if (s.heightMm) add(`высота ${s.heightMm} мм`);
       if (s.fanMm) add(`вентилятор ${s.fanMm} мм`);
       break;
+    case 'display': {
+      const d = it.description || '';
+      const diag = d.match(/([\d.,]+)"/);
+      const res = d.match(/(\d{3,4})x(\d{3,4})/);
+      const hz = d.match(/(\d{2,3})\s*Гц/);
+      const mtx = d.match(/\b(IPS|VA|TN|OLED|QD-OLED|Mini-?LED)\b/i);
+      if (diag) add(diag[1] + '"', 'accent');
+      if (res) add(res[0]);
+      if (hz) add(hz[1] + ' Гц', +hz[1] >= 144 ? 'ok' : '');
+      if (mtx) add(mtx[1]);
+      break;
+    }
     default:
+      // Для остальных разделов — первые характеристики из описания Onliner
+      for (const part of String(it.description || '').split(/,\s*/).filter((x) => x && x.length <= 40).slice(0, 4)) add(part);
       break;
   }
   if (it.noname) out.push(el('span.chip.warn', { title: 'Малоизвестный бренд: часто это восстановленные карты. Проверяйте гарантию.' }, 'малоизвестный бренд'));

@@ -95,6 +95,38 @@ async function getJSON(url, { ttl = 15 * 60 * 1000, timeout = 15000, headers = {
   }
 }
 
+/** GET текста (HTML) с кэшем — для данных, которых нет в JSON API. */
+async function getText(url, { ttl = 12 * 60 * 60 * 1000, timeout = 20000 } = {}) {
+  const key = 'text:' + url;
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.t < ttl) return hit.data;
+  await acquire();
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeout);
+    try {
+      const res = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': USER_AGENT, 'Accept-Language': 'ru' } });
+      if (!res.ok) throw new HttpError(`HTTP ${res.status} для ${new URL(url).host}`, res.status);
+      const data = await res.text();
+      cache.set(key, { t: Date.now(), data });
+      return data;
+    } catch (e) {
+      if (e.name === 'AbortError') throw new HttpError(`Таймаут запроса к ${new URL(url).host}`, 0);
+      if (altFetch && e.status === undefined) {
+        const res = await altFetch(url, { headers: { 'User-Agent': USER_AGENT } });
+        const data = await res.text();
+        cache.set(key, { t: Date.now(), data });
+        return data;
+      }
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
+  } finally {
+    release();
+  }
+}
+
 function clearCache() {
   cache.clear();
 }
@@ -118,4 +150,4 @@ function qs(params) {
   return parts.join('&');
 }
 
-module.exports = { getJSON, clearCache, qs, HttpError, setAltFetch };
+module.exports = { getJSON, getText, clearCache, qs, HttpError, setAltFetch };

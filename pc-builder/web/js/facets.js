@@ -14,6 +14,22 @@ export async function loadFacets(cat) {
   return cache.get(cat);
 }
 
+const kcache = new Map();
+
+/** Фильтры Kufar для раздела; type — «параметр:значение» выбранного типа (у Kufar свои фильтры для каждого типа). */
+export async function loadKufarFacets(cat, type) {
+  const key = cat + '|' + (type || '');
+  if (!kcache.has(key)) {
+    const qs = new URLSearchParams({ cat });
+    if (type) qs.set('type', type);
+    kcache.set(key, api('/api/kufar/facets?' + qs).catch((e) => {
+      kcache.delete(key);
+      throw e;
+    }));
+  }
+  return kcache.get(key);
+}
+
 export function countActive(v) {
   return Object.keys(v || {}).length;
 }
@@ -67,6 +83,13 @@ export function facetPanel(meta, value, onChange, opts = {}) {
     const empty = v == null || (Array.isArray(v) && !v.length) || (typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).length);
     if (empty) delete val[k];
     else val[k] = v;
+    // Зависимые списки (город зависит от региона): сбрасываем и перерисовываем
+    for (const b of blocks) {
+      if (b.dependsOn === k) {
+        delete val[b.id];
+        b.redraw();
+      }
+    }
     for (const b of blocks) b.refreshHead();
     emit();
   };
@@ -87,13 +110,14 @@ export function facetPanel(meta, value, onChange, opts = {}) {
       if (!only[it.id] || !it.values) return it;
       // В подборе оставляем только значения, которые подходят для сборки ПК
       return { ...it, values: it.values.filter((v) => only[it.id].includes(v.id)), popular: (it.popular || []).filter((id) => only[it.id].includes(id)) };
-    }).filter((it) => !it.values || it.values.length);
+    }).filter((it) => !it.values || it.values.length || it.dependsOn);
     if (!items.length) continue;
     const gBlocks = items.map((it) => facetBlock(it, val, setVal, opts));
     blocks.push(...gBlocks);
     const body = el('div.facet-group-body', gBlocks.map((b) => b.node));
     const hasActive = items.some((it) => val[it.id] !== undefined);
-    let isOpen = g.id === 'general' || hasActive || !!opts.allOpen;
+    // «Основные» и характеристики Kufar раскрыты сразу, остальное — по клику
+    let isOpen = g.id === 'general' || g.id === 'specs' || hasActive || !!opts.allOpen;
     const toggle = el('button.facet-group-head', {
       type: 'button',
       onclick: () => open(!isOpen),
@@ -144,10 +168,16 @@ function facetBlock(it, val, setVal, opts) {
   function dictionary() {
     const selected = new Set(val[it.id] || []);
     const popular = it.popular || [];
+    let values = it.values;
+    if (it.dependsOn) {
+      const parent = (val[it.dependsOn] || [])[0];
+      values = parent && it.valuesBy ? it.valuesBy[parent] || [] : [];
+      if (!values.length) return el('div.dim.small', parent ? 'Нет вариантов' : 'Сначала выберите регион');
+    }
     const order = [
-      ...it.values.filter((v) => selected.has(v.id)),
-      ...popular.map((id) => it.values.find((v) => v.id === id)).filter((v) => v && !selected.has(v.id)),
-      ...it.values.filter((v) => !selected.has(v.id) && !popular.includes(v.id)),
+      ...values.filter((v) => selected.has(v.id)),
+      ...popular.map((id) => values.find((v) => v.id === id)).filter((v) => v && !selected.has(v.id)),
+      ...values.filter((v) => !selected.has(v.id) && !popular.includes(v.id)),
     ];
     const LIMIT = 8;
     let list = order;
@@ -156,6 +186,12 @@ function facetBlock(it, val, setVal, opts) {
     const box = el('div.facet-values', { class: expanded && order.length > 14 ? 'scroll' : '' }, list.map((v) => el('label.check', el('input', {
       type: 'checkbox', checked: selected.has(v.id),
       onchange: (e) => {
+        if (it.single) {
+          // Один вариант из списка (регион, состояние, тип)
+          setVal(it.id, e.target.checked ? [v.id] : []);
+          redraw();
+          return;
+        }
         const cur = new Set(val[it.id] || []);
         if (e.target.checked) cur.add(v.id);
         else cur.delete(v.id);
@@ -255,19 +291,24 @@ function facetBlock(it, val, setVal, opts) {
 
   body.append(render());
   refreshHead();
-  return { node, refreshHead, text: (it.name + ' ' + (it.description || '')).toLowerCase() };
+  return { node, refreshHead, redraw, id: it.id, dependsOn: it.dependsOn, text: (it.name + ' ' + (it.description || '')).toLowerCase() };
 }
 
-/** Живой счётчик подходящих товаров в наличии. */
-export function liveCount(cat) {
+/** Живой счётчик подходящих товаров в наличии (Onliner) или объявлений (Kufar). */
+export function liveCount(cat, source = 'onliner', extra = {}) {
   const box = el('div.facet-count', el('span.dim', 'Считаем…'));
   let seq = 0;
   const update = debounce(async (value) => {
     const my = ++seq;
     box.replaceChildren(el('span.dim', 'Считаем…'));
     try {
-      const r = await api(`/api/count?cat=${encodeURIComponent(cat)}&f=${encodeURIComponent(JSON.stringify(value || {}))}`);
+      const qs = new URLSearchParams({ cat, f: JSON.stringify(value || {}), ...extra });
+      const r = await api((source === 'kufar' ? '/api/kufar/count?' : '/api/count?') + qs);
       if (my !== seq) return;
+      if (source === 'kufar') {
+        box.replaceChildren(el('b', { class: r.total ? '' : 'err-text' }, r.total ? `${r.total.toLocaleString('ru-RU')} ${plural(r.total, 'объявление', 'объявления', 'объявлений')}` : 'Объявлений нет'));
+        return;
+      }
       box.replaceChildren(
         el('b', { class: r.total ? '' : 'err-text' }, r.total ? `${r.total.toLocaleString('ru-RU')} ${plural(r.total, 'товар', 'товара', 'товаров')} в наличии` : 'Ничего нет в наличии'),
         r.total && r.min ? el('span.dim', ` · от ${money.fmt(r.min)}`) : null);
