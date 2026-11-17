@@ -1,7 +1,7 @@
 {
   "name": "pc-podbor",
   "productName": "ПодборПК",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Подбор комплектующих для ПК под бюджет по ценам Onliner и объявлениям Kufar",
   "main": "main.js",
   "private": true,

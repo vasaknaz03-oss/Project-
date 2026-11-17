@@ -172,13 +172,22 @@ function chassis(desc) {
   return spec;
 }
 
+// Типичное рассеивание СЖО по размеру радиатора, если производитель его не указал
+const AIO_TDP = { 120: 150, 140: 170, 240: 250, 280: 280, 360: 320, 420: 350 };
+
 function cooler(desc, name) {
   const d = desc || '';
+  const radMm = num((d.match(/типоразмер\s+(\d{3})/) || [])[1]);
+  const aio = !!radMm || /СЖО|жидкост|\bAIO\b/i.test(d + ' ' + (name || ''));
+  let tdp = num((d.match(/рассеивание до\s+(\d+)\s*Вт/) || [])[1]);
+  if (!tdp && radMm) tdp = AIO_TDP[radMm] || 200;
   return {
-    tdp: num((d.match(/рассеивание до\s+(\d+)\s*Вт/) || [])[1]),
-    heightMm: num((d.match(/высота\s+([\d.]+)\s*мм/) || [])[1]),
+    tdp,
+    // у СЖО «высота» — толщина радиатора, с высотой кулера в корпусе её сравнивать нельзя
+    heightMm: aio ? null : num((d.match(/высота\s+([\d.]+)\s*мм/) || [])[1]),
     fanMm: num((d.match(/вентилятор\s+(\d+)\s*мм/) || [])[1]),
-    aio: /СЖО|жидкост|AIO/i.test(d + ' ' + (name || '')),
+    aio,
+    radMm,
   };
 }
 

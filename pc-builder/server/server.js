@@ -10,6 +10,7 @@ const onliner = require('./providers/onliner');
 const kufar = require('./providers/kufar');
 const currency = require('./currency');
 const builder = require('./builder');
+const filters = require('./filters');
 const store = require('./store');
 const { clearCache } = require('./http');
 
@@ -68,6 +69,17 @@ const num = (v) => (v === undefined || v === null || v === '' || isNaN(+v) ? und
 
 const ONLINER_SORT = { price_asc: 'price:asc', price_desc: 'price:desc', rating: 'rating:desc' };
 
+/** Фильтры Onliner из параметра f (JSON). */
+function parseFilters(p) {
+  const raw = p.get('f');
+  if (!raw || raw.length > 8000) return {};
+  try {
+    return filters.sanitize(JSON.parse(raw));
+  } catch {
+    return {};
+  }
+}
+
 async function searchOnliner(q, p) {
   const cat = p.get('cat') || '';
   const page = num(p.get('page')) || 1;
@@ -75,9 +87,12 @@ async function searchOnliner(q, p) {
   const max = num(p.get('max'));
   const sort = p.get('sort') || '';
   if (cat && PC_SCHEMAS.has(cat)) {
-    const params = { order: ONLINER_SORT[sort] || (q ? undefined : 'rating:desc'), price: { from: min, to: max } };
-    if (q) params.query = q;
-    if (cat === 'fan' && !q) params.type_fan = ['cpu', 'syslcp'];
+    const f = parseFilters(p);
+    const base = { order: ONLINER_SORT[sort] || (q ? undefined : 'rating:desc'), price: { from: min, to: max } };
+    if (q) base.query = q;
+    if (cat === 'fan' && !q && !f.type_fan) base.type_fan = ['cpu', 'syslcp'];
+    const params = filters.merge(base, f);
+    if (!params) return { items: [], total: 0, pages: 0 };
     const r = await onliner.categoryPage(cat, params, page);
     return { items: r.items, total: r.total, pages: r.pages };
   }
@@ -139,6 +154,22 @@ async function route(req, res, url) {
       return send(res, 200, { items: r.items, total: r.total, pages: 1 });
     }
     return send(res, 200, await searchOnliner(q, p));
+  }
+
+  if (pathname === '/api/facets') {
+    const cat = p.get('cat');
+    if (!PC_SCHEMAS.has(cat)) throw new Error('Неизвестная категория');
+    return send(res, 200, await filters.facets(cat));
+  }
+
+  // Сколько товаров в наличии подходит под фильтры (для кнопки «Показать N»)
+  if (pathname === '/api/count') {
+    const cat = p.get('cat');
+    if (!PC_SCHEMAS.has(cat)) throw new Error('Неизвестная категория');
+    const params = filters.merge({ order: 'price:asc' }, parseFilters(p));
+    if (!params) return send(res, 200, { total: 0 });
+    const r = await onliner.categoryPage(cat, params, 1);
+    return send(res, 200, { total: r.total, min: r.items.length ? r.items[0].price : null });
   }
 
   if (pathname === '/api/offers') {

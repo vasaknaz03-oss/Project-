@@ -118,7 +118,8 @@ export function specChips(cat, it) {
       if (s.coolerMaxMm) add(`кулер до ${s.coolerMaxMm} мм`);
       break;
     case 'fan':
-      if (s.tdp) add(`до ${s.tdp} Вт`, 'accent');
+      if (s.aio) add(s.radMm ? `СЖО ${s.radMm} мм` : 'СЖО', 'accent');
+      if (s.tdp) add(`до ${s.tdp} Вт`, s.aio ? '' : 'accent');
       if (s.heightMm) add(`высота ${s.heightMm} мм`);
       if (s.fanMm) add(`вентилятор ${s.fanMm} мм`);
       break;

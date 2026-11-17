@@ -161,6 +161,39 @@ test('индексы: RTX 4060 + Ryzen 5 5600 ≈ 100', () => {
   assert.strictEqual(i.work, 100);
 });
 
+console.log('Фильтры Onliner');
+const F = require('../server/filters');
+test('списки пересекаются, противоречие — null', () => {
+  assert.deepStrictEqual(F.merge({ socket_cpu: ['am4', 'am5'] }, { socket_cpu: ['am5', 'lga1700'] }).socket_cpu, ['am5']);
+  assert.strictEqual(F.merge({ dramkit: ['ddr4dimm'] }, { dramkit: ['ddr5dimm'] }), null);
+  assert.deepStrictEqual(F.merge({ order: 'price:asc' }, { mfr: ['asus'] }), { order: 'price:asc', mfr: ['asus'] });
+});
+test('диапазоны: общая часть', () => {
+  assert.deepStrictEqual(F.merge({ price: { from: 100, to: 500 } }, { price: { to: 300 } }).price, { from: 100, to: 300 });
+  assert.strictEqual(F.merge({ price: { from: 400, to: 500 } }, { price: { to: 300 } }), null);
+  assert.deepStrictEqual(F.merge({ volume_dram: { from: '16gb', to: '16gb' } }, { volume_dram: { from: '16gb' } }).volume_dram, { from: '16gb', to: '16gb' });
+  assert.strictEqual(F.merge({ volume_dram: { from: '16gb', to: '16gb' } }, { volume_dram: { from: '32gb' } }), null);
+  assert.strictEqual(F.merge({ volume_hdd: { from: '960gb', to: '1tb' } }, { volume_hdd: { from: '2tb' } }), null);
+});
+test('флаги должны совпасть', () => {
+  assert.strictEqual(F.merge({ mother_wifi: 1 }, { mother_wifi: 0 }), null);
+  assert.deepStrictEqual(F.merge({ mother_wifi: 1 }, { mother_wifi: 1 }), { mother_wifi: 1 });
+});
+test('объёмы из фильтра и очистка мусора', () => {
+  assert.strictEqual(F.rangeNum('1_2tb'), 1200);
+  assert.strictEqual(F.rangeNum('dram3200'), 3200);
+  assert.ok(F.inRange(32, { from: '32gb' }) && !F.inRange(16, { from: '32gb' }) && F.inRange(1000, { from: '512gb', to: '2tb' }));
+  assert.deepStrictEqual(F.sanitize({ mfr: ['asus', 'bad id!'], price: { from: '100', to: 'x y' }, backlit: true, 'evil key': [1], shops: ['1'] }),
+    { mfr: ['asus'], price: { from: '100' }, backlit: 1 });
+});
+test('СЖО распознаётся, высота радиатора не путается с высотой кулера', () => {
+  const c = parseSpecs('fan', 'типоразмер 360, высота 52 мм, вентилятор 120 мм', 'Arctic Liquid Freezer III 360');
+  assert.strictEqual(c.aio, true);
+  assert.strictEqual(c.radMm, 360);
+  assert.strictEqual(c.heightMm, null);
+  assert.ok(c.tdp >= 300);
+});
+
 console.log('Оптимизатор (подставные данные)');
 test('подбирает совместимую сборку в рамках бюджета', () => {
   const onliner = require('../server/providers/onliner');

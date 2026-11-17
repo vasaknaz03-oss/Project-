@@ -2,10 +2,12 @@
 import { el, icon, api, money, toast, modal, thumb, plural } from './util.js';
 import { state, CATEGORIES, CAT_TO_SLOT, CAT_ICON, specChips, shopLinks, linkFor } from './state.js';
 import { replaceFromSearch, hasActiveBuild } from './build.js';
+import { facetPanel, loadFacets, countActive } from './facets.js';
 
 const S = {
   q: '', cat: '', src: 'onliner', cond: '', min: '', max: '', sort: '', page: 1,
   items: [], total: 0, pages: 0, loading: false, error: null, searched: false, replaceSlot: null,
+  filters: {}, layoutKey: '',
 };
 let root;
 
@@ -25,15 +27,54 @@ export function openSearchFor(cat, slot) {
   S.src = 'onliner';
   S.replaceSlot = slot;
   S.sort = 'rating';
+  // Те же фильтры Onliner, что были заданы в подборе
+  const bf = state.lastBuildForm && state.lastBuildForm.filters && state.lastBuildForm.filters[cat];
+  if (bf && countActive(bf)) S.filters[cat] = JSON.parse(JSON.stringify(bf));
   run(true);
 }
 
 function render() {
+  S.layoutKey = S.src + '|' + S.cat;
+  const results = el('div#searchResults', renderResults());
   root.replaceChildren(
     el('div.page-head', el('div', el('h1', 'Поиск комплектующих'), el('p', 'Новые — по каталогу Onliner с ценами магазинов, б/у — по объявлениям Kufar.'))),
-    renderBar(),
-    el('div#searchResults', renderResults()));
+    el('div#searchBar', renderBar()),
+    S.src === 'onliner' && S.cat ? el('div.search-layout', filtersColumn(S.cat), results) : results);
   renderTray();
+}
+
+/** Обновление без пересборки панели фильтров (чтобы не терять раскрытые списки). */
+function refresh() {
+  const key = S.src + '|' + S.cat;
+  if (key !== S.layoutKey || !document.getElementById('searchResults')) {
+    render();
+    return;
+  }
+  document.getElementById('searchBar').replaceChildren(renderBar());
+  document.getElementById('searchResults').replaceChildren(...[].concat(renderResults()));
+}
+
+/** Левая колонка с фильтрами Onliner для выбранной категории. */
+function filtersColumn(cat) {
+  const n = countActive(S.filters[cat]);
+  const host = el('div', el('div.row', el('div.spinner', { style: { width: '18px', height: '18px', borderWidth: '2px' } }), el('span.muted.small', 'Загружаем фильтры…')));
+  const col = el('aside.card.filters-col',
+    el('div.filters-col-head',
+      el('h3', 'Фильтры', n ? el('span.badge-count', String(n)) : null),
+      n ? el('button.link-btn', { type: 'button', onclick: () => { delete S.filters[cat]; S.layoutKey = ''; run(true); } }, 'Сбросить') : null),
+    host);
+  let timer;
+  loadFacets(cat).then((meta) => {
+    host.replaceChildren(facetPanel(meta, S.filters[cat], (v) => {
+      if (countActive(v)) S.filters[cat] = v;
+      else delete S.filters[cat];
+      const badge = col.querySelector('.filters-col-head h3');
+      badge.replaceChildren('Фильтры', countActive(v) ? el('span.badge-count', String(countActive(v))) : '');
+      clearTimeout(timer);
+      timer = setTimeout(() => run(true), 450);
+    }, { compact: true }));
+  }).catch((e) => host.replaceChildren(el('div.notice.err', icon('error'), el('div', e.message))));
+  return col;
 }
 
 function renderBar() {
@@ -98,11 +139,12 @@ async function run(reset) {
   S.loading = true;
   S.error = null;
   S.searched = true;
-  render();
+  refresh();
   const toByn = (v) => (v === '' || v == null ? '' : Math.round(money.fromCur(+v) * 100) / 100);
   const params = new URLSearchParams({
     q: S.q.trim(), cat: S.cat, src: S.src, cond: S.cond, sort: S.sort, page: String(S.page), min: String(toByn(S.min)), max: String(toByn(S.max)),
   });
+  if (S.src === 'onliner' && S.cat && countActive(S.filters[S.cat])) params.set('f', JSON.stringify(S.filters[S.cat]));
   try {
     const r = await api('/api/search?' + params);
     S.items = S.page === 1 ? r.items : S.items.concat(r.items);

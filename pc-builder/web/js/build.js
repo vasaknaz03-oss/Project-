@@ -1,6 +1,7 @@
 // Страница «Подбор по бюджету».
 import { el, icon, api, money, toast, modal, closeModal, promptText, copyText, download, thumb, plural } from './util.js';
 import { state, SLOTS, specChips, shopLinks, linkFor, slim, saveBuilds, buildText } from './state.js';
+import { openFacetModal, loadFacets, summarize, countActive } from './facets.js';
 
 const Compat = window.Compat;
 
@@ -23,8 +24,23 @@ const HAVE = [
 
 const DEFAULT_FORM = {
   budget: 3500, currency: 'BYN', purpose: 'gaming', cpuBrand: 'any', gpuBrand: 'any', ram: 'auto', storage: 'auto',
-  hdd: 0, platform: 'any', form: 'any', wifi: false, trustedOnly: false, have: {}, advOpen: false,
+  hdd: 0, platform: 'any', form: 'any', wifi: false, trustedOnly: false, have: {}, advOpen: false, filters: {},
 };
+
+// Фильтры Onliner по комплектующим: [категория Onliner, название, иконка, ключ «у меня уже есть»]
+const FILTER_SLOTS = [
+  ['cpu', 'Процессор', 'cpu'],
+  ['videocard', 'Видеокарта', 'gpu', 'gpu'],
+  ['motherboard', 'Материнская плата', 'board'],
+  ['dram', 'Оперативная память', 'ram'],
+  ['ssd', 'SSD', 'ssd', 'ssd'],
+  ['hdd', 'Жёсткий диск', 'hdd'],
+  ['powersupply', 'Блок питания', 'psu', 'psu'],
+  ['chassis', 'Корпус', 'case', 'case'],
+  ['fan', 'Охлаждение', 'fan', 'cooler'],
+];
+// Эти условия подбор задаёт сам (корпус без БП, крепление кулера под сокет)
+const BUILDER_HIDE = { chassis: ['type_chassis'], fan: ['fan_socket'] };
 
 let form = { ...DEFAULT_FORM };
 let root;
@@ -33,7 +49,7 @@ const usedCache = {}; // id -> items
 
 export function initBuild(container, savedForm) {
   root = container;
-  if (savedForm) form = { ...DEFAULT_FORM, ...savedForm, have: { ...(savedForm.have || {}) } };
+  if (savedForm) form = { ...DEFAULT_FORM, ...savedForm, have: { ...(savedForm.have || {}) }, filters: JSON.parse(JSON.stringify(savedForm.filters || {})) };
   if (state.settings.currency && !savedForm) form.currency = state.settings.currency;
   money.currency = form.currency;
   render();
@@ -117,6 +133,7 @@ function renderForm() {
         form[key] = v;
         persistForm();
         for (const b of box.children) b.classList.toggle('on', b === e.currentTarget);
+        if (key === 'hdd') refreshFilters();
       },
     }, label)));
     return box;
@@ -131,6 +148,7 @@ function renderForm() {
       form.have[k] = !form.have[k];
       e.currentTarget.classList.toggle('on', form.have[k]);
       persistForm();
+      refreshFilters();
     },
   }, label)));
 
@@ -159,6 +177,7 @@ function renderForm() {
   }, icon('gear'), el('span', form.advOpen ? 'Скрыть тонкие настройки' : 'Тонкие настройки'));
 
   const submitBtn = el('button.btn.btn-primary.btn-lg#buildBtn', { type: 'button', onclick: submit }, icon('sparkles'), 'Подобрать сборку');
+  const filtersBlock = renderFilters();
 
   return el('div.card.hero',
     el('h1', 'Соберём компьютер под ваш бюджет'),
@@ -167,9 +186,67 @@ function renderForm() {
       el('div.field', el('label', 'Бюджет'), el('div.budget-input', budgetInput, curSelect)),
       el('div.field', el('label', 'Быстрый выбор'), presets)),
     purposeGrid,
+    filtersBlock,
     advBtn,
     adv,
     el('div.form-foot', submitBtn, el('span.dim', 'Обычно занимает 3–8 секунд: приложение просматривает несколько тысяч товаров.')));
+}
+
+// ------------------------------------------------------------------ фильтры Onliner
+
+function renderFilters() {
+  const total = Object.values(form.filters || {}).reduce((n, f) => n + countActive(f), 0);
+  const buttons = FILTER_SLOTS.filter(([cat]) => cat !== 'hdd' || Number(form.hdd) > 0 || countActive(form.filters.hdd)).map(([cat, label, ic, haveKey]) => {
+    const n = countActive(form.filters[cat]);
+    const owned = haveKey && form.have[haveKey];
+    return el('button.btn.btn-sm.filter-btn', {
+      type: 'button', class: n ? 'on' : '', disabled: !!owned,
+      title: owned ? 'Отмечено «уже есть» — в сборку не входит' : `Фильтры Onliner для категории «${label}»`,
+      onclick: async () => {
+        const res = await openFacetModal(cat, label, form.filters[cat], { hide: BUILDER_HIDE[cat] });
+        if (res === null) return;
+        if (countActive(res)) form.filters[cat] = res;
+        else delete form.filters[cat];
+        persistForm();
+        refreshFilters();
+      },
+    }, icon(ic), label, n ? el('span.badge-count', String(n)) : null);
+  });
+  const summary = el('div.filter-summary');
+  const box = el('div.filters-block#filtersBlock',
+    el('div.row.wrap', { style: { justifyContent: 'space-between' } },
+      el('div', el('div.label', 'Фильтры комплектующих — как на Onliner'),
+        el('div.dim.small', 'Производитель, чипсет, частоты, подсветка, цвет, размеры… Подбор возьмёт только подходящие товары.')),
+      total ? el('button.btn.btn-ghost.btn-sm', { type: 'button', onclick: () => { form.filters = {}; persistForm(); refreshFilters(); } }, 'Сбросить все фильтры') : null),
+    el('div.row.wrap.filter-buttons', buttons),
+    summary);
+  fillSummary(summary);
+  return box;
+}
+
+function refreshFilters() {
+  const old = document.getElementById('filtersBlock');
+  if (old) old.replaceWith(renderFilters());
+}
+
+async function fillSummary(box) {
+  const active = FILTER_SLOTS.filter(([cat]) => countActive(form.filters[cat]));
+  if (!active.length) return;
+  const rows = [];
+  for (const [cat, label] of active) {
+    let meta = null;
+    try {
+      meta = await loadFacets(cat);
+    } catch {}
+    const parts = meta ? summarize(meta, form.filters[cat]) : [`${countActive(form.filters[cat])} фильтр(а)`];
+    rows.push(el('div.filter-line',
+      el('b', label + ':'), el('span.muted', ' ' + parts.join(' · ')),
+      el('button.icon-btn.small-x', {
+        type: 'button', title: 'Убрать фильтры этой категории',
+        onclick: () => { delete form.filters[cat]; persistForm(); refreshFilters(); },
+      }, icon('x'))));
+  }
+  box.replaceChildren(...rows);
 }
 
 // ------------------------------------------------------------------ запрос
@@ -194,7 +271,7 @@ async function submit() {
   try {
     const body = { ...form, budget: form.budget, currency: form.currency };
     state.result = await api('/api/build', { method: 'POST', body });
-    state.lastBuildForm = { ...form, have: { ...form.have } };
+    state.lastBuildForm = { ...form, have: { ...form.have }, filters: JSON.parse(JSON.stringify(form.filters || {})) };
     state.variant = state.result.variants.find((v) => v.id === 'optimal' && v.build) ? 'optimal' : (state.result.variants.find((v) => v.build) || {}).id || 'optimal';
     for (const k of Object.keys(panels)) delete panels[k];
     results.replaceChildren(...renderResults());
@@ -228,6 +305,11 @@ function renderResults() {
       el('p.muted', 'Приложение подберёт три варианта сборки: экономный, оптимальный и с запасом. Всё можно поменять вручную.'))];
   }
   const out = [];
+  const usedFilters = state.lastBuildForm && state.lastBuildForm.filters ? FILTER_SLOTS.filter(([cat]) => countActive(state.lastBuildForm.filters[cat])) : [];
+  if (usedFilters.length && r.variants.some((v) => v.id !== 'saved')) {
+    out.push(el('div.notice.info', { style: { marginBottom: '12px' } }, icon('info'),
+      el('div', 'Учтены ваши фильтры: ', usedFilters.map(([cat, label]) => `${label} (${countActive(state.lastBuildForm.filters[cat])})`).join(', '), '.')));
+  }
   if (r.warnings && r.warnings.length) {
     out.push(el('div.notice', { style: { marginBottom: '12px' } }, icon('alert'), el('div', r.warnings.join('. '))));
   }

@@ -133,6 +133,9 @@
       if (!boardFitsCase(ms.form, kase)) err(`Плата формата ${ms.form} не помещается в корпус`);
       else ok(`Плата ${ms.form || ''} помещается в корпус`);
     }
+    if (cooler && cooler.specs && cooler.specs.aio) {
+      info(`Жидкостное охлаждение${cooler.specs.radMm ? ` с радиатором ${cooler.specs.radMm} мм` : ''}: проверьте, что корпус поддерживает такой радиатор`);
+    }
     if (kase && cooler && kase.specs.coolerMaxMm && cooler.specs.heightMm) {
       if (cooler.specs.heightMm > kase.specs.coolerMaxMm) err(`Кулер высотой ${cooler.specs.heightMm} мм не влезет: в корпусе до ${kase.specs.coolerMaxMm} мм`);
     }

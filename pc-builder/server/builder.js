@@ -6,6 +6,7 @@
 // 3) Выбираем комбинацию с максимальной оценкой под назначение в рамках бюджета.
 
 const onliner = require('./providers/onliner');
+const filters = require('./filters');
 const Compat = require('../web/compat');
 
 const ALL_SOCKETS = ['am4', 'am5', 'lga1700', 'lga1851', 'lga1200'];
@@ -77,23 +78,57 @@ function cheapestBy(items, keyFn) {
 
 const inStock = (it) => it.price && it.price > 0;
 
+// Названия категорий для сообщений о фильтрах
+const SCHEMA_LABEL = {
+  cpu: 'Процессор', videocard: 'Видеокарта', motherboard: 'Материнская плата', dram: 'Оперативная память',
+  ssd: 'SSD', hdd: 'Жёсткий диск', powersupply: 'Блок питания', chassis: 'Корпус', fan: 'Кулер',
+};
+
+/** Пользовательские фильтры Onliner по категориям (уже проверенные). */
+function userFilters(opts) {
+  const out = {};
+  const src = opts.filters && typeof opts.filters === 'object' ? opts.filters : {};
+  for (const schema of Object.keys(SCHEMA_LABEL)) out[schema] = filters.sanitize(src[schema]);
+  // Эти условия подбор ставит сам: корпус без БП, крепление кулера под сокет
+  delete out.chassis.type_chassis;
+  delete out.fan.fan_socket;
+  return out;
+}
+
+/**
+ * Загрузка категории с учётом фильтров пользователя.
+ * Если условия подбора и фильтры противоречат друг другу, запрос не делается.
+ */
+function makeFetcher(F, warnings) {
+  return function fetchCat(schema, params, pages, what) {
+    const merged = filters.merge(params, F[schema]);
+    if (!merged) return Promise.resolve([]);
+    return safe(onliner.category(schema, merged, pages), warnings, what);
+  };
+}
+
 /** Загрузка категории ценовыми диапазонами параллельно: дешёвый хлам не вытесняет дорогие позиции. */
-async function banded(schema, params, edges, pages, warnings, what) {
+async function banded(fetchCat, schema, params, edges, pages, what) {
   const jobs = [];
   for (let i = 0; i + 1 < edges.length; i++) {
     const from = Math.round(edges[i]);
     const to = Math.round(edges[i + 1]);
     if (to <= from) continue;
-    jobs.push(safe(onliner.category(schema, { ...params, price: { from: from || undefined, to } }, pages), warnings, what));
+    jobs.push(fetchCat(schema, { ...params, price: { from: from || undefined, to } }, pages, what));
   }
   const lists = await Promise.all(jobs);
   return cheapestBy(lists.flat(), (x) => x.id);
 }
 
+const RAM_CAPS = [8, 16, 24, 32, 48, 64, 96, 128];
+const SSD_CAPS = [256, 512, 1000, 2000, 4000];
+
 async function gather(opts, B) {
   const warnings = [];
   const prof = PROFILES[opts.purpose] || PROFILES.gaming;
   const have = opts.have || {};
+  const F = userFilters(opts);
+  const fetchCat = makeFetcher(F, warnings);
   const sockets = opts.platform === 'modern' ? MODERN_SOCKETS : ALL_SOCKETS;
   const cpuMfr = opts.cpuBrand === 'amd' ? ['amd'] : opts.cpuBrand === 'intel' ? ['intel'] : undefined;
   const useSockets = sockets.filter((s) => {
@@ -104,7 +139,7 @@ async function gather(opts, B) {
   const memNeeded = new Set(useSockets.flatMap((s) => SOCKET_MEM[SOCKET_NAME[s]]));
 
   const jobs = {};
-  jobs.cpus = banded('cpu', { order: 'price:asc', socket_cpu: useSockets, mfr: cpuMfr }, [0, B * 0.12, B * 0.25, B * 0.5], 5, warnings, 'процессоры');
+  jobs.cpus = banded(fetchCat, 'cpu', { order: 'price:asc', socket_cpu: useSockets, mfr: cpuMfr }, [0, B * 0.12, B * 0.25, B * 0.5], 5, 'процессоры');
 
   if (!have.gpu) {
     const gpuChip = { nvidia: ['nvidia'], amd: ['ati'], intel: ['intel'] }[opts.gpuBrand];
@@ -112,75 +147,99 @@ async function gather(opts, B) {
     const lo = Math.max(150, B * 0.05);
     const hi = Math.max(lo + 100, B * maxShare);
     const step = (hi - lo) / 4;
-    jobs.gpus = banded('videocard', { order: 'price:asc', gpu_videocard: gpuChip },
-      [lo, lo + step, lo + 2 * step, lo + 3 * step, hi], opts.purpose === 'office' ? 2 : 5, warnings, 'видеокарты');
+    jobs.gpus = banded(fetchCat, 'videocard', { order: 'price:asc', gpu_videocard: gpuChip },
+      [lo, lo + step, lo + 2 * step, lo + 3 * step, hi], opts.purpose === 'office' ? 2 : 5, 'видеокарты');
   }
 
   const wifi = opts.wifi ? 1 : undefined;
   jobs.boards = Promise.all(useSockets.flatMap((s) => [
-    safe(onliner.category('motherboard', { order: 'price:asc', socket_cpu: [s], mother_wifi: wifi }, 2), warnings, 'материнские платы ' + SOCKET_NAME[s]),
-    safe(onliner.category('motherboard', {
+    fetchCat('motherboard', { order: 'price:asc', socket_cpu: [s], mother_wifi: wifi }, 2, 'материнские платы ' + SOCKET_NAME[s]),
+    fetchCat('motherboard', {
       order: 'rating:desc', socket_cpu: [s], mother_wifi: wifi, price: { from: Math.round(Math.max(250, B * 0.04)), to: Math.round(Math.max(600, B * 0.16)) },
-    }, 2), warnings, 'материнские платы ' + SOCKET_NAME[s]),
+    }, 2, 'материнские платы ' + SOCKET_NAME[s]),
   ])).then((a) => a.flat());
 
-  const ramCaps = opts.ram && opts.ram !== 'auto' ? [Number(opts.ram)] : prof.ram.filter((c) => c <= 32 || B > 6000 || opts.purpose === 'work');
+  // Объёмы памяти: из фильтра пользователя, из «Тонких настроек» или по назначению
+  let ramCaps;
+  if (F.dram.volume_dram) ramCaps = RAM_CAPS.filter((c) => filters.inRange(c, F.dram.volume_dram)).slice(0, 3);
+  else if (opts.ram && opts.ram !== 'auto') ramCaps = [Number(opts.ram)];
+  else ramCaps = prof.ram.filter((c) => c <= 32 || B > 6000 || opts.purpose === 'work');
   const ramJobs = [];
   for (const mem of memNeeded) {
     for (const cap of ramCaps) {
-      ramJobs.push(safe(onliner.category('dram', {
+      ramJobs.push(fetchCat('dram', {
         order: 'price:asc', dramkit: [mem.toLowerCase() + 'dimm'], volume_dram: { from: cap + 'gb', to: cap + 'gb' },
-      }, 1), warnings, `память ${mem} ${cap} ГБ`));
+      }, 1, `память ${mem} ${cap} ГБ`));
     }
   }
   jobs.ram = Promise.all(ramJobs).then((a) => a.flat());
 
   if (!have.ssd) {
-    const ssdCaps = opts.storage && opts.storage !== 'auto' ? [Number(opts.storage)] : prof.ssd;
+    let ssdCaps;
+    if (F.ssd.volume_hdd) ssdCaps = SSD_CAPS.filter((c) => filters.inRange(c, F.ssd.volume_hdd));
+    else if (opts.storage && opts.storage !== 'auto') ssdCaps = [Number(opts.storage)];
+    else ssdCaps = prof.ssd;
     const capRange = { 256: ['240gb', '256gb'], 512: ['480gb', '512gb'], 1000: ['960gb', '1tb'], 2000: ['2tb', '2tb'], 4000: ['4tb', '4tb'] };
     const ssdJobs = [];
     for (const cap of ssdCaps) {
       const [from, to] = capRange[cap] || ['1tb', '1tb'];
-      ssdJobs.push(safe(onliner.category('ssd', { order: 'price:asc', volume_hdd: { from, to }, interface_ssd: ['pcie30x4', 'pcie40x4', 'pcie5x4'] }, 1), warnings, `SSD ${cap}`));
-      ssdJobs.push(safe(onliner.category('ssd', { order: 'price:asc', volume_hdd: { from, to }, interface_ssd: ['sata30'] }, 1), warnings, `SSD SATA ${cap}`));
+      ssdJobs.push(fetchCat('ssd', { order: 'price:asc', volume_hdd: { from, to }, interface_ssd: ['pcie30x4', 'pcie40x4', 'pcie5x4'] }, 1, `SSD ${cap}`));
+      ssdJobs.push(fetchCat('ssd', { order: 'price:asc', volume_hdd: { from, to }, interface_ssd: ['sata30'] }, 1, `SSD SATA ${cap}`));
     }
     jobs.ssd = Promise.all(ssdJobs).then((a) => a.flat());
   }
 
   if (opts.hdd && Number(opts.hdd) > 0) {
     const tb = Math.max(1, Math.round(Number(opts.hdd) / 1000));
-    jobs.hdd = safe(onliner.category('hdd', { order: 'price:asc', volume_hdd: { from: tb + 'tb', to: tb + 'tb' } }, 1), warnings, 'жёсткие диски');
+    jobs.hdd = fetchCat('hdd', { order: 'price:asc', volume_hdd: { from: tb + 'tb', to: tb + 'tb' } }, 1, 'жёсткие диски');
   }
 
   if (!have.psu) {
     const certs = ['bronze', 'silver', 'golden', 'platinum', 'titanium'];
     jobs.psus = Promise.all([
-      safe(onliner.category('powersupply', { order: 'price:asc', power_sup: { from: 450, to: 700 }, '80plus_conform': certs, ffactorsize: ['atx'] }, 4), warnings, 'блоки питания'),
-      safe(onliner.category('powersupply', { order: 'price:asc', power_sup: { from: 750 }, '80plus_conform': certs, ffactorsize: ['atx'] }, 4), warnings, 'блоки питания 750+'),
-      safe(onliner.category('powersupply', { order: 'price:asc', power_sup: { from: 400 }, ffactorsize: ['atx'] }, 1), warnings, 'блоки питания (бюджетные)'),
+      fetchCat('powersupply', { order: 'price:asc', power_sup: { from: 450, to: 700 }, '80plus_conform': certs, ffactorsize: ['atx'] }, 4, 'блоки питания'),
+      fetchCat('powersupply', { order: 'price:asc', power_sup: { from: 750 }, '80plus_conform': certs, ffactorsize: ['atx'] }, 4, 'блоки питания 750+'),
+      fetchCat('powersupply', { order: 'price:asc', power_sup: { from: 400 }, ffactorsize: ['atx'] }, 1, 'блоки питания (бюджетные)'),
     ]).then((a) => a.flat());
   }
 
   if (!have.case) {
     const target = Math.min(500, Math.max(80, B * 0.045));
     jobs.cases = Promise.all([
-      safe(onliner.category('chassis', { order: 'rating:desc', type_chassis: ['nopsu'], price: { from: Math.round(target * 0.5), to: Math.round(target * 1.6) } }, 2), warnings, 'корпуса'),
-      safe(onliner.category('chassis', { order: 'price:asc', type_chassis: ['nopsu'] }, 1), warnings, 'корпуса (дешёвые)'),
+      fetchCat('chassis', { order: 'rating:desc', type_chassis: ['nopsu'], price: { from: Math.round(target * 0.5), to: Math.round(target * 1.6) } }, 2, 'корпуса'),
+      fetchCat('chassis', { order: 'price:asc', type_chassis: ['nopsu'] }, 2, 'корпуса (дешёвые)'),
     ]).then((a) => a.flat());
   }
 
   if (!have.cooler) {
+    // Тип охлаждения: башенный кулер по умолчанию, СЖО — если пользователь выбрал её в фильтре
+    let coolTypes = ['cpu'];
+    if (F.fan.type_fan) {
+      const t = F.fan.type_fan.filter((x) => x === 'cpu' || x === 'syslcp');
+      if (t.length) coolTypes = t;
+      delete F.fan.type_fan;
+    }
     const fams = [...new Set(useSockets.map((s) => COOLER_FAMILY[SOCKET_NAME[s]]))];
-    jobs.coolers = Promise.all(fams.map((f) => safe(onliner.category('fan', {
-      order: 'price:asc', type_fan: ['cpu'], fan_socket: [f], power_cooling: { from: 110 }, price: { to: 450 },
-    }, 3), warnings, 'кулеры').then((items) => items.map((it) => ({ ...it, family: f }))))).then((a) => a.flat());
+    jobs.coolers = Promise.all(fams.map((f) => fetchCat('fan', {
+      order: 'price:asc', type_fan: coolTypes, fan_socket: [f], power_cooling: { from: 110 }, price: { to: coolTypes.includes('syslcp') ? 900 : 450 },
+    }, 3, 'кулеры').then((items) => items.map((it) => ({ ...it, family: f }))))).then((a) => a.flat());
   }
 
   const keys = Object.keys(jobs);
   const vals = await Promise.all(keys.map((k) => jobs[k]));
   const raw = {};
   keys.forEach((k, i) => (raw[k] = vals[i]));
-  return { raw, warnings, sockets: useSockets.map((s) => SOCKET_NAME[s]) };
+
+  // Предупреждаем, если фильтры не оставили ни одного товара
+  const RAW_KEY = { cpu: 'cpus', videocard: 'gpus', motherboard: 'boards', dram: 'ram', ssd: 'ssd', hdd: 'hdd', powersupply: 'psus', chassis: 'cases', fan: 'coolers' };
+  for (const [schema, f] of Object.entries(F)) {
+    if (!filters.countActive(f)) continue;
+    const list = raw[RAW_KEY[schema]];
+    if (list && !list.some(inStock)) {
+      warnings.push(`По вашим фильтрам для «${SCHEMA_LABEL[schema]}» в наличии ничего не нашлось в пределах бюджета — ослабьте фильтры`);
+    }
+  }
+  return { raw, warnings, F, sockets: useSockets.map((s) => SOCKET_NAME[s]) };
 }
 
 // ------------------------------------------------------------------ подготовка пулов
@@ -198,9 +257,9 @@ function boardSuitable(cpu, mb) {
   return true;
 }
 
-function preparePools(raw, opts, B) {
+function preparePools(raw, opts, B, F = {}) {
   const prof = PROFILES[opts.purpose] || PROFILES.gaming;
-  const pools = {};
+  const pools = { F };
   const allowedSockets = new Set(Object.values(SOCKET_NAME));
 
   // Процессоры: известная производительность, нужный сокет, отдельно OEM и BOX с кулером
@@ -218,7 +277,9 @@ function preparePools(raw, opts, B) {
   pools.gpus = pools.gpus.filter((g, i, arr) => !arr.some((o, j) => j < i && eff(o) >= eff(g) && o.price < g.price));
 
   // Платы
+  const userForms = F.motherboard && F.motherboard.type_mother;
   const formOk = (f) => {
+    if (userForms) return f === 'ATX' || f === 'mATX' || f === 'ITX'; // формат задан фильтром Onliner
     if (opts.form === 'atx') return f === 'ATX';
     if (opts.form === 'matx') return f === 'mATX';
     return f === 'ATX' || f === 'mATX';
@@ -260,7 +321,9 @@ function preparePools(raw, opts, B) {
   // БП
   const psus = (raw.psus || []).filter((p) => inStock(p) && p.specs.watts && (!p.specs.form || p.specs.form === 'ATX') && !/без кабел/i.test(p.name));
   const goodBrands = psus.filter((p) => !PSU_AVOID.test(p.name));
-  pools.psuAll = cheapestBy(B > 1200 && goodBrands.length > 5 ? goodBrands : psus, (p) => p.id);
+  // Если производитель БП выбран в фильтре — уважаем выбор пользователя
+  pools.psuUserBrand = !!(F.powersupply && F.powersupply.mfr);
+  pools.psuAll = cheapestBy(B > 1200 && goodBrands.length > 5 && !pools.psuUserBrand ? goodBrands : psus, (p) => p.id);
 
   // Корпуса: «удачный» вариант около целевой цены для ATX и для mATX
   const target = Math.min(500, Math.max(80, B * 0.045));
@@ -277,6 +340,7 @@ function preparePools(raw, opts, B) {
   pools.caseFor = {
     ATX: bestCase((c) => c.specs.boards.includes('ATX')),
     mATX: bestCase((c) => c.specs.boards.includes('mATX') || c.specs.boards.includes('ATX')),
+    ITX: bestCase((c) => c.specs.boards.length > 0),
   };
 
   // Кулеры
@@ -295,7 +359,7 @@ function makePickers(pools, opts, B) {
     const key = need.rec;
     if (psuMemo.has(key)) return psuMemo.get(key);
     let list = pools.psuAll;
-    if (B > 4000) {
+    if (B > 4000 && !pools.psuUserBrand) {
       const good = list.filter((p) => GOOD_PSU.test(p.name));
       if (good.some((p) => p.specs.watts >= need.rec)) list = good;
     }
@@ -375,7 +439,8 @@ function optimize(pools, opts, budget) {
   const purpose = opts.purpose in PROFILES ? opts.purpose : 'gaming';
   const have = opts.have || {};
   const P = makePickers(pools, opts, budget);
-  const minRam = opts.ram && opts.ram !== 'auto' ? Number(opts.ram) : prof.minRam;
+  const userRam = pools.F && pools.F.dram && pools.F.dram.volume_dram;
+  const minRam = userRam ? 0 : opts.ram && opts.ram !== 'auto' ? Number(opts.ram) : prof.minRam;
   const ssdOpts = have.ssd ? [null] : pools.ssd;
   const hdd = pools.hdd;
   const hddCost = hdd ? hdd.price : 0;
@@ -546,8 +611,8 @@ async function build(opts) {
   const budget = Number(opts.budgetByn);
   if (!(budget > 0)) throw new Error('Укажите бюджет');
   const t0 = Date.now();
-  const { raw, warnings, sockets } = await gather(opts, budget * 1.15);
-  const pools = preparePools(raw, opts, budget * 1.15);
+  const { raw, warnings, sockets, F } = await gather(opts, budget * 1.15);
+  const pools = preparePools(raw, opts, budget * 1.15, F);
   if (!pools.cpus.length) throw new Error('Не удалось загрузить процессоры с Onliner. Проверьте интернет и попробуйте ещё раз.');
 
   const variants = [];
