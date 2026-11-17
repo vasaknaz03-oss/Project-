@@ -41,6 +41,16 @@ const FILTER_SLOTS = [
 ];
 // Эти условия подбор задаёт сам (корпус без БП, крепление кулера под сокет)
 const BUILDER_HIDE = { chassis: ['type_chassis'], fan: ['fan_socket'] };
+// У каждой категории Onliner свои фильтры; в подборе оставляем только значения, из которых можно собрать ПК
+const PC_SOCKETS = ['am4', 'am5', 'lga1200', 'lga1700', 'lga1851'];
+const BUILDER_ONLY = {
+  cpu: { socket_cpu: PC_SOCKETS },
+  motherboard: { socket_cpu: PC_SOCKETS, mem_type_mother: ['ddr4', 'ddr5', 'ddr5cudimm'], type_mother: ['atx', 'matx', 'miniitx'] },
+  dram: { dramkit: ['ddr4dimm', 'ddr5dimm'] },
+  ssd: { form_ssd: ['m2', '25'] },
+  powersupply: { ffactorsize: ['atx'] },
+  fan: { type_fan: ['cpu', 'syslcp'] },
+};
 
 let form = { ...DEFAULT_FORM };
 let root;
@@ -203,7 +213,7 @@ function renderFilters() {
       type: 'button', class: n ? 'on' : '', disabled: !!owned,
       title: owned ? 'Отмечено «уже есть» — в сборку не входит' : `Фильтры Onliner для категории «${label}»`,
       onclick: async () => {
-        const res = await openFacetModal(cat, label, form.filters[cat], { hide: BUILDER_HIDE[cat] });
+        const res = await openFacetModal(cat, label, form.filters[cat], { hide: BUILDER_HIDE[cat], only: BUILDER_ONLY[cat] || {} });
         if (res === null) return;
         if (countActive(res)) form.filters[cat] = res;
         else delete form.filters[cat];

@@ -59,6 +59,7 @@ export function summarize(meta, value) {
 export function facetPanel(meta, value, onChange, opts = {}) {
   const val = JSON.parse(JSON.stringify(value || {}));
   const hide = new Set(opts.hide || []);
+  const only = opts.only || {}; // { параметр: [разрешённые значения] } — для подбора
   const emit = () => onChange(JSON.parse(JSON.stringify(val)));
   const blocks = [];
 
@@ -82,7 +83,11 @@ export function facetPanel(meta, value, onChange, opts = {}) {
 
   const groupNodes = [];
   for (const g of meta.groups) {
-    const items = g.items.filter((it) => !hide.has(it.id));
+    const items = g.items.filter((it) => !hide.has(it.id)).map((it) => {
+      if (!only[it.id] || !it.values) return it;
+      // В подборе оставляем только значения, которые подходят для сборки ПК
+      return { ...it, values: it.values.filter((v) => only[it.id].includes(v.id)), popular: (it.popular || []).filter((id) => only[it.id].includes(id)) };
+    }).filter((it) => !it.values || it.values.length);
     if (!items.length) continue;
     const gBlocks = items.map((it) => facetBlock(it, val, setVal, opts));
     blocks.push(...gBlocks);
@@ -298,8 +303,12 @@ export async function openFacetModal(cat, title, value, opts = {}) {
       closeModal();
       resolve(v);
     };
+    const total = meta.groups.reduce((n, g) => n + g.items.filter((it) => !(opts.hide || []).includes(it.id)).length, 0);
     const body = el('div.facet-modal',
-      el('p.muted.small', { style: { margin: '0 0 12px' } }, opts.intro || 'Подбор будет выбирать только из товаров, подходящих под эти фильтры. Фильтры те же, что на Onliner.'),
+      el('p.muted.small', { style: { margin: '0 0 12px' } },
+        `У Onliner для категории «${title}» свой набор фильтров: ${total} ${plural(total, 'фильтр', 'фильтра', 'фильтров')}. `,
+        opts.intro || 'Подбор будет выбирать только из товаров, подходящих под эти фильтры.',
+        opts.only ? ' Варианты, которые не годятся для сборки ПК (ноутбучная память, серверные сокеты и т. п.), здесь скрыты — они есть в «Поиске».' : ''),
       host,
       el('div.facet-modal-foot',
         counter.node,
