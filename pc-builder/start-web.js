@@ -21,6 +21,14 @@ async function run() {
   exec(cmd, () => {});
 }
 
+// Ctrl+C / закрытие окна терминала: дописываем несохранённые данные
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  process.on(sig, () => {
+    require('./server/store').flush();
+    process.exit(0);
+  });
+}
+
 run().catch((e) => {
   console.error('Не удалось запустить:', e.message);
   process.exit(1);

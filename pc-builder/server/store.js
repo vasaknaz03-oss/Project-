@@ -28,18 +28,29 @@ function load() {
 }
 
 let saveTimer = null;
+function writeNow() {
+  saveTimer = null;
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const tmp = file() + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(data, null, 1));
+    fs.renameSync(tmp, file());
+  } catch (e) {
+    console.error('Не удалось сохранить данные:', e.message);
+  }
+}
+
 function save() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    try {
-      fs.mkdirSync(dir, { recursive: true });
-      const tmp = file() + '.tmp';
-      fs.writeFileSync(tmp, JSON.stringify(data, null, 1));
-      fs.renameSync(tmp, file());
-    } catch (e) {
-      console.error('Не удалось сохранить данные:', e.message);
-    }
-  }, 150);
+  saveTimer = setTimeout(writeNow, 150);
+}
+
+/** Немедленно записать отложенные изменения (перед выходом из программы). */
+function flush() {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    writeNow();
+  }
 }
 
 function get(key) {
@@ -51,4 +62,4 @@ function set(key, value) {
   save();
 }
 
-module.exports = { get, set, setDir, dataDir: () => dir };
+module.exports = { get, set, flush, setDir, dataDir: () => dir };

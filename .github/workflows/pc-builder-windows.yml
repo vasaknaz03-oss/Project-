@@ -1,4 +1,4 @@
-name: PodborPK — Windows build
+name: PodborPK — Windows и macOS
 
 on:
   push:
@@ -43,6 +43,56 @@ jobs:
           path: pc-builder/dist/*.exe
           if-no-files-found: error
 
+  macos:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: pc-builder
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: pc-builder/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Tests
+        run: npm test
+
+      - name: Build .dmg (Apple Silicon and Intel)
+        run: npx electron-builder --mac dmg --arm64 --x64 --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Check signature and architectures
+        run: |
+          for app in dist/mac-arm64/*.app dist/mac/*.app; do
+            [ -d "$app" ] || continue
+            echo "== $app"
+            codesign --verify --deep --strict --verbose=2 "$app"
+            lipo -archs "$app/Contents/MacOS/"*
+          done
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PodborPK-macOS
+          path: pc-builder/dist/*.dmg
+          if-no-files-found: error
+
+  release:
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: files
+          merge-multiple: true
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
@@ -50,10 +100,19 @@ jobs:
           name: ПодборПК — сборка ${{ github.run_number }}
           target_commitish: ${{ github.sha }}
           body: |
-            Готовые файлы для Windows:
-            - **PodborPK-…-portable.exe** — запускается сразу, установка не нужна.
-            - **PodborPK-…-setup.exe** — установщик с ярлыком на рабочем столе.
+            **Windows**
+            - `PodborPK-…-portable.exe` — запускается сразу, установка не нужна.
+            - `PodborPK-…-setup.exe` — установщик с ярлыком на рабочем столе.
 
-            Windows может предупредить «Неизвестный издатель» (у программы нет платной цифровой подписи): нажмите «Подробнее» → «Выполнить в любом случае».
-          files: pc-builder/dist/*.exe
+            Windows может предупредить «Неизвестный издатель»: нажмите «Подробнее» → «Выполнить в любом случае».
+
+            **macOS** (12 Monterey и новее)
+            - `PodborPK-…-mac-arm64.dmg` — для Mac на Apple M1, M2, M3, M4.
+            - `PodborPK-…-mac-x64.dmg` — для Mac на Intel.
+
+            Не знаете, какой у вас Mac: значок яблока в левом верхнем углу → «Об этом Mac» → строка «Чип» (Apple M…) или «Процессор» (Intel).
+            Откройте .dmg и перетащите ПодборПК в «Программы». При первом запуске macOS скажет, что не может проверить разработчика:
+            откройте «Системные настройки» → «Конфиденциальность и безопасность» → внизу «Всё равно открыть».
+            (На macOS 14 и старше достаточно правой кнопкой по программе → «Открыть».)
+          files: files/*
           make_latest: true
