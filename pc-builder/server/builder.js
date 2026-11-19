@@ -21,9 +21,10 @@ const COOLER_FAMILY = { AM4: 'am4', AM5: 'am5', LGA1700: 'lga1700', LGA1851: 'lg
 const ENTRY_CHIPSETS = /^(A320|A520|A620A?|B840|H610|H510|H410)$/;
 const OLD_AM4_CHIPSETS = /^(A320|B350|X370)$/;
 // Малоизвестные бренды (часто восстановленные карты из Китая) — штраф в оценке или исключение
-const NONAME_GPU = /sinotex|ninja|afox|pcwinmax|kissin|\bcbr\b|ocpc|arktek|soyo|jieshuo|mllse|veineda|szmz|yeston|kllisre|machinist/i;
-const NONAME_MB = /jginyue|esonic|afox|arktek|kllisre|machinist|huananzhi|soyo|qiyida/i;
+const Brands = require('./brands');
 const SERVER_CPU = /epyc|xeon|threadripper|opteron/i;
+// Процессоры AM4 до Ryzen (A-серия, Athlon X4 на Bristol Ridge): почти ни одна плата в продаже их не поддерживает
+const PRE_RYZEN = /athlon\s*x4|\bA(4|6|8|10|12)[- ]\d{4}|bristol|excavator|carrizo/i;
 // Проверенные производители БП — для дорогих сборок берём только их
 const GOOD_PSU = /seasonic|be quiet|corsair|deepcool|cooler master|thermaltake|\bfsp\b|chieftec|\bmsi\b|asus|gigabyte|aorus|montech|super flower|\bxpg\b|adata|zalman|cougar|1stplayer|lian li|nzxt|fractal|silverstone|enermax|antec|\bevga\b|thermalright|arctic|segotep|pccooler|hiper|lian-li/i;
 const PSU_AVOID = /exegate|ginzzu|accord|crown|kingprice|\bcbr\b|digma|3cott|linkworld|powerman|oklick|\bsven\b|frime|delux|pc pet|aerocool\s+vx/i;
@@ -141,7 +142,9 @@ async function gather(opts, B) {
   const memNeeded = new Set(useSockets.flatMap((s) => SOCKET_MEM[SOCKET_NAME[s]]));
 
   const jobs = {};
-  jobs.cpus = banded(fetchCat, 'cpu', { order: 'price:asc', socket_cpu: useSockets, mfr: cpuMfr }, [0, B * 0.12, B * 0.25, B * 0.5], 5, 'процессоры');
+  // Узкие ценовые диапазоны: дешёвые модели не вытесняют дорогие из выдачи
+  const cpuEdges = [0, 250, 400, 600, 850, 1200, 1700, 2500, 4000].filter((e) => e < B * 0.5).concat(Math.round(B * 0.5));
+  jobs.cpus = banded(fetchCat, 'cpu', { order: 'price:asc', socket_cpu: useSockets, mfr: cpuMfr }, cpuEdges, 3, 'процессоры');
 
   if (!have.gpu) {
     const gpuChip = { nvidia: ['nvidia'], amd: ['ati'], intel: ['intel'] }[opts.gpuBrand];
@@ -210,6 +213,7 @@ async function gather(opts, B) {
     jobs.cases = Promise.all([
       fetchCat('chassis', { order: 'rating:desc', type_chassis: ['nopsu'], price: { from: Math.round(target * 0.5), to: Math.round(target * 1.6) } }, 2, 'корпуса'),
       fetchCat('chassis', { order: 'price:asc', type_chassis: ['nopsu'] }, 2, 'корпуса (дешёвые)'),
+      fetchCat('chassis', { order: 'rating:desc', type_chassis: ['nopsu'], price: { from: 90, to: Math.round(Math.max(160, target * 0.6)) } }, 1, 'корпуса (недорогие с хорошим рейтингом)'),
     ]).then((a) => a.flat());
   }
 
@@ -252,6 +256,8 @@ function boardSuitable(cpu, mb) {
   if (!ms.socket || ms.socket !== cs.socket) return false;
   if (!ms.mem || !(cs.mem || []).includes(ms.mem)) return false;
   if (ms.socket === 'AM4' && OLD_AM4_CHIPSETS.test(ms.chipset || '') && /\b5\d{3}/.test(cpu.name)) return false;
+  // A520 не поддерживает Ryzen 1000/2000 и Athlon 200GE/220GE/240GE
+  if (ms.socket === 'AM4' && /^A520$/.test(ms.chipset || '') && /ryzen\s*\d\s*(pro\s*)?[12]\d{3}|athlon\s*(pro\s*)?2[024]0ge/i.test(cpu.name)) return false;
   const power = Compat.cpuPower(cpu);
   if (power >= 140 && /^(H610|H510|H410|A320|A520)$/.test(ms.chipset || '')) return false;
   // Мощному процессору — плату с нормальным питанием: не начального уровня и не «копеечную»
@@ -265,13 +271,14 @@ function preparePools(raw, opts, B, F = {}) {
   const allowedSockets = new Set(Object.values(SOCKET_NAME));
 
   // Процессоры: известная производительность, нужный сокет, отдельно OEM и BOX с кулером
-  const cpus = (raw.cpus || []).filter((c) => inStock(c) && c.perf && allowedSockets.has(c.specs.socket) && (c.specs.mem || []).length && !SERVER_CPU.test(c.name));
+  const cpus = (raw.cpus || []).filter((c) => inStock(c) && c.perf && allowedSockets.has(c.specs.socket) && (c.specs.mem || []).length &&
+    !SERVER_CPU.test(c.name) && !PRE_RYZEN.test(c.name + ' ' + (c.specs.arch || '')));
   pools.cpuAll = cpus;
   pools.cpus = cheapestBy(cpus, (c) => (c.perf.key || c.name) + (c.specs.withCooler ? '+cooler' : ''));
 
   // Видеокарты: дешевейший вариант каждого чипа (с учётом объёма памяти)
   const strict = !!opts.trustedOnly;
-  const gpus = (raw.gpus || []).filter((g) => inStock(g) && g.perf && g.perf.score >= 9).map((g) => ((g.noname = NONAME_GPU.test(g.name)), g)).filter((g) => !(strict && g.noname));
+  const gpus = (raw.gpus || []).filter((g) => inStock(g) && g.perf && g.perf.score >= 9).map((g) => ((g.noname = Brands.isNoname('videocard', g.name)), g)).filter((g) => !(strict && g.noname));
   pools.gpuAll = gpus;
   // убираем видеокарты, которые и дороже, и слабее другой
   const eff = (g) => g.perf.score * (g.noname ? 0.92 : 1);
@@ -288,12 +295,12 @@ function preparePools(raw, opts, B, F = {}) {
   };
   pools.boardAll = (raw.boards || [])
     .filter((m) => inStock(m) && m.specs.socket && m.specs.mem && formOk(m.specs.form) && (!opts.wifi || m.specs.wifi))
-    .map((m) => ((m.noname = NONAME_MB.test(m.name)), m))
+    .map((m) => ((m.noname = Brands.isNoname('motherboard', m.name)), m))
     .filter((m) => !(strict && m.noname));
 
   // Память: обычные DIMM, без серверной
   const ramOk = (r) => inStock(r) && r.specs.type && (r.specs.form === 'DIMM' || r.specs.form === 'CUDIMM') && !r.specs.registered && r.specs.totalGb;
-  pools.ramAll = (raw.ram || []).filter(ramOk);
+  pools.ramAll = (raw.ram || []).filter(ramOk).map((r) => ((r.noname = Brands.isNoname('dram', r.name)), r)).filter((r) => !(strict && r.noname));
   pools.ram = {};
   for (const mem of ['DDR4', 'DDR5']) {
     const list = pools.ramAll.filter((r) => r.specs.type === mem && r.specs.form === 'DIMM');
@@ -306,6 +313,10 @@ function preparePools(raw, opts, B, F = {}) {
         sub[0],
         sub.find((r) => r.specs.modules >= 2),
         sub.find((r) => r.specs.modules >= 2 && r.specs.mhz >= fast),
+        // известные бренды: Kingston, Corsair, G.Skill, Crucial…
+        sub.find((r) => !r.noname && r.specs.modules >= 2),
+        sub.find((r) => !r.noname && r.specs.modules >= 2 && r.specs.mhz >= fast),
+        sub.find((r) => !r.noname),
       ];
       for (const p of picks) if (p && !out.includes(p)) out.push(p);
     }
@@ -313,9 +324,10 @@ function preparePools(raw, opts, B, F = {}) {
   }
 
   // SSD: по 2 варианта на объём (NVMe и SATA)
-  const ssds = (raw.ssd || []).filter((s) => inStock(s) && s.specs.capacityGb);
+  const ssds = (raw.ssd || []).filter((s) => inStock(s) && s.specs.capacityGb)
+    .map((x) => ((x.noname = Brands.isNoname('ssd', x.name)), x)).filter((x) => !(strict && x.noname));
   pools.ssdAll = ssds;
-  pools.ssd = cheapestBy(ssds, (s) => Math.round(s.specs.capacityGb / 100) + ':' + (s.specs.iface || '?'));
+  pools.ssd = cheapestBy(ssds, (x) => Math.round(x.specs.capacityGb / 100) + ':' + (x.specs.iface || '?') + (x.noname ? ':nn' : ''));
 
   pools.hdd = (raw.hdd || []).filter(inStock).sort((a, b) => a.price - b.price)[0] || null;
   if (pools.hdd) pools.hdd.slot = 'hdd';
@@ -329,7 +341,8 @@ function preparePools(raw, opts, B, F = {}) {
 
   // Корпуса: «удачный» вариант около целевой цены для ATX и для mATX
   const target = Math.min(500, Math.max(80, B * 0.045));
-  const cases = cheapestBy((raw.cases || []).filter((c) => inStock(c) && !c.specs.psuIncluded && !/SFF|горизонт/i.test(c.specs.class || '')), (c) => c.id);
+  const cases = cheapestBy((raw.cases || []).filter((c) => inStock(c) && !c.specs.psuIncluded && !/SFF|горизонт/i.test(c.specs.class || ''))
+    .map((c) => ((c.noname = Brands.isNoname('chassis', c.name)), c)).filter((c) => !(strict && c.noname)), (c) => c.id);
   pools.caseAll = cases;
   const caseScore = (c) => {
     const s = c.specs;
@@ -339,11 +352,21 @@ function preparePools(raw, opts, B, F = {}) {
     return v;
   };
   const bestCase = (pred) => cases.filter(pred).sort((a, b) => caseScore(b) - caseScore(a))[0] || null;
-  pools.caseFor = {
-    ATX: bestCase((c) => c.specs.boards.includes('ATX')),
-    mATX: bestCase((c) => c.specs.boards.includes('mATX') || c.specs.boards.includes('ATX')),
-    ITX: bestCase((c) => c.specs.boards.length > 0),
+  // Бюджетный, но приличный корпус: известный бренд, вентиляторы, длинная видеокарта влезает
+  const cheapCase = (pred) => cases.filter((c) => pred(c) && !c.noname && (c.specs.fans || 0) >= 1 && (!c.specs.gpuMaxMm || c.specs.gpuMaxMm >= 320))
+    .sort((a, b) => a.price - b.price)[0] || null;
+  const fits = {
+    ATX: (c) => c.specs.boards.includes('ATX'),
+    mATX: (c) => c.specs.boards.includes('mATX') || c.specs.boards.includes('ATX'),
+    ITX: (c) => c.specs.boards.length > 0,
   };
+  pools.caseFor = {};
+  pools.caseOpts = {};
+  for (const [form, pred] of Object.entries(fits)) {
+    pools.caseFor[form] = bestCase(pred);
+    // Корпус тоже участвует в переборе: можно сэкономить на нём ради видеокарты
+    pools.caseOpts[form] = [pools.caseFor[form], cheapCase(pred)].filter((c, i, a) => c && a.indexOf(c) === i);
+  }
 
   // Кулеры
   pools.coolerAll = cheapestBy((raw.coolers || []).filter((c) => inStock(c) && c.specs.tdp), (c) => c.id + c.family);
@@ -391,6 +414,12 @@ function makePickers(pools, opts, B) {
     return pools.caseFor[form] || pools.caseFor.ATX || undefined;
   }
 
+  function caseOptions(form) {
+    if (opts.have && opts.have.case) return [null];
+    const list = pools.caseOpts[form] && pools.caseOpts[form].length ? pools.caseOpts[form] : pools.caseOpts.ATX || [];
+    return list;
+  }
+
   const boardMemo = new Map();
   function boardsFor(cpu) {
     const key = cpu.id;
@@ -409,10 +438,10 @@ function makePickers(pools, opts, B) {
     return out;
   }
 
-  return { pickPsu, pickCooler, pickCase, boardsFor };
+  return { pickPsu, pickCooler, pickCase, caseOptions, boardsFor };
 }
 
-function scoreParts(prof, purpose, cpu, gpu, ram, ssd, mb, haveGpu) {
+function scoreParts(prof, purpose, cpu, gpu, ram, ssd, mb, haveGpu, kase) {
   let g = haveGpu ? 100 : gpu ? gpu.perf.score * (gpu.noname ? 0.92 : 1) : Math.max(1, cpu.perf.igpu || 1);
   if (prof.gpuCap) g = Math.min(g, prof.gpuCap);
   // Для офиса сверхмощный процессор не нужен: выше порога производительность не засчитывается
@@ -425,12 +454,20 @@ function scoreParts(prof, purpose, cpu, gpu, ram, ssd, mb, haveGpu) {
     const mhz = ram.specs.mhz || 0;
     if (ram.specs.type === 'DDR4' && mhz < 3000) s *= 0.975;
     if (ram.specs.type === 'DDR5' && mhz < 5600) s *= 0.985;
+    if (ram.noname) s *= Brands.PENALTY.dram;
   }
   if (ssd) {
     s *= stepFactor(SSD_F[purpose], ssd.specs.capacityGb);
     if (ssd.specs.iface === 'SATA') s *= purpose === 'office' ? 0.99 : 0.975;
     if (ssd.specs.qlc) s *= 0.99;
+    if (ssd.noname) s *= Brands.PENALTY.ssd;
   }
+  if (kase) {
+    if (kase.noname) s *= Brands.PENALTY.chassis;
+    if (!kase.specs.fans) s *= 0.99; // без вентиляторов придётся докупать
+  }
+  // Офису отдельная видеокарта почти ничего не даёт, а шумит и тратит деньги
+  if (purpose === 'office' && gpu) s *= 0.95;
   if (mb && ENTRY_CHIPSETS.test(mb.specs.chipset || '')) s *= 0.99;
   if (mb && mb.noname) s *= 0.985;
   return s;
@@ -455,9 +492,10 @@ function optimize(pools, opts, budget) {
     if (cooler === undefined) continue;
     const gpuOpts = have.gpu ? [null] : [...(cpu.specs.hasIgpu ? [null] : []), ...pools.gpus];
     for (const mb of P.boardsFor(cpu)) {
-      const kase = P.pickCase(mb.specs.form);
-      if (kase === undefined) continue;
+      const caseList = P.caseOptions(mb.specs.form);
+      if (!caseList.length) continue;
       const rams = (pools.ram[mb.specs.mem] || []).filter((r) => r.specs.totalGb >= minRam * 0.94 && r.specs.modules <= (mb.specs.memSlots || 4));
+      for (const kase of caseList)
       for (const ram of rams) {
         const plat = cpu.price + mb.price + ram.price + (cooler ? cooler.price : 0) + (kase ? kase.price : 0) + hddCost;
         if (plat > budget) continue;
@@ -475,7 +513,7 @@ function optimize(pools, opts, budget) {
           for (const ssd of ssdOpts) {
             const total = base + (ssd ? ssd.price : 0);
             if (total > budget) continue;
-            const s = scoreParts(prof, purpose, cpu, gpu, ram, ssd, mb, have.gpu);
+            const s = scoreParts(prof, purpose, cpu, gpu, ram, ssd, mb, have.gpu, kase);
             const obj = s * (1 - PENALTY * (total / budget));
             if (!best || obj > best.obj) {
               best = { obj, score: s, total, parts: { cpu, motherboard: mb, ram, gpu, ssd, hdd, psu, case: kase, cooler }, need };
