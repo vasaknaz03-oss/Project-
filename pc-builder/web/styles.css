@@ -600,3 +600,11 @@ a.chip:hover { border-color: var(--accent); color: var(--text); }
 .small-seg { flex-wrap: nowrap; }
 .small-seg button { white-space: nowrap; }
 .fps-card .card-head { flex-wrap: wrap; row-gap: 6px; }
+
+/* ---------- своя деталь, стили сборки ---------- */
+.custom-part-row { gap: 10px; padding: 6px 4px; align-items: center; }
+.form-grid { display: flex; flex-direction: column; gap: 12px; }
+.form-grid .field { display: flex; flex-direction: column; gap: 6px; }
+.style-field { margin-top: 14px; }
+.style-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.style-chip { padding: 7px 14px; }

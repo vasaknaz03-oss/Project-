@@ -21,6 +21,39 @@ const PURPOSES = [
 
 const PRESETS_BYN = [1500, 2500, 3500, 5000, 8000, 12000];
 
+// Стили сборки: наборы фильтров и настроек, которые видно и можно поправить в форме
+const STYLES = [
+  { id: '', title: 'Обычный', text: 'Максимум за свои деньги' },
+  { id: 'quiet', title: 'Тихий', text: 'Кулер с запасом, корпус с вентиляторами, БП Gold', set: { quiet: true } },
+  { id: 'white', title: 'Белый', text: 'Белые корпус и память', filters: { chassis: { color_shassis: ['white'] }, dram: { dramcolor: ['white', 'silver'] } } },
+  { id: 'rgb', title: 'С подсветкой', text: 'ARGB-вентиляторы и память с подсветкой', filters: { chassis: { coocolor_shassis: ['argb', 'multicolor', 'rgbfix'] }, dram: { dramlight: 1 } } },
+  { id: 'compact', title: 'Компактный', text: 'Плата mATX в небольшом корпусе Mini Tower', set: { form: 'matx' }, filters: { chassis: { case_class: ['minitower'] } } },
+  { id: 'stream', title: 'Для стриминга', text: 'NVIDIA (кодировщик NVENC), 32 ГБ памяти, упор и на процессор', set: { purpose: 'universal', gpuBrand: 'nvidia', ram: '32' } },
+];
+
+/** Включить стиль: снимаем фильтры прошлого стиля и ставим новые. */
+function applyStyle(id) {
+  const prev = STYLES.find((x) => x.id === (form.style || ''));
+  if (prev && prev.filters) {
+    for (const [cat, f] of Object.entries(prev.filters)) {
+      for (const k of Object.keys(f)) if (form.filters[cat]) delete form.filters[cat][k];
+      if (form.filters[cat] && !Object.keys(form.filters[cat]).length) delete form.filters[cat];
+    }
+  }
+  if (prev && prev.set) {
+    if (prev.set.quiet) form.quiet = false;
+    if (prev.set.form) form.form = 'any';
+    if (prev.set.gpuBrand) form.gpuBrand = 'any';
+    if (prev.set.ram) form.ram = 'auto';
+  }
+  const st = STYLES.find((x) => x.id === id) || STYLES[0];
+  for (const [cat, f] of Object.entries(st.filters || {})) form.filters[cat] = { ...(form.filters[cat] || {}), ...JSON.parse(JSON.stringify(f)) };
+  Object.assign(form, st.set || {});
+  form.style = st.id;
+  persistForm();
+  render();
+}
+
 const HAVE = [
   ['gpu', 'Видеокарта'],
   ['case', 'Корпус'],
@@ -212,6 +245,12 @@ function renderForm() {
       el('div.field', el('label', 'Бюджет'), el('div.budget-input', budgetInput, curSelect)),
       el('div.field', el('label', 'Быстрый выбор'), presets)),
     purposeGrid,
+    el('div.field.style-field', el('label', 'Стиль сборки'),
+      el('div.style-chips', STYLES.map((st) => el('button.chip.toggle-chip.style-chip', {
+        type: 'button', class: (form.style || '') === st.id ? 'on' : '', title: st.text,
+        onclick: () => applyStyle(st.id),
+      }, st.title))),
+      form.style ? el('div.dim.small', STYLES.find((x) => x.id === form.style).text + '. Фильтры стиля видны ниже — их можно поправить.') : null),
     setupBlock,
     filtersBlock,
     advBtn,
@@ -287,6 +326,38 @@ async function fillSummary(box) {
 const SLOT_LABEL = Object.fromEntries(SLOTS.map((x) => [x.key, x.label]));
 
 /** Закрепить или открепить деталь: при пересборке закреплённое остаётся, остальное подбирается под бюджет. */
+/** Окно «Своя деталь»: ссылка, название, цена → деталь в сборке (закреплённая). */
+function openCustomPart(slotKey) {
+  const slotSel = el('select.select', SLOTS.map((sl) => el('option', { value: sl.key, selected: sl.key === slotKey }, sl.label)));
+  const url = el('input.input', { type: 'url', placeholder: 'https://… (необязательно)' });
+  const name = el('input.input', { placeholder: 'Например: MSI MAG B650 Tomahawk WiFi' });
+  const price = el('input.input', { type: 'number', min: '0', step: '0.01', placeholder: `цена, ${money.currency}` });
+  const status = el('div.dim.small');
+  const btn = el('button.btn.btn-primary', {
+    onclick: async () => {
+      btn.disabled = true;
+      status.textContent = 'Определяем характеристики…';
+      try {
+        const body = { slot: slotSel.value, url: url.value.trim(), name: name.value.trim(), price: price.value ? money.fromCur(+price.value) : 0 };
+        const { item, exact } = await api('/api/part/custom', { method: 'POST', body });
+        replacePart(slotSel.value, item);
+        pinPart(slotSel.value, item, true);
+        closeModal();
+        toast(exact ? `Добавлено с каталога Onliner: ${item.name}` : `Добавлено: ${item.name}. Характеристики определены по названию — проверьте совместимость справа.`);
+      } catch (e) {
+        status.textContent = e.message;
+        btn.disabled = false;
+      }
+    },
+  }, 'Добавить в сборку');
+  modal('Своя деталь', el('div.form-grid',
+    el('div.field', el('label', 'Что это'), slotSel),
+    el('div.field', el('label', 'Ссылка на товар'), url, el('div.dim.small', 'Для ссылки на каталог Onliner характеристики возьмём оттуда точно.')),
+    el('div.field', el('label', 'Название (модель)'), name),
+    el('div.field', el('label', 'Цена'), price),
+    el('div.row', btn, status)), { narrow: true });
+}
+
 function pinPart(slotKey, item, on) {
   if (on && item) form.pins[slotKey] = slim(item);
   else delete form.pins[slotKey];
@@ -531,6 +602,9 @@ function renderBuild(v) {
       el('button.btn.btn-sm.btn-primary', { onclick: submit, title: 'Оставить закреплённые детали и подобрать остальное под бюджет' }, icon('sparkles'), 'Пересобрать остальное'),
       el('button.btn.btn-sm', { onclick: () => { b.parts = { ...b.original }; delete b.original; rerenderResults(); } }, 'Вернуть как было')));
   }
+  partsBox.append(el('div.row.custom-part-row',
+    el('button.btn.btn-sm', { onclick: () => openCustomPart() }, icon('plus'), 'Своя деталь из любого магазина'),
+    el('span.dim.small', 'Вставьте ссылку (Onliner, 21vek, DNS, Kufar…), название и цену — деталь встанет в сборку, совместимость проверится.')));
   // Сетап: монитор, периферия, рабочее место
   if (hasSetup(b)) {
     const rows = SETUP_SLOTS.filter((sl) => (b.setup && b.setup[sl.key]) || (b.setupAlternatives && b.setupAlternatives[sl.key])).map((sl) => renderPart(sl, v)).filter(Boolean);

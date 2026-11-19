@@ -470,7 +470,7 @@ function makePickers(pools, opts, B) {
     const gold = list.find((p) => p.specs.watts >= need.rec && p.specs.cert >= 4);
     let pick = bronze || list.find((p) => p.specs.watts >= need.rec) || undefined;
     // Чем дороже сборка, тем важнее надёжный БП: на дорогих — Gold, даже если он заметно дороже Bronze
-    const goldLimit = B >= 9000 || need.rec >= 850 ? 2.4 : B >= 6000 ? 1.8 : 1.3;
+    const goldLimit = B >= 9000 || need.rec >= 850 || opts.quiet ? 2.4 : B >= 6000 ? 1.8 : 1.3;
     if (gold && bronze && (B > 4000 || need.rec >= 750) && gold.price <= bronze.price * goldLimit) pick = gold;
     psuMemo.set(key, pick);
     return pick;
@@ -484,7 +484,9 @@ function makePickers(pools, opts, B) {
     if (!need) return null;
     const fam = COOLER_FAMILY[cpu.specs.socket];
     // В дорогой сборке — кулер с запасом: тише и не даёт процессору сбрасывать частоты
-    const want = B >= 12000 ? Math.max(need, 250) : B >= 7000 ? Math.max(need, 220) : B >= 4500 ? Math.max(need, 180) : need;
+    let want = B >= 12000 ? Math.max(need, 250) : B >= 7000 ? Math.max(need, 220) : B >= 4500 ? Math.max(need, 180) : need;
+    // Тихая сборка: кулер с большим запасом крутится медленнее
+    if (opts.quiet) want = Math.max(want, Math.round(need * 1.4));
     const key = fam + ':' + need + ':' + want;
     if (coolMemo.has(key)) return coolMemo.get(key);
     const fitsH = (c) => c.family === fam && (!c.specs.heightMm || c.specs.heightMm >= 70);
@@ -526,7 +528,7 @@ function makePickers(pools, opts, B) {
   return { pickPsu, pickCooler, pickCase, caseOptions, boardsFor };
 }
 
-function scoreParts(prof, purpose, cpu, gpu, ram, ssd, mb, haveGpu, kase) {
+function scoreParts(prof, purpose, cpu, gpu, ram, ssd, mb, haveGpu, kase, quiet) {
   let g = haveGpu ? 100 : gpu ? gpu.perf.score : Math.max(1, cpu.perf.igpu || 1);
   if (prof.gpuCap) g = Math.min(g, prof.gpuCap);
   // Штраф за малоизвестный бренд — после ограничения, иначе для офиса он теряется
@@ -558,6 +560,7 @@ function scoreParts(prof, purpose, cpu, gpu, ram, ssd, mb, haveGpu, kase) {
     // Хороший продув важен мощному железу: при дорогой видеокарте «удачный» корпус в приоритете
     if (kase.goodCase && gpu && gpu.price >= 2500) s *= 1.012;
     if (!kase.specs.fans) s *= 0.99; // без вентиляторов придётся докупать
+    if (quiet && (kase.specs.fans || 0) < 2) s *= 0.98;
   }
   // Офису отдельная видеокарта почти ничего не даёт, а шумит и тратит деньги
   if (purpose === 'office' && gpu) s *= 0.92;
@@ -609,7 +612,7 @@ function optimize(pools, opts, budget) {
           for (const ssd of ssdOpts) {
             const total = base + (ssd ? ssd.price : 0);
             if (total > budget) continue;
-            const s = scoreParts(prof, purpose, cpu, gpu, ram, ssd, mb, have.gpu, kase);
+            const s = scoreParts(prof, purpose, cpu, gpu, ram, ssd, mb, have.gpu, kase, !!opts.quiet);
             const obj = s * (1 - PENALTY * (total / budget));
             if (!best || obj > best.obj) {
               best = { obj, score: s, total, parts: { cpu, motherboard: mb, ram, gpu, ssd, hdd, psu, case: kase, cooler }, need };

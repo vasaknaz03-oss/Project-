@@ -499,6 +499,31 @@ async function route(req, res, url) {
     return send(res, 200, r);
   }
 
+  // Своя деталь из любого магазина: название, цена, ссылка → характеристики для проверки совместимости.
+  // Ссылка на каталог Onliner — берём точные данные товара.
+  if (pathname === '/api/part/custom' && req.method === 'POST') {
+    const body = await readBody(req);
+    const slot = String(body.slot || '');
+    if (!kufarCompat.TYPE[slot]) throw new Error('Неизвестный тип детали');
+    const url = String(body.url || '').trim().slice(0, 500);
+    const m = url.match(/catalog\.onliner\.by\/[\w-]+\/[\w-]+\/([\w.-]+)/) || url.match(/catalog\.onliner\.by\/[\w-]+\/([\w.-]+)$/);
+    if (m) {
+      const schema = kufarCompat.SCHEMA[slot];
+      try {
+        const it = await onliner.product(m[1], schema);
+        if (it && it.category === schema) {
+          if (Number(body.price) > 0) it.price = Number(body.price);
+          return send(res, 200, { item: it, exact: true });
+        }
+      } catch {}
+    }
+    const name = String(body.name || '').trim().slice(0, 200);
+    if (!name) throw new Error('Укажите название детали');
+    const price = Number(body.price) > 0 ? Number(body.price) : 0;
+    const item = await kufarCompat.enrich(slot, { id: 'custom-' + Date.now(), name, price, url: url || null, params: {} });
+    return send(res, 200, { item: { ...item, source: 'custom', fromKufar: false, kufarNote: ['своя деталь', item.kufarNote].filter(Boolean).join('; ') } });
+  }
+
   // Объявление Kufar → деталь сборки (характеристики для проверки совместимости)
   if (pathname === '/api/kufar/enrich' && req.method === 'POST') {
     const body = await readBody(req);

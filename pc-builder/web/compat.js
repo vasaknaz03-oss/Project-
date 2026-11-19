@@ -98,6 +98,16 @@
       if (ms.socket === 'LGA1700' && OLD_1700.test(ms.chipset || '') && /i\d-1[34]\d{3}/i.test(cpu.name)) {
         info(`Для Intel 13/14 поколения на ${ms.chipset} может понадобиться свежий BIOS (обычно уже прошит, уточните у продавца)`);
       }
+      // Процессоры новее платы: нужна свежая версия BIOS
+      if (ms.socket === 'AM5' && /^(A620|B650E?|X670E?)$/.test(ms.chipset || '') && /ryzen\s*\d\s*(pro\s*)?9\d{3}/i.test(cpu.name)) {
+        info(`Ryzen 9000 на плате ${ms.chipset}: нужна версия BIOS с поддержкой Ryzen 9000. У плат последних партий она уже есть — уточните у продавца или обновите BIOS (у многих плат есть кнопка BIOS Flashback)`);
+      }
+      if (ms.socket === 'AM5' && /^(A620|B650E?|X670E?)$/.test(ms.chipset || '') && /ryzen\s*\d\s*(pro\s*)?8\d{3}g/i.test(cpu.name)) {
+        info(`Ryzen 8000G на плате ${ms.chipset}: понадобится BIOS с поддержкой этой серии (обычно уже прошит)`);
+      }
+      if (ms.socket === 'AM4' && /^(B450|X470)$/.test(ms.chipset || '') && /ryzen\s*\d\s*(pro\s*)?5\d{3}/i.test(cpu.name)) {
+        info(`Ryzen 5000 на ${ms.chipset}: поддерживается после обновления BIOS — у новых плат обычно уже есть, уточните у продавца`);
+      }
       if ((cs.tdp || 0) >= 105 && /^(H610|H510|H410|A320|A520)$/.test(ms.chipset || '')) {
         warn(`Мощный процессор (TDP ${cs.tdp} Вт) на бюджетной плате ${ms.chipset}: возможен перегрев цепей питания`);
       }
@@ -110,6 +120,10 @@
       else if (mb && rs.type) ok(`Память ${rs.type} подходит к плате`);
       if (mb && ms.memSlots && rs.modules > ms.memSlots) err(`Модулей памяти (${rs.modules}) больше, чем слотов на плате (${ms.memSlots})`);
       if (rs.modules === 1) warn('Один модуль памяти работает в одноканальном режиме: для игр лучше комплект из двух');
+      // Подсказка новичку: без профиля в BIOS память работает на базовой частоте
+      if (rs.mhz && ((rs.type === 'DDR5' && rs.mhz > 4800) || (rs.type === 'DDR4' && rs.mhz > 2666))) {
+        info(`Чтобы память работала на ${rs.mhz} МГц, после сборки включите в BIOS профиль ${cs.socket && /^AM/.test(cs.socket) ? 'EXPO (или XMP/DOCP)' : 'XMP'} — иначе она будет на базовой частоте`);
+      }
     }
 
     if (!gpu && !have.gpu) {
