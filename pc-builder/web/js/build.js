@@ -428,7 +428,12 @@ const STEPS = [
 ];
 
 async function submit() {
-  if (!(form.budget > 0)) return toast('Введите бюджет', 'err');
+  if (!(form.budget > 0)) {
+    toast('Введите бюджет', 'err');
+    const res = document.getElementById('results');
+    if (res) res.replaceChildren(el('div.notice.err', icon('alert'), el('div', el('b', 'Укажите бюджет больше нуля. '), 'Например, 2500 р. — или нажмите одну из кнопок «Быстрый выбор».')));
+    return;
+  }
   const btn = document.getElementById('buildBtn');
   btn.disabled = true;
   const results = document.getElementById('results');

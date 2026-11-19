@@ -130,7 +130,7 @@ function renderResult() {
       return el('div.card.up-card', { class: sc.id === r.best ? 'best' : '' },
         el('div.up-card-head',
           el('div', el('h3', sc.title), el('div.row.wrap', tags)),
-          el('div.up-gain', el('b', `+${sc.gain}%`), el('div.dim.small', money.fmt(sc.cost)))),
+          el('div.up-gain', el('b', (r.index[key] || 0) < 15 ? `индекс ${sc.index[key]}` : `+${sc.gain}%`), el('div.dim.small', money.fmt(sc.cost)))),
         el('div.dim.small', `Станет: ${sc.index.tier} (индекс ${sc.index[key]})`),
         el('div.up-buy', sc.buy.map(({ slot, item }) => {
           const meta = SLOTS.find((s) => s.key === slot) || { label: slot, icon: 'cpu' };

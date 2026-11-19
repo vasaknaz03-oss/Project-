@@ -145,7 +145,8 @@ function cpuKey(name) {
     if (CPU['r' + m[1]]) return 'r' + m[1];
     return null;
   }
-  m = s.match(/\bi([3579])\s*-\s*(\d{4,5})([a-z]*)/) || s.match(/core\s+i([3579])\s+(\d{4,5})([a-z]*)/);
+  // «i5-12400F», «i7 9700K», «Core i5 10400»
+  m = s.match(/\bi([3579])[\s-]+(\d{4,5})([a-z]*)/) || s.match(/core\s+i([3579])\s+(\d{4,5})([a-z]*)/);
   if (m) {
     const suf = m[3].replace(/f$/, '').replace(/^kf$/, 'k').replace(/^(k|t)?.*$/, '$1');
     const k = 'i' + m[2] + suf;

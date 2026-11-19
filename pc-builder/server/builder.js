@@ -831,6 +831,7 @@ async function build(opts) {
 
   const variants = [];
   for (const v of VARIANTS) {
+    await tick(); // перебор тяжёлый: даём серверу ответить на другие запросы между вариантами
     const b = Math.round(budget * v.k);
     let best;
     let setup = null;
@@ -983,6 +984,7 @@ async function hybrid(opts) {
   ]);
   if (!gpus.length && !cpus.length) return { none: true, reason: 'Подходящих б/у процессоров и видеокарт на Kufar сейчас не нашлось.' };
   const mixed = { ...pools, gpus: pools.gpus.concat(gpus), cpus: pools.cpus.concat(cpus) };
+  await tick();
   const best = optimize(mixed, o, budget);
   if (!best) return { none: true, reason: 'Совместимую сборку с б/у деталями собрать не получилось.' };
   const used = Object.entries(best.parts).filter(([, x]) => x && x.fromKufar).map(([k]) => k);
@@ -1005,6 +1007,8 @@ async function hybrid(opts) {
 }
 
 // ------------------------------------------------------------------ апгрейд своего ПК
+
+const tick = () => new Promise((r) => setImmediate(r));
 
 const UPGRADE_SCENARIOS = [
   { id: 'gpu', title: 'Только видеокарта', replace: ['gpu'] },
@@ -1049,7 +1053,8 @@ function bottleneck(parts) {
   const g = parts.gpu ? parts.gpu.perf.score : parts.cpu.perf.igpu || 1;
   const rs = parts.ram.specs;
   const notes = [];
-  if (!parts.gpu) notes.push('Нет отдельной видеокарты: для игр это главное узкое место.');
+  if (!parts.gpu && !(parts.cpu.specs && parts.cpu.specs.hasIgpu) && !parts.cpu.perf.igpu) notes.push('У процессора нет встроенной графики, а видеокарты нет: без видеокарты не будет изображения. Начните с видеокарты.');
+  else if (!parts.gpu) notes.push('Нет отдельной видеокарты: для игр это главное узкое место.');
   else if (g > c * 1.6) notes.push(`Процессор слабее видеокарты: в играх он не даёт ей раскрыться (процессор ${c}, видеокарта ${g} по нашему индексу).`);
   else if (g < c * 0.65) notes.push(`Видеокарта — слабое место: процессор потянет карту заметно мощнее (процессор ${c}, видеокарта ${g}).`);
   else notes.push(`Процессор и видеокарта примерно сбалансированы (процессор ${c}, видеокарта ${g}).`);
@@ -1074,6 +1079,7 @@ async function upgrade(opts) {
   const { raw, F } = await gather({ ...o, platform: 'any', cpuBrand: 'any' }, Math.max(budget * 2, 1200));
   const results = [];
   for (const sc of UPGRADE_SCENARIOS) {
+    await tick();
     if (sc.id === 'ram' && owned.ram.specs.totalGb >= 32 && owned.ram.specs.modules >= 2) continue;
     const pins = {};
     for (const slot of ['cpu', 'gpu', 'motherboard', 'ram', 'psu']) if (owned[slot] && !sc.replace.includes(slot)) pins[slot] = owned[slot];
@@ -1087,6 +1093,8 @@ async function upgrade(opts) {
       continue;
     }
     if (!pools.cpus.length) continue;
+    // Видеокарты нет и вариант её не меняет — подбор не должен «тайком» её добавлять
+    if (!owned.gpu && !sc.replace.includes('gpu')) pools.gpus = [];
     const best = optimize(pools, so, budget);
     if (!best) continue;
     const parts = { ...best.parts };

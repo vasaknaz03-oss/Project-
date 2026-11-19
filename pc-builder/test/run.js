@@ -112,6 +112,13 @@ test('видеокарты', () => {
   };
   for (const [name, key] of Object.entries(cases)) assert.strictEqual(perf.gpuKey(name), key, name);
 });
+test('процессор пишут по-разному: «i7 9700K», «Core i5 10400», «i5-12400F»', () => {
+  const perf = require('../server/perfdb');
+  assert.strictEqual(perf.cpuKey('i7 9700K'), 'i9700k');
+  assert.strictEqual(perf.cpuKey('Core i5 10400'), 'i10400');
+  assert.strictEqual(perf.cpuKey('Процессор Intel Core i5-12400F BOX'), 'i12400');
+});
+
 test('процессоры', () => {
   const cases = {
     'AMD Ryzen 5 5600': 'r5600', 'AMD Ryzen 5 5600 (BOX)': 'r5600', 'AMD Ryzen 7 7800X3D': 'r7800x3d',
