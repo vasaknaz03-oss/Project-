@@ -1,6 +1,7 @@
 // Страница «Поиск комплектующих»: Onliner (новые, цены магазинов) и Kufar (объявления).
 import { el, icon, api, money, toast, modal, thumb, plural } from './util.js';
 import { adChips, adLink, hideButton, isHidden, isViewed, hiddenToggle } from './kufarui.js';
+import { isWatched, toggleWatch, saveKufarSearch } from './watch.js';
 import { state, CAT_TO_SLOT, CAT_ICON, specChips, shopLinks, linkFor } from './state.js';
 import { replaceFromSearch, hasActiveBuild, takeKufarToBuild } from './build.js';
 import { facetPanel, loadFacets, loadKufarFacets, countActive } from './facets.js';
@@ -250,6 +251,26 @@ function renderResults() {
     const hiddenN = S.src === 'kufar' ? S.items.filter(isHidden).length : 0;
     const shown = S.src === 'kufar' && !S.showHidden ? S.items.filter((it) => !isHidden(it)) : S.items;
     if (hiddenN) out.push(el('div.dim.small', { style: { marginTop: '6px' } }, `Скрыто объявлений: ${hiddenN}. `, hiddenToggle(hiddenN, S.showHidden, () => { S.showHidden = !S.showHidden; render(); })));
+    if (S.src === 'kufar') {
+      out.push(el('div.notice.watch-hint', icon('bell'),
+        el('div', el('b', 'Следить за новыми объявлениями. '), 'Программа будет проверять этот поиск (раздел, запрос, фильтры и цена) и сообщит о новых объявлениях — выгодные отметит отдельно.'),
+        el('button.btn.btn-sm.btn-primary', {
+          onclick: async (e) => {
+            e.currentTarget.disabled = true;
+            const sec = section();
+            const toByn = (v) => (v === '' || v == null ? null : Math.round(money.fromCur(+v) * 100) / 100);
+            try {
+              await saveKufarSearch({
+                name: [sec ? sec.name : null, S.q.trim() ? `«${S.q.trim()}»` : null].filter(Boolean).join(' ') || 'Kufar',
+                cat: S.cat, q: S.q.trim(), filters: S.filters[fkey()] || {}, priceMax: toByn(S.max), cond: S.cond,
+              });
+            } catch (err) {
+              toast(err.message, 'err');
+              e.currentTarget.disabled = false;
+            }
+          },
+        }, 'Следить')));
+    }
     out.push(el('div.grid', shown.map(card)));
   } else if (!S.loading && !S.error) {
     out.push(el('div.card.empty-state', { style: { marginTop: '16px' } }, el('h3', 'Ничего не нашлось'), el('p.muted', 'Попробуйте короче: например, «4060» вместо полного названия.')));
@@ -291,6 +312,11 @@ function card(it) {
       el('div.pcard-actions',
         it.source === 'kufar' ? hideButton(it, render) : null,
         isOnliner && it.offers ? el('button.icon-btn', { title: 'Цены в магазинах', onclick: () => showShops(it) }, icon('store')) : null,
+        isOnliner && it.price ? el('button.icon-btn', {
+          title: isWatched(it) ? 'Перестать следить за ценой' : 'Следить за ценой',
+          style: isWatched(it) ? { color: 'var(--accent)' } : null,
+          onclick: async (e) => { await toggleWatch(it, e.currentTarget); render(); },
+        }, icon('bell')) : null,
         !isOnliner && hasActiveBuild() && S.cat && (CAT_TO_SLOT[S.cat] || Catalog.setupById[S.cat]) ? el('button.btn.btn-sm', {
           title: CAT_TO_SLOT[S.cat] ? 'Взять объявление в сборку и закрепить' : 'Добавить объявление в сетап',
           onclick: async (e) => {

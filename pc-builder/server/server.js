@@ -28,6 +28,13 @@ const kufarFilters = require('./providers/kufarFilters');
 const kufarCompat = require('./kufarCompat');
 const wb = require('./providers/wildberries');
 const market = require('./market');
+const watch = require('./watch');
+
+// Возможности оболочки Electron (автозапуск, работа в фоне); в режиме браузера их нет
+let appHooks = null;
+function setAppHooks(h) {
+  appHooks = h;
+}
 const PC_SCHEMAS = new Set(Object.keys(onliner.CATEGORIES));
 
 /** Раздел каталога по id (или категории Onliner — для подбора). */
@@ -222,7 +229,51 @@ async function route(req, res, url) {
   const pathname = url.pathname;
 
   if (pathname === '/api/info') {
-    return send(res, 200, { version: VERSION, dataDir: store.dataDir(), categories: onliner.CATEGORIES });
+    return send(res, 200, { version: VERSION, dataDir: store.dataDir(), categories: onliner.CATEGORIES, desktop: !!appHooks, platform: process.platform });
+  }
+
+  // ---------------- слежение за ценами и поисками Kufar
+  if (pathname === '/api/watch' && req.method === 'GET') return send(res, 200, watch.summary());
+  if (pathname === '/api/watch/item' && req.method === 'POST') {
+    const body = await readBody(req);
+    return send(res, 200, { item: watch.addItem(body.item) });
+  }
+  if (pathname === '/api/watch/item' && req.method === 'DELETE') {
+    watch.removeItem(String(p.get('id') || ''));
+    return send(res, 200, { ok: true });
+  }
+  if (pathname === '/api/watch/target' && req.method === 'POST') {
+    const body = await readBody(req);
+    return send(res, 200, { item: watch.setTarget(String(body.id || ''), body.target) });
+  }
+  if (pathname === '/api/watch/search' && req.method === 'POST') {
+    const body = await readBody(req);
+    return send(res, 200, { search: await watch.addSearch(body) });
+  }
+  if (pathname === '/api/watch/search' && req.method === 'DELETE') {
+    watch.removeSearch(String(p.get('id') || ''));
+    return send(res, 200, { ok: true });
+  }
+  if (pathname === '/api/watch/check' && req.method === 'POST') return send(res, 200, await watch.check({ force: true }));
+  if (pathname === '/api/watch/read' && req.method === 'POST') {
+    const body = await readBody(req);
+    watch.markRead(Array.isArray(body.ids) ? body.ids.map(String) : null);
+    return send(res, 200, { ok: true });
+  }
+  if (pathname === '/api/watch/events' && req.method === 'DELETE') {
+    watch.clearEvents();
+    return send(res, 200, { ok: true });
+  }
+
+  // ---------------- автозапуск и работа в фоне (только в программе, не в браузере)
+  if (pathname === '/api/app') {
+    if (!appHooks) return send(res, 200, { desktop: false });
+    if (req.method === 'POST') {
+      const body = await readBody(req);
+      if (typeof body.autostart === 'boolean') appHooks.setAutostart(body.autostart);
+      if (body.testNotification) appHooks.notify({ title: 'ПодборПК', body: 'Уведомления работают: так будут приходить сообщения о ценах и объявлениях.' });
+    }
+    return send(res, 200, { desktop: true, autostart: appHooks.getAutostart() });
   }
 
   if (pathname === '/api/rates') {
@@ -428,12 +479,14 @@ function start(port = 0, host = '127.0.0.1') {
     server.on('error', reject);
     server.listen(port, host, () => {
       const p = server.address().port;
+      // Фоновая проверка цен и объявлений
+      watch.start({ kufarOpts: (s) => kufarQuery(sectionOf(s.cat), s.q, new URLSearchParams({ f: JSON.stringify(s.filters || {}) })) });
       resolve({ server, port: p, url: `http://${host}:${p}/` });
     });
   });
 }
 
-module.exports = { start, createServer };
+module.exports = { start, createServer, setAppHooks, watch };
 
 if (require.main === module) {
   start(Number(process.env.PORT) || 4780).then(({ url }) => console.log('ПодборПК: ' + url));

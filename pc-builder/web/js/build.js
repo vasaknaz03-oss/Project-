@@ -3,6 +3,7 @@ import { el, icon, api, money, toast, modal, closeModal, promptText, copyText, d
 import { state, SLOTS, specChips, shopLinks, linkFor, slim, saveBuilds, buildText } from './state.js';
 import { openFacetModal, loadFacets, summarize, countActive } from './facets.js';
 import { adChips, adLink, hideButton, isHidden, isViewed, hiddenToggle } from './kufarui.js';
+import { watchButton } from './watch.js';
 
 const Compat = window.Compat;
 const Catalog = window.Catalog;
@@ -600,6 +601,7 @@ function renderPart(slot, v) {
       alts.length || (slot.key === 'gpu' && b.alternatives && b.alternatives.gpuSame && b.alternatives.gpuSame.length) ? openBtn('alts', 'swap', `Альтернативы (${alts.length + ((slot.key === 'gpu' && b.alternatives && b.alternatives.gpuSame) ? b.alternatives.gpuSame.length : 0)})`) : null,
       openBtn('used', 'recycle', 'Б/у на Kufar'),
       el('a.btn.btn-sm.btn-ghost', { href: it.url, target: '_blank', rel: 'noopener' }, icon('external'), 'Открыть'),
+      watchButton(it, rerenderResults),
       !slot.setup ? el('button.btn.btn-sm.btn-ghost', {
         class: isPinned(slot.key, it) ? 'on' : '',
         title: isPinned(slot.key, it) ? 'Открепить' : 'Закрепить: при пересборке эта деталь останется, остальное подберётся под бюджет',

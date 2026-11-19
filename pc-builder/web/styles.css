@@ -524,3 +524,40 @@ a.chip:hover { border-color: var(--accent); color: var(--text); }
 .alt.viewed .alt-name a::after, .pcard.viewed .pcard-name a::after { content: ' · просмотрено'; color: var(--text-3); font-size: 12px; font-weight: 400; }
 .market-line { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); margin: -2px 0 8px; }
 .market-line [data-icon] svg { width: 14px; height: 14px; }
+
+/* ---------- слежение ---------- */
+.nav-count.hot:not(:empty) { background: var(--accent); color: #fff; }
+.count-pill { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 12px; font-weight: 700; vertical-align: 2px; }
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.card-head h3, .card h3 { display: flex; align-items: center; gap: 6px; }
+.card h3 [data-icon] svg { width: 18px; height: 18px; color: var(--accent); }
+.watch-events { margin-top: 4px; }
+.event-list { display: flex; flex-direction: column; gap: 8px; }
+.event { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 12px; padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg-2); animation: fadeUp .25s ease-out both; }
+.event.unread { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-soft) inset; }
+.event-ico { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--surface-2); color: var(--accent); }
+.event-ico svg { width: 18px; height: 18px; }
+.event-ico.ev-price, .event-ico.ev-target { color: var(--ok); }
+.event-ico.ev-ads { color: #f59e0b; }
+.event-title { font-weight: 650; }
+.event-body { color: var(--text-2); font-size: 13.5px; margin-top: 2px; }
+.event-time { color: var(--text-3); font-size: 12px; white-space: nowrap; }
+.alt-list.compact { margin-top: 8px; }
+.alt-list.compact .alt { padding: 8px; }
+.watch-list { display: flex; flex-direction: column; gap: 8px; }
+.watch-row { display: grid; grid-template-columns: 48px minmax(0, 1fr) 120px 130px 100px 32px; gap: 12px; align-items: center; padding: 8px; border-radius: var(--radius-sm); background: var(--bg-2); border: 1px solid var(--border); }
+.watch-row .thumb { width: 48px; height: 48px; }
+.watch-name a { font-weight: 600; }
+.watch-price { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.target-input { width: 100%; padding: 6px 8px; font-size: 13px; }
+.spark { width: 120px; height: 32px; }
+.spark path { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.search-row { padding: 10px 0; border-top: 1px solid var(--border); }
+.search-row:first-of-type { border-top: 0; }
+.watch-hint { margin-top: 12px; align-items: center; }
+.watch-hint .btn { margin-left: auto; flex: none; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (max-width: 900px) {
+  .watch-row { grid-template-columns: 48px minmax(0, 1fr) auto; }
+  .watch-row .spark, .watch-row .target-input { display: none; }
+}

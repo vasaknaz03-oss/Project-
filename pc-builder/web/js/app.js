@@ -6,14 +6,16 @@ import { initSearch, rerenderSearch, openSearchFor, renderTray } from './search.
 import { initSaved, rerenderSaved } from './saved.js';
 import { initSettings, rerenderSettings } from './settings.js';
 import { loadMarks } from './kufarui.js';
+import { initWatch, rerenderWatch } from './watch.js';
 
-const pages = ['build', 'search', 'saved', 'settings'];
+const pages = ['build', 'search', 'watch', 'saved', 'settings'];
 
 function go(page) {
   state.page = page;
   for (const p of pages) document.getElementById('page-' + p).hidden = p !== page;
   for (const b of document.querySelectorAll('.nav-item')) b.classList.toggle('active', b.dataset.page === page);
   if (page === 'saved') rerenderSaved();
+  if (page === 'watch') rerenderWatch();
   renderTray();
   document.getElementById('main').scrollTop = 0;
 }
@@ -91,12 +93,15 @@ async function main() {
   initBuild(document.getElementById('page-build'), lastForm);
   initSearch(document.getElementById('page-search'));
   initSaved(document.getElementById('page-saved'));
+  await initWatch(document.getElementById('page-watch'));
   initSettings(document.getElementById('page-settings'), async (force) => {
     await loadRates(force);
     rerenderBuild();
     rerenderSearch();
   });
-  go('build');
+  // Оболочка может открыть сразу нужную страницу (например, по клику на уведомление)
+  const startPage = new URLSearchParams(location.search).get('page');
+  go(startPage && pages.includes(startPage) ? startPage : 'build');
   // обновление курсов раз в 6 часов, если приложение долго открыто
   setInterval(() => loadRates(false), 6 * 60 * 60 * 1000);
   window.__ready = true;

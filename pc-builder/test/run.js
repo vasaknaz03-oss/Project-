@@ -241,6 +241,44 @@ test('чипсет из объявления → сокет (AMD и Intel с п�
   assert.strictEqual(kase2.specs.fans, null);
 });
 
+console.log('Слежение');
+test('слежение: снижение цены, цель и новые объявления Kufar', async () => {
+  const os = require('os');
+  const path = require('path');
+  const store = require('../server/store');
+  store.setDir(require('fs').mkdtempSync(path.join(os.tmpdir(), 'podbor-watch-')));
+  const onliner = require('../server/providers/onliner');
+  const kufar = require('../server/providers/kufar');
+  const orig = { product: onliner.product, search: kufar.search };
+  let price = 1000;
+  let ads = [{ id: '1', name: 'Видеокарта RTX 3060 12GB', price: 900, source: 'kufar' }];
+  onliner.product = async () => ({ price });
+  kufar.search = async () => ({ items: ads, total: ads.length });
+  try {
+    const W = require('../server/watch');
+    W.start({ kufarOpts: () => ({}) });
+    const got = [];
+    const off = W.onEvent((e) => got.push(e.type));
+    const item = W.addItem({ id: 'rtx3060', category: 'videocard', name: 'RTX 3060', price: 1000 });
+    W.setTarget(item.id, 950);
+    price = 940;
+    await W.check({ force: true });
+    assert.deepStrictEqual(got.sort(), ['price', 'target']);
+    await W.addSearch({ cat: 'videocard', q: 'rtx 3060' });
+    got.length = 0;
+    ads = [{ id: '2', name: 'RTX 3060 Palit', price: 850, source: 'kufar' }, ...ads];
+    await W.check({ force: true });
+    assert.deepStrictEqual(got, ['ads']);
+    const sum = W.summary();
+    assert.strictEqual(sum.items[0].lastPrice, 940);
+    assert.ok(sum.unread >= 3);
+    off();
+  } finally {
+    onliner.product = orig.product;
+    kufar.search = orig.search;
+  }
+});
+
 console.log('Сетап');
 test('класс монитора по мощности видеокарты', () => {
   const Setup = require('../server/setup');
