@@ -26,6 +26,7 @@ const TYPES = {
 const Catalog = require('../web/catalog');
 const kufarFilters = require('./providers/kufarFilters');
 const kufarCompat = require('./kufarCompat');
+const wb = require('./providers/wildberries');
 const PC_SCHEMAS = new Set(Object.keys(onliner.CATEGORIES));
 
 /** Раздел каталога по id (или категории Onliner — для подбора). */
@@ -162,9 +163,30 @@ async function route(req, res, url) {
     return send(res, 200, result);
   }
 
+  // Wildberries: цены за пределами Onliner (может быть недоступен — тогда только ссылка)
+  if (pathname === '/api/wb') {
+    const q = (p.get('q') || '').trim().slice(0, 200);
+    if (!q) throw new Error('Пустой запрос');
+    return send(res, 200, await wb.search(q));
+  }
+
   if (pathname === '/api/search') {
     const q = (p.get('q') || '').trim().slice(0, 200);
     const src = p.get('src') || 'onliner';
+    if (src === 'wb') {
+      const section = sectionOf(p.get('cat'));
+      const query = q || (section ? section.name : '');
+      if (!query) return send(res, 200, { items: [], total: 0, pages: 0 });
+      const r = await wb.search(query, { page: num(p.get('page')) || 1 });
+      let items = r.items;
+      const min = num(p.get('min'));
+      const max = num(p.get('max'));
+      if (min !== undefined) items = items.filter((it) => it.price >= min);
+      if (max !== undefined) items = items.filter((it) => it.price <= max);
+      if (p.get('sort') === 'price_asc') items.sort((a, b) => a.price - b.price);
+      if (p.get('sort') === 'price_desc') items.sort((a, b) => b.price - a.price);
+      return send(res, 200, { items, total: items.length, pages: r.blocked ? 0 : 5, blocked: r.blocked, url: r.url });
+    }
     if (src === 'kufar') {
       const section = sectionOf(p.get('cat'));
       const kq = kufarQuery(section, q, p);

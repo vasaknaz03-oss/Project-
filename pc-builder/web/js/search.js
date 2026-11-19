@@ -18,6 +18,7 @@ const fkey = () => S.src + '|' + S.cat;
 function hasFilters() {
   const sec = section();
   if (!sec) return false;
+  if (S.src === 'wb') return false;
   return S.src === 'onliner' ? !!sec.onliner : !!sec.kufar;
 }
 /** Раздел может быть только на одном из сайтов — переключаемся на доступный. */
@@ -135,7 +136,7 @@ function renderBar() {
   cat.value = S.cat;
 
   const sec = section();
-  const src = el('div.seg', [['onliner', 'Новые · Onliner'], ['kufar', 'Объявления · Kufar']].map(([v, l]) => el('button', {
+  const src = el('div.seg', [['onliner', 'Новые · Onliner'], ['kufar', 'Объявления · Kufar'], ['wb', 'Wildberries']].map(([v, l]) => el('button', {
     type: 'button', class: S.src === v ? 'on' : '',
     disabled: v === 'onliner' && sec && !sec.onliner,
     title: v === 'onliner' && sec && !sec.onliner ? 'На Onliner нет такого раздела' : '',
@@ -206,6 +207,7 @@ async function run(reset) {
     S.total = r.total;
     S.pages = r.pages;
     S.next = r.next || null;
+    S.blocked = r.blocked ? r.url : null;
   } catch (e) {
     S.error = e.message;
   } finally {
@@ -229,6 +231,12 @@ function renderResults() {
   }
   const out = [];
   if (S.error) out.push(el('div.notice.err', { style: { marginTop: '16px' } }, icon('error'), el('div', S.error)));
+  if (S.src === 'wb' && S.blocked && !S.loading) {
+    out.push(el('div.notice', { style: { marginTop: '16px' } }, icon('alert'), el('div',
+      'Wildberries не ответил на автоматический запрос (сайт защищён от роботов). ',
+      el('a', { href: S.blocked, target: '_blank', rel: 'noopener' }, 'Открыть этот поиск на Wildberries ↗'))));
+    return out;
+  }
   if (S.items.length) {
     out.push(el('div.dim.small', { style: { marginTop: '14px' } },
       S.src === 'kufar' ? `Найдено объявлений: ${S.total.toLocaleString('ru-RU')} · показано ${S.items.length}${S.next ? ' — ниже кнопка «Показать ещё»' : ''}` : S.cat ? `Товаров в разделе: ${S.total.toLocaleString('ru-RU')}` : 'Результаты каталога Onliner: компьютеры, периферия, мониторы и всё для сетапа'));
@@ -255,13 +263,14 @@ function card(it) {
   return el('div.pcard',
     thumb(it.image, CAT_ICON[it.category] || CAT_ICON[S.cat] || 'cpu'),
     el('div.pcard-top',
-      el('span.badge', { class: it.source }, isOnliner ? 'Onliner' : 'Kufar'),
-      isOnliner ? el('span.chip', it.categoryName) : el('span.chip', it.condition || 'объявление'),
+      el('span.badge', { class: it.source }, isOnliner ? 'Onliner' : it.source === 'wb' ? 'Wildberries' : 'Kufar'),
+      isOnliner ? el('span.chip', it.categoryName) : it.source === 'wb' ? (it.reviews ? el('span.chip', `★ ${it.rating} · ${it.reviews}`) : null) : el('span.chip', it.condition || 'объявление'),
       it.perf && it.perf.score ? el('span.chip.accent', `индекс ${it.perf.score}`) : null,
       it.perf && it.perf.gaming ? el('span.chip.accent', `игры ${it.perf.gaming}`) : null),
     el('div.pcard-name', el('a', { href: it.url, target: '_blank', rel: 'noopener' }, it.name)),
     isOnliner
       ? el('div.part-specs', specChips(it.category, it).slice(0, 4))
+      : it.source === 'wb' ? el('div.pcard-desc', 'Маркетплейс Wildberries, доставка в Беларусь')
       : el('div.pcard-desc', [it.location, it.date ? new Date(it.date).toLocaleDateString('ru-RU') : null, it.company ? 'магазин' : 'частное лицо', it.exchange ? 'возможен обмен' : null].filter(Boolean).join(' · ')),
     isOnliner && it.description ? el('div.pcard-desc', it.description) : null,
     el('div.pcard-foot',

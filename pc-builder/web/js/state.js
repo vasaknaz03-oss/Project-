@@ -51,6 +51,9 @@ export const DEFAULT_LINKS = [
   { name: 'DNS', url: 'https://www.dns-shop.by/search/?q={q}' },
   { name: '5 элемент', url: 'https://5element.by/search?q={q}' },
   { name: 'Shop.by', url: 'https://shop.by/find/?findtext={q}' },
+  { name: 'Wildberries', url: 'https://www.wildberries.by/catalog/0/search.aspx?search={q}' },
+  { name: 'Ozon', url: 'https://ozon.by/search/?text={q}' },
+  { name: 'AliExpress', url: 'https://aliexpress.ru/wholesale?SearchText={q}' },
   { name: 'Google', url: 'https://www.google.com/search?q={q}+купить+Беларусь' },
 ];
 
@@ -180,8 +183,8 @@ export function updateSavedCount() {
 /** Облегчённая копия товара для сохранения. */
 export function slim(it) {
   if (!it) return null;
-  const { id, source, category, name, price, url, pricesUrl, image, specs, perf, offers, noname, rating, reviews, description } = it;
-  return { id, source, category, name, price, url, pricesUrl, image, specs, perf, offers, noname, rating, reviews, description };
+  const { id, source, category, name, price, url, pricesUrl, image, specs, perf, offers, noname, rating, reviews, description, usedCount, usedMin, usedUrl, kufarNote } = it;
+  return { id, source, category, name, price, url, pricesUrl, image, specs, perf, offers, noname, rating, reviews, description, usedCount, usedMin, usedUrl, kufarNote };
 }
 
 export function buildText(title, parts, total, extra = '', setup = null) {

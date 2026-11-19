@@ -585,6 +585,7 @@ function renderPart(slot, v) {
         el('div.part-name', el('a', { href: it.url, target: '_blank', rel: 'noopener' }, it.name)),
         el('div.part-specs', note ? el('span.chip.ok', note) : null,
           it.source === 'kufar' ? el('span.badge.kufar', 'Kufar · объявление') : null,
+          it.usedCount && it.usedMin ? el('a.chip', { href: it.usedUrl, target: '_blank', rel: 'noopener', title: 'Б/у на барахолке Onliner' }, `б/у на Onliner от ${money.fmt(it.usedMin)}`) : null,
           it.kufarNote ? el('span.chip.warn', it.kufarNote) : null,
           specChips(slot.cat, it),
           slot.setup && it.reviews ? el('span.chip', `★ ${it.rating.toFixed(1)} · ${it.reviews} ${plural(it.reviews, 'отзыв', 'отзыва', 'отзывов')}`) : null)),
@@ -720,14 +721,44 @@ async function loadShops(panel, it) {
         el('td', o.rating ? `★ ${o.rating} (${o.reviews})` : '—'),
         el('td', o.warranty ? `${o.warranty} мес.` : '—'),
         el('td.num', el('b', money.fmt(o.price)))))));
+    const other = el('div', { style: { marginTop: '14px' } }, el('div.panel-title', 'Другие площадки'), el('div.muted.small', 'Ищем на Wildberries…'));
+    loadOtherSites(other, it);
     panel.replaceChildren(
-      el('div.panel-title', offers.length ? `${offers.length} ${plural(offers.length, 'предложение', 'предложения', 'предложений')} на Onliner` : 'Сейчас нет предложений'),
+      el('div.panel-title', offers.length ? `${offers.length} ${plural(offers.length, 'предложение', 'предложения', 'предложений')} на Onliner (21vek, 5 элемент и сотни других магазинов)` : 'Сейчас нет предложений'),
       offers.length ? table : el('div.muted', 'Товар закончился в магазинах.'),
+      it.usedCount ? el('div.ext-links', el('span.dim', 'Б/у на барахолке Onliner:'), el('a', { href: it.usedUrl, target: '_blank', rel: 'noopener' }, `${it.usedCount} ${plural(it.usedCount, 'объявление', 'объявления', 'объявлений')}${it.usedMin ? ` от ${money.fmt(it.usedMin)}` : ''} ↗`)) : null,
+      other,
       el('div.ext-links', el('span.dim', 'Все цены:'), el('a', { href: it.pricesUrl || it.url, target: '_blank', rel: 'noopener' }, 'Onliner'),
         el('span.dim', { style: { marginLeft: '8px' } }, 'Искать в других магазинах:'),
         shopLinks().map((l) => el('a', { href: linkFor(l.url, searchName(it)), target: '_blank', rel: 'noopener' }, l.name))));
   } catch (e) {
     panel.replaceChildren(el('div.notice.err', icon('error'), el('div', e.message)));
+  }
+}
+
+/** Та же модель на Wildberries: оставляем объявления, где есть все «модельные» слова. */
+async function loadOtherSites(box, it) {
+  const q = searchName(it);
+  try {
+    const r = await api('/api/wb?q=' + encodeURIComponent(q));
+    const tokens = q.toLowerCase().split(/[\s,()]+/).filter((w) => w.length >= 3 && /\d/.test(w));
+    const same = r.items.filter((x) => tokens.every((t) => x.name.toLowerCase().replace(/\s+/g, ' ').includes(t))).sort((a, b) => a.price - b.price);
+    if (r.blocked) {
+      box.replaceChildren(el('div.panel-title', 'Другие площадки'),
+        el('div.muted.small', 'Wildberries не ответил на автоматический запрос — откройте поиск на сайте: '),
+        el('div.ext-links', el('a', { href: r.url, target: '_blank', rel: 'noopener' }, 'Wildberries ↗'),
+          el('a', { href: linkFor('https://ozon.by/search/?text={q}', q), target: '_blank', rel: 'noopener' }, 'Ozon ↗'),
+          el('a', { href: linkFor('https://aliexpress.ru/wholesale?SearchText={q}', q), target: '_blank', rel: 'noopener' }, 'AliExpress ↗')));
+      return;
+    }
+    box.replaceChildren(el('div.panel-title', `Wildberries: ${same.length ? `${same.length} ${plural(same.length, 'предложение', 'предложения', 'предложений')} этой модели` : 'этой модели не нашлось'}`,
+      el('a.link-btn', { href: r.url, target: '_blank', rel: 'noopener', style: { marginLeft: '10px' } }, 'поиск на Wildberries ↗')),
+    same.length ? el('table.tbl', el('tbody', same.slice(0, 5).map((x) => el('tr',
+      el('td', el('a', { href: x.url, target: '_blank', rel: 'noopener' }, x.name)),
+      el('td', x.reviews ? `★ ${x.rating} (${x.reviews})` : '—'),
+      el('td.num', el('b', money.fmt(x.price)), x.price < it.price ? el('span.diff.down', ` −${Math.round((1 - x.price / it.price) * 100)}%`) : null))))) : null);
+  } catch (e) {
+    box.replaceChildren(el('div.panel-title', 'Другие площадки'), el('div.muted.small', e.message));
   }
 }
 

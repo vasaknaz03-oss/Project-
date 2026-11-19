@@ -498,3 +498,8 @@ html.mac-os .select { padding-right: 32px; }
 .pins-block .label { display: flex; align-items: center; gap: 6px; }
 .pins-block .label [data-icon] { width: 15px; height: 15px; }
 .part-actions .btn.on [data-icon="pin"] { color: var(--accent); }
+
+.badge.wb { background: rgba(203, 17, 171, 0.16); color: #e879f9; }
+[data-theme="light"] .badge.wb { color: #a21caf; }
+a.chip { text-decoration: none; }
+a.chip:hover { border-color: var(--accent); color: var(--text); }
