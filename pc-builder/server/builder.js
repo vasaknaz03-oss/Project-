@@ -15,8 +15,8 @@ const ALL_SOCKETS = ['am4', 'am5', 'lga1700', 'lga1851', 'lga1200'];
 const MODERN_SOCKETS = ['am5', 'lga1700', 'lga1851'];
 const SOCKET_NAME = { am4: 'AM4', am5: 'AM5', lga1700: 'LGA1700', lga1851: 'LGA1851', lga1200: 'LGA1200' };
 const SOCKET_MEM = { AM4: ['DDR4'], AM5: ['DDR5'], LGA1700: ['DDR4', 'DDR5'], LGA1851: ['DDR5'], LGA1200: ['DDR4'] };
-// Монтаж кулера: LGA1851 использует крепление LGA1700
-const COOLER_FAMILY = { AM4: 'am4', AM5: 'am5', LGA1700: 'lga1700', LGA1851: 'lga1700', LGA1200: 'lga1200' };
+// Монтаж кулера: LGA1851 использует крепление LGA1700, старые LGA115x — то же, что LGA1200
+const COOLER_FAMILY = { AM4: 'am4', AM5: 'am5', LGA1700: 'lga1700', LGA1851: 'lga1700', LGA1200: 'lga1200', LGA1151: 'lga1200', LGA1150: 'lga1200', LGA1155: 'lga1200' };
 
 const ENTRY_CHIPSETS = /^(A320|A520|A620A?|B840|H610|H510|H410)$/;
 const OLD_AM4_CHIPSETS = /^(A320|B350|X370)$/;
@@ -251,11 +251,21 @@ async function gather(opts, B) {
 
 // ------------------------------------------------------------------ подготовка пулов
 
+// LGA1151 бывает двух несовместимых версий: платы 100/200-й серии — Core 6–7 поколения, 300-й — Core 8–9
+function lga1151Mismatch(cpuName, chipset) {
+  const gen = Number((String(cpuName).match(/i[3579][- ]?([6-9])\d{3}/i) || [])[1]);
+  if (!gen || !chipset) return false;
+  const v2Board = /^[BHZQ]3\d\d/.test(chipset);
+  const v1Board = /^[BHZQ][12]\d\d/.test(chipset);
+  return (v2Board && gen < 8) || (v1Board && gen >= 8);
+}
+
 function boardSuitable(cpu, mb) {
   const cs = cpu.specs;
   const ms = mb.specs;
   if (!ms.socket || ms.socket !== cs.socket) return false;
   if (!ms.mem || !(cs.mem || []).includes(ms.mem)) return false;
+  if (ms.socket === 'LGA1151' && lga1151Mismatch(cpu.name, ms.chipset)) return false;
   if (ms.socket === 'AM4' && OLD_AM4_CHIPSETS.test(ms.chipset || '') && /\b5\d{3}/.test(cpu.name)) return false;
   // A520 не поддерживает Ryzen 1000/2000 и Athlon 200GE/220GE/240GE
   if (ms.socket === 'AM4' && /^A520$/.test(ms.chipset || '') && /ryzen\s*\d\s*(pro\s*)?[12]\d{3}|athlon\s*(pro\s*)?2[024]0ge/i.test(cpu.name)) return false;
@@ -438,7 +448,7 @@ function makePickers(pools, opts, B) {
     const key = need.rec;
     if (psuMemo.has(key)) return psuMemo.get(key);
     let list = pools.psuAll;
-    if (B > 2500 && !pools.psuUserBrand) {
+    if (B > 1500 && !pools.psuUserBrand) {
       const good = list.filter((p) => GOOD_PSU.test(p.name));
       if (good.some((p) => p.specs.watts >= need.rec)) list = good;
     }
@@ -596,6 +606,65 @@ function optimize(pools, opts, budget) {
 }
 
 /** Минимально возможная стоимость сборки (для подсказки, если бюджета не хватает). */
+/** Есть ли у процессора встроенная графика — по названию (для объявлений Kufar). */
+function igpuByName(name) {
+  if (/ryzen/i.test(name)) return /\d{4}g/i.test(name) || /\b[789]\d{3}(?!f)\b/i.test(name);
+  return !/\d{3,5}[a-z]*f\b/i.test(name);
+}
+
+/**
+ * Закреплена плата или процессор под сокет, которого уже нет в новых товарах (LGA1151 и т. п.):
+ * вторую деталь пары подбираем из объявлений Kufar.
+ */
+async function kufarForPinnedSocket(pools, warnings) {
+  const pins = pools.pins || {};
+  const KC = require('./kufarCompat');
+  const mb = pins.motherboard;
+  const cpu = pins.cpu;
+  if (mb && !cpu && mb.specs && mb.specs.socket && !pools.cpus.some((c) => boardSuitable(c, mb))) {
+    const sock = mb.specs.socket;
+    if (!/^DDR[45]$/.test(mb.specs.mem || '')) {
+      warnings.push(`Плата под ${sock} с памятью ${mb.specs.mem || '?'}: такие сборки программа не подбирает автоматически — процессор и память для неё ищите в «Поиске» на Kufar.`);
+      return;
+    }
+    let found = [];
+    try {
+      // Все объявления с процессорами под сокет (до 4 страниц), дешёвые Celeron отсекает порог цены
+      const r = await KC.compatible('cpu', { specs: { socket: sock }, price: 300 }, {}, { limit: 200, pages: 4 });
+      found = r.items.map((it) => {
+        const specs = { socket: sock, mem: [mb.specs.mem], tdp: 95, hasIgpu: igpuByName(it.name), withCooler: false };
+        const p = perf.cpuPerf(it.name, specs);
+        if (!p || !p.gaming || SERVER_CPU.test(it.name)) return null;
+        return { ...it, category: 'cpu', slot: 'cpu', specs, perf: { ...p, name: it.name }, fromKufar: true, offers: 0, kufarNote: 'процессор с Kufar под закреплённую плату' };
+      }).filter(Boolean);
+    } catch {}
+    if (found.length) {
+      pools.cpus = pools.cpus.concat(cheapestBy(found, (x) => x.perf.key));
+      warnings.push(`Новых процессоров под ${sock} в продаже нет — к закреплённой плате подобраны объявления Kufar. Проверьте состояние и продавца.`);
+    } else {
+      warnings.push(`Под сокет ${sock} не нашлось процессоров ни в магазинах, ни на Kufar. Закрепите процессор вручную через «Поиск» → Kufar.`);
+    }
+  }
+  if (cpu && !mb && cpu.specs && cpu.specs.socket && !pools.boardAll.some((m) => boardSuitable(cpu, m))) {
+    const sock = cpu.specs.socket;
+    let found = [];
+    try {
+      const mem = (cpu.specs.mem || []).find((m) => /^DDR[45]$/.test(m));
+      const r = await KC.compatible('motherboard', { specs: { socket: sock, mem }, price: 300 }, {}, { limit: 60, pages: 2 });
+      found = (await Promise.all(r.items.slice(0, 30).map((it) => KC.enrich('motherboard', it).catch(() => null))))
+        // Только объявления с понятной моделью (чипсет распознан) и подходящие к процессору
+        .filter((m) => m && m.specs.socket === sock && m.specs.chipset && /^DDR[45]$/.test(m.specs.mem || '') && boardSuitable(cpu, m))
+        .map((m) => ({ ...m, slot: 'motherboard', kufarNote: [m.kufarNote, 'плата с Kufar под закреплённый процессор'].filter(Boolean).join('; ') }));
+    } catch {}
+    if (found.length) {
+      pools.boardAll = pools.boardAll.concat(found);
+      warnings.push(`Новых плат под ${sock} в продаже нет — к закреплённому процессору подобраны объявления Kufar. Проверьте состояние и продавца.`);
+    } else {
+      warnings.push(`Под сокет ${sock} не нашлось плат ни в магазинах, ни на Kufar. Закрепите плату вручную через «Поиск» → Kufar.`);
+    }
+  }
+}
+
 function minimalCost(pools, opts) {
   const o = { ...opts, purpose: 'office', ram: 'auto' };
   const p = { ...pools, prof: PROFILES.office };
@@ -729,6 +798,7 @@ async function build(opts) {
   ]);
   warnings.push(...setupWarnings);
   const pools = preparePools(raw, opts, budget * 1.15, F);
+  await kufarForPinnedSocket(pools, warnings);
   if (!pools.cpus.length) {
     // Различаем «фильтры ничего не оставили» и «нет связи с Onliner»
     if (filters.countActive(F.cpu) || opts.cpuBrand === 'amd' || opts.cpuBrand === 'intel' || opts.platform === 'modern') {

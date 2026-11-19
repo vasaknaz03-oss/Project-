@@ -66,7 +66,7 @@ function webUrl(params, query) {
  * Совместимые предложения Kufar для слота. part — текущая деталь, ctx — {socket, mem, need, gpuScore}.
  * Возвращает { items, total, url, criteria }.
  */
-async function compatible(slot, part, ctx = {}) {
+async function compatible(slot, part, ctx = {}, { limit = 40, pages = 2 } = {}) {
   if (!TYPE[slot]) return { items: [], total: 0, url: null, criteria: '' };
   const params = { cct: TYPE[slot] };
   let query;
@@ -75,8 +75,11 @@ async function compatible(slot, part, ctx = {}) {
 
   if (slot === 'cpu' || slot === 'motherboard') {
     const socket = s.socket || ctx.socket;
-    const id = await valueId(slot, 'ccsct', socket);
-    if (id) params.ccsct = id;
+    // LGA1151 на Kufar разделён на «LGA1151» и «LGA1151 v2» — берём оба, совместимость проверит подбор
+    const id = socket === 'LGA1151'
+      ? (await valuesOf(slot, 'ccsct')).filter((v) => norm(v.name).startsWith('LGA1151')).map((v) => v.id).join(',')
+      : await valueId(slot, 'ccsct', socket);
+    if (id) params.ccsct = id.includes(',') ? 'v.or:' + id : id;
     else if (socket) query = socket;
     if (socket) crit.push('сокет ' + socket);
     if (slot === 'motherboard') {
@@ -118,7 +121,7 @@ async function compatible(slot, part, ctx = {}) {
   const all = [];
   let total = 0;
   let cursor;
-  for (let page = 0; page < 2; page++) {
+  for (let page = 0; page < pages; page++) {
     const r = await kufar.search({ cat: 16010, params, query, size: 50, cursor });
     total = r.total;
     all.push(...r.items);
@@ -140,7 +143,7 @@ async function compatible(slot, part, ctx = {}) {
     if (part && part.perf && it.perf && part.perf.key && it.perf.key === part.perf.key) it.sameModel = true;
   }
   items.sort((a, b) => a.price - b.price);
-  return { items: items.slice(0, 40), total, url: webUrl(params, query), criteria: crit.join(', ') };
+  return { items: items.slice(0, limit), total, url: webUrl(params, query), criteria: crit.join(', ') };
 }
 
 // ---------------------------------------------------------------- объявление → деталь сборки
