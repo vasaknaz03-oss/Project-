@@ -69,6 +69,7 @@ export function ago(date) {
 export function adChips(u) {
   const out = [];
   const chip = (text, cls, title) => out.push(el('span.chip', { class: cls || '', title: title || '' }, text));
+  if (u.best) out.push(el('span.chip.best', { title: 'Одно из самых выгодных среди найденных: мощность или объём за рубль, цена относительно рынка, понятный производитель, безопасная сделка' }, icon('star'), 'лучшее предложение'));
   if (u.date) chip(ago(u.date), '', 'Когда размещено (или поднято) объявление');
   chip(u.company ? 'компания' : 'частное лицо', u.company ? 'accent' : '', u.seller ? `Продавец: ${u.seller}` : '');
   if (u.delivery) chip('Куфар Доставка', 'ok', 'Можно заказать доставку через Kufar');

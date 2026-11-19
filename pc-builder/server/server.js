@@ -518,6 +518,7 @@ async function route(req, res, url) {
             condition: p.get('cond') || '', size: 50, cursor: (p.get('cursor') || '').slice(0, 400) || undefined,
           });
           await market.annotate(kr.items, sec.id);
+          if (p.get('sort') === 'value') kr.items = market.rankByValue(kr.items, sec.id);
           r = { items: kr.items, total: kr.total, pages: 1, next: kr.next };
         }
         return send(res, 200, { ...r, smart: { section: smart.section, chips: smart.chips, filters: src === 'onliner' ? smart.filters : {}, rest: smart.rest } });
@@ -546,6 +547,7 @@ async function route(req, res, url) {
         condition: p.get('cond') || '', size: 50, cursor: (p.get('cursor') || '').slice(0, 400) || undefined,
       });
       if (section) await market.annotate(r.items, section.id);
+      if (p.get('sort') === 'value') r.items = market.rankByValue(r.items, section ? section.id : '');
       return send(res, 200, { items: r.items, total: r.total, pages: 1, next: r.next });
     }
     return send(res, 200, await searchOnliner(q, p));
@@ -590,6 +592,13 @@ async function route(req, res, url) {
     return send(res, 200, { total: r.total, min: r.items.length ? r.items[0].price : null });
   }
 
+  // Отзывы покупателей Onliner
+  if (pathname === '/api/reviews') {
+    const key = p.get('key');
+    if (!key || !/^[\w.-]+$/.test(key)) throw new Error('Не указан товар');
+    return send(res, 200, await onliner.reviews(key, 12));
+  }
+
   // История цены товара Onliner
   if (pathname === '/api/history') {
     const key = p.get('key');
@@ -632,6 +641,8 @@ async function route(req, res, url) {
     if (!kufarCompat.TYPE[body.slot]) throw new Error('Неизвестный слот');
     const r = await kufarCompat.compatible(body.slot, body.part || null, body.ctx || {});
     await market.annotate(r.items, body.slot);
+    // Сначала выгодные: мощность за рубль, цена к рынку, бренд, безопасная сделка — а не просто самые дешёвые
+    r.items = market.rankByValue(r.items, body.slot);
     return send(res, 200, r);
   }
 

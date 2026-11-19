@@ -141,4 +141,52 @@ function annotateSame(items) {
   return s;
 }
 
-module.exports = { annotate, annotateSame, stats, verdict, index, KIND_OF, ramKey, ssdKey };
+const KNOWN_BRAND = /asus|msi|gigabyte|aorus|palit|gainward|zotac|sapphire|powercolor|asrock|xfx|inno3d|pny|evga|kingston|corsair|g\.?skill|crucial|samsung|adata|xpg|patriot|team|western digital|\bwd\b|seagate|be quiet|seasonic|deepcool|thermalright|noctua|arctic|lian li|nzxt|fractal|cooler master|chieftec|amd|intel|ryzen|core i\d|geforce|radeon/i;
+
+/**
+ * Насколько объявление выгодное: { tier, v }. tier 2 — модель понятна, 1 — модель не распознана,
+ * 0 — «куплю», нерабочее, подозрительно дёшево (вниз списка). v — польза за рубль внутри уровня:
+ * мощность (со степенью, чтобы древние дешёвые карты не обгоняли нормальные), объём памяти/SSD,
+ * цена относительно рынка, понятный бренд, безопасная сделка.
+ */
+function valueScore(it, kind) {
+  if (!it.price) return { tier: 0, v: 0 };
+  kind = KIND_OF[kind] || kind;
+  if (!it.perf && kind === 'gpu') {
+    const key = perf.gpuKey(it.name) || perf.gpuKey(pv(it, 'ccvc'));
+    const p = key && perf.gpuPerf(key, parseFloat(pv(it, 'cdr')) || 0);
+    if (p) it.perf = { key, ...p };
+  }
+  if (!it.perf && kind === 'cpu' && perf.cpuKey(it.name)) it.perf = perf.cpuPerf(it.name, {});
+  let base = null;
+  if (kind === 'gpu' && it.perf && it.perf.score) base = Math.pow(it.perf.score, 1.4) / it.price;
+  else if (kind === 'cpu' && it.perf && it.perf.gaming) base = Math.pow(it.perf.gaming, 1.8) / it.price;
+  else if (kind === 'ram' && ramKey(it)) base = Math.pow(Number(ramKey(it).split('-')[1]), 1.15) / it.price;
+  else if (kind === 'ssd' && ssdKey(it)) {
+    const [t, gb] = ssdKey(it).split('-');
+    base = Number(gb) * (t === 'nvme' ? 1.15 : 1) / it.price;
+  }
+  const m = it.market;
+  const bad = (m && m.deal === 'suspicious')
+    || ((kind === 'gpu' || kind === 'cpu') && kufar.isJunk(it.name))
+    || /куплю|нерабоч|не\s*рабоч|запчаст|под\s*ремонт|неисправ/i.test(it.name || '');
+  let f = 1;
+  if (m && typeof m.pct === 'number') f *= Math.max(0.7, Math.min(1.4, 1 - m.pct / 100));
+  if (KNOWN_BRAND.test(it.name || '')) f *= 1.08;
+  if (it.safedeal) f *= 1.04;
+  if (it.delivery) f *= 1.02;
+  const tier = bad ? 0 : base === null && KIND_OF[kind] ? 1 : 2;
+  return { tier, v: (base === null ? 1 / it.price : base) * f };
+}
+
+/** Сортировка объявлений «сначала выгодные»; лучшим трём ставится отметка best. */
+function rankByValue(items, kind) {
+  const scored = items.map((it) => ({ it, s: valueScore(it, kind) }));
+  scored.sort((a, b) => b.s.tier - a.s.tier || b.s.v - a.s.v);
+  scored.forEach((x, i) => {
+    if (i < 3 && x.s.tier === 2) x.it.best = true;
+  });
+  return scored.map((x) => x.it);
+}
+
+module.exports = { annotate, annotateSame, stats, verdict, index, KIND_OF, ramKey, ssdKey, valueScore, rankByValue };

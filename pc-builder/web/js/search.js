@@ -143,7 +143,13 @@ function renderBar() {
     type: 'button', class: S.src === v ? 'on' : '',
     disabled: v === 'onliner' && sec && !sec.onliner,
     title: v === 'onliner' && sec && !sec.onliner ? 'На Onliner нет такого раздела' : '',
-    onclick: () => { S.src = v; run(true); },
+    onclick: () => {
+      S.src = v;
+      // На Kufar по умолчанию — выгодные объявления, а не просто свежие или самые дешёвые
+      if (v === 'kufar' && (S.sort === '' || S.sort === 'rating')) S.sort = 'value';
+      if (v !== 'kufar' && S.sort === 'value') S.sort = 'rating';
+      run(true);
+    },
   }, l)));
 
   const cond = el('select.select', { onchange: (e) => { S.cond = e.target.value; run(true); } },
@@ -151,10 +157,11 @@ function renderBar() {
   cond.value = S.cond;
 
   // У Kufar нет сортировки «популярные» — сбрасываем на «новые»
-  if (S.src === 'kufar' && S.sort === 'rating') S.sort = '';
+  if (S.src === 'kufar' && S.sort === 'rating') S.sort = 'value';
+  if (S.src !== 'kufar' && S.sort === 'value') S.sort = 'rating';
   const sort = el('select.select', { onchange: (e) => { S.sort = e.target.value; run(true); } },
     (S.src === 'kufar'
-      ? [['', 'Сначала новые объявления'], ['price_asc', 'Сначала дешёвые'], ['price_desc', 'Сначала дорогие']]
+      ? [['value', 'Сначала выгодные'], ['', 'Сначала новые объявления'], ['price_asc', 'Сначала дешёвые'], ['price_desc', 'Сначала дорогие']]
       : [['', 'По релевантности'], ['rating', 'Популярные'], ['price_asc', 'Сначала дешёвые'], ['price_desc', 'Сначала дорогие']]
     ).map(([v, l]) => el('option', { value: v }, l)));
   sort.value = S.sort;
@@ -272,7 +279,7 @@ function renderResults() {
       el('div.section-picker', Catalog.GROUPS.map((g) => el('div.section-group',
         el('div.label', g.name),
         el('div.row.wrap', Catalog.SECTIONS.filter((x) => x.group === g.id).map((x) => el('button.btn.btn-sm', {
-          onclick: () => { S.cat = x.id; S.sort = x.onliner ? 'rating' : ''; run(true); },
+          onclick: () => { S.cat = x.id; S.sort = x.onliner ? 'rating' : 'value'; run(true); },
         }, icon(x.icon || 'cpu'), x.name)))))));
   }
   const out = [];

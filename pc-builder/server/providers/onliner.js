@@ -131,6 +131,23 @@ async function priceHistory(key, period = '6m') {
   };
 }
 
+/** Отзывы покупателей Onliner: оценка, плюсы, минусы, текст. */
+async function reviews(key, limit = 10) {
+  const data = await getJSON(`${API}/products/${encodeURIComponent(key)}/reviews?order=created_at:desc`, { ttl: 6 * 60 * 60 * 1000 });
+  const clean = (t) => String(t || '').replace(/\s+/g, ' ').trim();
+  const items = (data.reviews || []).slice(0, limit).map((r) => ({
+    rating: r.rating || null,
+    summary: clean(r.summary),
+    pros: clean(r.pros) === '-' ? '' : clean(r.pros),
+    cons: clean(r.cons) === '-' ? '' : clean(r.cons),
+    text: clean(r.text).slice(0, 600),
+    author: (r.author && r.author.name) || '',
+    date: r.created_at || null,
+  }));
+  // Оценка у Onliner хранится по шкале 0–50
+  return { total: data.total || items.length, rating: typeof data.rating === 'number' ? data.rating / 10 : null, stars: (data.counters && data.counters.rating) || null, items };
+}
+
 /** Предложения всех магазинов для товара (сравнение цен). */
 async function offers(productKey) {
   const url = `${SHOP_API}/products/${encodeURIComponent(productKey)}/positions`;
@@ -160,4 +177,4 @@ async function offers(productKey) {
   return list;
 }
 
-module.exports = { CATEGORIES, category, categoryPage, search, offers, product, priceHistory, normalize, enrich };
+module.exports = { CATEGORIES, category, categoryPage, search, offers, product, priceHistory, reviews, normalize, enrich };
