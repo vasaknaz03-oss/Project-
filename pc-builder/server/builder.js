@@ -135,17 +135,26 @@ async function gather(opts, B) {
   const fetchCat = makeFetcher(F, warnings);
   const sockets = opts.platform === 'modern' ? MODERN_SOCKETS : ALL_SOCKETS;
   const cpuMfr = opts.cpuBrand === 'amd' ? ['amd'] : opts.cpuBrand === 'intel' ? ['intel'] : undefined;
-  const useSockets = sockets.filter((s) => {
+  let useSockets = sockets.filter((s) => {
     if (opts.cpuBrand === 'amd') return s.startsWith('am');
     if (opts.cpuBrand === 'intel') return s.startsWith('lga');
     return true;
   });
+  // Закреплённый процессор или плата важнее настроек: грузим всё под их сокет
+  const pinned = opts.pins || {};
+  const pinSockets = [pinned.cpu, pinned.motherboard].map((p) => p && p.specs && p.specs.socket).filter(Boolean);
+  const pinIds = [...new Set(pinSockets.map((ps) => Object.keys(SOCKET_NAME).find((k) => SOCKET_NAME[k] === ps)).filter(Boolean))];
+  let cpuMfrUse = cpuMfr;
+  if (pinIds.length) {
+    useSockets = pinIds;
+    cpuMfrUse = undefined;
+  }
   const memNeeded = new Set(useSockets.flatMap((s) => SOCKET_MEM[SOCKET_NAME[s]]));
 
   const jobs = {};
   // Узкие ценовые диапазоны: дешёвые модели не вытесняют дорогие из выдачи
   const cpuEdges = [0, 250, 400, 600, 850, 1200, 1700, 2500, 4000].filter((e) => e < B * 0.5).concat(Math.round(B * 0.5));
-  jobs.cpus = banded(fetchCat, 'cpu', { order: 'price:asc', socket_cpu: useSockets, mfr: cpuMfr }, cpuEdges, 3, 'процессоры');
+  jobs.cpus = banded(fetchCat, 'cpu', { order: 'price:asc', socket_cpu: useSockets, mfr: cpuMfrUse }, cpuEdges, 3, 'процессоры');
 
   if (!have.gpu) {
     const gpuChip = { nvidia: ['nvidia'], amd: ['ati'], intel: ['intel'] }[opts.gpuBrand];
@@ -226,7 +235,8 @@ async function gather(opts, B) {
       if (t.length) coolTypes = t;
       delete F.fan.type_fan;
     }
-    const fams = [...new Set(useSockets.map((s) => COOLER_FAMILY[SOCKET_NAME[s]]))];
+    // Кулеры под сокеты подбора и под сокет закреплённой детали (в том числе старый, например LGA1151)
+    const fams = [...new Set(useSockets.map((s) => COOLER_FAMILY[SOCKET_NAME[s]]).concat(pinSockets.map((ps) => COOLER_FAMILY[ps])).filter(Boolean))];
     jobs.coolers = Promise.all(fams.map((f) => fetchCat('fan', {
       order: 'price:asc', type_fan: coolTypes, fan_socket: [f], power_cooling: { from: 110 }, price: { to: coolTypes.includes('syslcp') ? 900 : 450 },
     }, 3, 'кулеры').then((items) => items.map((it) => ({ ...it, family: f }))))).then((a) => a.flat());
@@ -860,6 +870,11 @@ async function build(opts) {
   let minSetup = null;
   if (!opt.build) {
     minNeeded = minimalCost(pools, opts);
+    if (!minNeeded && !warnings.length) {
+      warnings.push(Object.keys(pools.pins || {}).length
+        ? 'С закреплёнными деталями совместимую сборку собрать не получилось: открепите часть деталей или ослабьте фильтры.'
+        : 'Под выбранные фильтры и настройки совместимую сборку собрать не получилось: ослабьте фильтры.');
+    }
     // С сетапом — плюс самая доступная периферия
     if (minNeeded && setupIds.length) {
       minSetup = Math.round(Setup.choose(setupIds, setupPools, 0, opts.purpose, 0).total);
