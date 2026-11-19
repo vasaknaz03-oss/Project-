@@ -18,7 +18,18 @@ export function rerenderSettings() {
 function render() {
   root.replaceChildren(
     el('div.page-head', el('div', el('h1', 'Настройки'), el('p', 'Валюта, курсы, ссылки на магазины и данные приложения.'))),
-    el('div.set-grid', currencyCard(), ratesCard(), powerCard(), linksCard(), aboutCard()));
+    el('div.set-grid', currencyCard(), pickCard(), ratesCard(), powerCard(), linksCard(), aboutCard()));
+}
+
+/** Общие предпочтения подбора. */
+function pickCard() {
+  return el('div.card',
+    el('h3', 'Подбор'),
+    el('label.check', el('input', {
+      type: 'checkbox', checked: !!state.settings.trustedOnly,
+      onchange: async (e) => { await saveSettings({ trustedOnly: e.target.checked }); toast(e.target.checked ? 'Подбор берёт только известные бренды' : 'Китайские и малоизвестные бренды снова участвуют в подборе'); },
+    }), 'Только известные бренды'),
+    el('p.dim.small', 'Исключить малоизвестные (часто китайские) видеокарты, платы, память и SSD. Без галочки они участвуют в подборе, но известный бренд выигрывает при близкой цене.'));
 }
 
 /** Тариф и часы использования — для расчёта счёта за электроэнергию в сборке. */

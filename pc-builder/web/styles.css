@@ -686,3 +686,14 @@ a.chip:hover { border-color: var(--accent); color: var(--text); }
 .smart-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; padding: 10px 14px; border-radius: var(--radius-sm); background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); animation: fadeUp .25s ease-out both; }
 .smart-line [data-icon] svg { width: 16px; height: 16px; color: var(--accent); }
 .smart-line .link-btn { margin-left: auto; }
+.have-field { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+
+/* ---------- режимы: подбор / своя сборка ---------- */
+.mode-tabs { display: inline-flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--bg-2); border: 1px solid var(--border); margin-bottom: 16px; }
+.mode-tab { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; border: 0; background: transparent; color: var(--text-2); font-weight: 650; cursor: pointer; transition: background .2s, color .2s; }
+.mode-tab svg { width: 16px; height: 16px; }
+.mode-tab.on { background: var(--accent); color: #fff; box-shadow: 0 4px 14px var(--accent-soft); }
+.links-input { width: 100%; min-height: 120px; resize: vertical; font-family: inherit; line-height: 1.5; margin-top: 8px; }
+.links-status { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.compact-list { margin: 6px 0; padding-left: 18px; }
+.custom-slot .part-side { align-items: center; }

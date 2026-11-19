@@ -184,8 +184,8 @@ export function updateSavedCount() {
 /** Облегчённая копия товара для сохранения. */
 export function slim(it) {
   if (!it) return null;
-  const { id, source, category, name, price, url, pricesUrl, image, specs, perf, offers, noname, rating, reviews, description, usedCount, usedMin, usedUrl, kufarNote } = it;
-  return { id, source, category, name, price, url, pricesUrl, image, specs, perf, offers, noname, rating, reviews, description, usedCount, usedMin, usedUrl, kufarNote };
+  const { id, source, category, name, price, url, pricesUrl, image, specs, perf, offers, noname, rating, reviews, description, usedCount, usedMin, usedUrl, kufarNote, shopUrl, keep, fromKufar } = it;
+  return { id, source, category, name, price, url, pricesUrl, image, specs, perf, offers, noname, rating, reviews, description, usedCount, usedMin, usedUrl, kufarNote, shopUrl, keep, fromKufar };
 }
 
 export function buildText(title, parts, total, extra = '', setup = null) {

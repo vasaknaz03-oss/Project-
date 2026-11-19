@@ -108,7 +108,13 @@ export function initBuild(container, savedForm) {
     };
   }
   if (state.settings.currency && !savedForm) form.currency = state.settings.currency;
+  // «Тонких настроек» больше нет: старые сохранённые значения не должны тайком ограничивать подбор.
+  // Их задают только стили сборки (видно по выбранному стилю) и фильтры.
+  Object.assign(form, { cpuBrand: 'any', gpuBrand: 'any', platform: 'any', ram: 'auto', storage: 'auto', hdd: 0, form: 'any', wifi: false, quiet: false });
+  const st = STYLES.find((x) => x.id === (form.style || ''));
+  if (st && st.set) Object.assign(form, st.set);
   money.currency = form.currency;
+  if (form.mode === 'custom') openCustomBuild();
   render();
 }
 
@@ -132,6 +138,90 @@ function niceRound(v) {
   if (v >= 1000) return Math.round(v / 100) * 100;
   if (v >= 100) return Math.round(v / 50) * 50;
   return Math.round(v);
+}
+
+/** Переключатель режимов: подбор по бюджету или своя сборка. */
+function modeTabs() {
+  return el('div.mode-tabs',
+    el('button.mode-tab', { type: 'button', class: form.mode !== 'custom' ? 'on' : '', onclick: () => setMode('budget') }, icon('wand'), 'Подбор по бюджету'),
+    el('button.mode-tab', { type: 'button', class: form.mode === 'custom' ? 'on' : '', onclick: () => setMode('custom') }, icon('plus'), 'Собрать самому — по ссылкам'));
+}
+
+function setMode(mode) {
+  form.mode = mode;
+  persistForm();
+  if (mode === 'custom') openCustomBuild();
+  else if (state.result && state.result.custom) state.result = null;
+  render();
+}
+
+/** Своя сборка как обычный «результат» с одним вариантом — работают все панели деталей. */
+function openCustomBuild() {
+  const parts = {};
+  for (const sl of SLOTS) if (form.customParts && form.customParts[sl.key]) parts[sl.key] = form.customParts[sl.key];
+  state.result = {
+    custom: true, budget: totalOf(parts), purpose: form.purpose, purposeLabel: 'Своя сборка',
+    variants: [{ id: 'custom', label: 'Своя сборка', hint: '', budget: totalOf(parts), build: { parts, setup: {}, alternatives: {}, setupAlternatives: {}, custom: true } }],
+    warnings: [], stats: { ms: 0, cpus: 0, gpus: 0, boards: 0 },
+  };
+  state.lastBuildForm = { have: {} };
+  state.variant = 'custom';
+}
+
+/** Детали своей сборки сохраняем, чтобы она не пропала после перезапуска. */
+function saveCustomParts() {
+  const v = current();
+  if (!state.result || !state.result.custom || !v) return;
+  form.customParts = Object.fromEntries(Object.entries(v.build.parts).filter(([, x]) => x).map(([k, x]) => [k, slim(x)]));
+  state.result.budget = totalOf(v.build.parts);
+  v.budget = state.result.budget;
+  persistForm();
+}
+
+function renderCustomHero() {
+  const area = el('textarea.input.links-input', {
+    rows: 5,
+    placeholder: 'Вставьте ссылки на детали или названия моделей — по одной в строке. Например:\nhttps://catalog.onliner.by/videocard/…\nhttps://www.kufar.by/item/…\nhttps://www.21vek.by/…\nRyzen 5 7500F\nKingston Fury Beast 2x16GB DDR5 6000',
+  });
+  const status = el('div.links-status');
+  const btn = el('button.btn.btn-primary.btn-lg', {
+    type: 'button',
+    onclick: async () => {
+      if (!area.value.trim()) return toast('Вставьте хотя бы одну ссылку или название', 'err');
+      btn.disabled = true;
+      status.replaceChildren(el('div.row', el('div.spinner.inline'), el('span.muted', 'Разбираем ссылки: открываем товары и определяем характеристики…')));
+      try {
+        const r = await api('/api/part/links', { method: 'POST', body: { text: area.value } });
+        if (!state.result || !state.result.custom) openCustomBuild();
+        const v = current();
+        for (const x of r.items) {
+          if (x.setup) continue;
+          v.build.parts[x.slot] = x.item;
+          pinPart(x.slot, x.item, true);
+        }
+        saveCustomParts();
+        status.replaceChildren(
+          r.items.length ? el('div.notice.ok', icon('check'), el('div', `Добавлено: ${r.items.map((x) => x.item.name).join(', ')}.`,
+            r.items.some((x) => x.approx) ? el('div', el('b', ' Проверьте: '), r.items.filter((x) => x.approx).map((x) => x.item.name).join(', '), ' — нашлась похожая, а не точно та же модель.') : null,
+            r.items.some((x) => x.needPrice) ? el('div', 'Цену из другого магазина поправьте кнопкой «Цена» у детали.') : null)) : null,
+          r.unknown.length ? el('div.notice', icon('alert'), el('div', el('b', 'Не распознано: '), el('ul.compact-list', r.unknown.map((u) => el('li', `${u.line.slice(0, 80)} — ${u.reason}`))),
+            el('div.dim.small', 'Такие детали можно добавить кнопкой «Своя деталь из любого магазина»: тип, название и цена.'))) : null);
+        area.value = '';
+        document.getElementById('results').replaceChildren(...renderResults());
+      } catch (e) {
+        status.replaceChildren(el('div.notice.err', icon('error'), el('div', e.message)));
+      }
+      btn.disabled = false;
+    },
+  }, icon('plus'), 'Добавить в сборку');
+  return el('div.card.hero',
+    modeTabs(),
+    el('h1', 'Соберите компьютер сами'),
+    el('p.lead', 'Вставьте ссылки на детали из любых магазинов и с Kufar или просто названия моделей. Программа определит, что это, проверит совместимость, покажет итог, FPS и где купить дешевле. Недостающее можно добавить по одной детали или подобрать автоматически под бюджет.'),
+    area,
+    el('div.row', { style: { marginTop: '12px', gap: '12px' } }, btn,
+      el('button.btn', { type: 'button', onclick: () => { form.customParts = {}; persistForm(); openCustomBuild(); render(); } }, icon('trash'), 'Начать заново')),
+    status);
 }
 
 function renderForm() {
@@ -184,22 +274,6 @@ function renderForm() {
     },
   }, icon(p.icon, 'p-ico'), el('div', el('b', p.title), el('span', p.text)))));
 
-  const seg = (key, options) => {
-    const box = el('div.seg', options.map(([v, label]) => el('button', {
-      type: 'button', class: String(form[key]) === String(v) ? 'on' : '',
-      onclick: (e) => {
-        form[key] = v;
-        persistForm();
-        for (const b of box.children) b.classList.toggle('on', b === e.currentTarget);
-        if (key === 'hdd') refreshFilters();
-      },
-    }, label)));
-    return box;
-  };
-
-  const check = (key, label, title) => el('label.check', { title },
-    el('input', { type: 'checkbox', checked: !!form[key], onchange: (e) => { form[key] = e.target.checked; persistForm(); } }), label);
-
   const haveChips = el('div.row.wrap', HAVE.map(([k, label]) => el('button.chip.toggle-chip', {
     type: 'button', class: form.have[k] ? 'on' : '',
     onclick: (e) => {
@@ -210,35 +284,13 @@ function renderForm() {
     },
   }, label)));
 
-  const adv = el('div.adv', { hidden: !form.advOpen },
-    el('div.field', el('label', 'Процессор'), seg('cpuBrand', [['any', 'Любой'], ['amd', 'AMD'], ['intel', 'Intel']])),
-    el('div.field', el('label', 'Видеокарта'), seg('gpuBrand', [['any', 'Любая'], ['nvidia', 'NVIDIA'], ['amd', 'AMD'], ['intel', 'Intel']])),
-    el('div.field', el('label', 'Платформа'), seg('platform', [['any', 'Любая'], ['modern', 'Только современная']])),
-    el('div.field', el('label', 'Оперативная память'), seg('ram', [['auto', 'Авто'], ['16', '16 ГБ'], ['32', '32 ГБ'], ['64', '64 ГБ']])),
-    el('div.field', el('label', 'SSD'), seg('storage', [['auto', 'Авто'], ['512', '512 ГБ'], ['1000', '1 ТБ'], ['2000', '2 ТБ']])),
-    el('div.field', el('label', 'Дополнительный HDD'), seg('hdd', [[0, 'Нет'], [1000, '1 ТБ'], [2000, '2 ТБ'], [4000, '4 ТБ']])),
-    el('div.field', el('label', 'Формат платы'), seg('form', [['any', 'Любой'], ['matx', 'mATX'], ['atx', 'ATX']])),
-    el('div.field', el('label', 'Пожелания'),
-      el('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } },
-        check('wifi', 'Wi-Fi на материнской плате'),
-        check('trustedOnly', 'Только известные бренды', 'Исключить малоизвестные (часто китайские) видеокарты, платы, память и SSD'))),
-    el('div.field.span-3', el('label', 'У меня уже есть (не включать в сборку)'), haveChips),
-  );
-  const advBtn = el('button.btn.btn-ghost.btn-sm.adv-toggle', {
-    type: 'button',
-    onclick: () => {
-      form.advOpen = !form.advOpen;
-      adv.hidden = !form.advOpen;
-      advBtn.lastChild.textContent = form.advOpen ? 'Скрыть тонкие настройки' : 'Тонкие настройки';
-      persistForm();
-    },
-  }, icon('gear'), el('span', form.advOpen ? 'Скрыть тонкие настройки' : 'Тонкие настройки'));
-
   const submitBtn = el('button.btn.btn-primary.btn-lg#buildBtn', { type: 'button', onclick: submit }, icon('sparkles'), 'Подобрать сборку');
   const filtersBlock = renderFilters();
   const setupBlock = renderSetupBlock();
 
+  if (form.mode === 'custom') return renderCustomHero();
   return el('div.card.hero',
+    modeTabs(),
     el('h1', 'Соберём компьютер под ваш бюджет'),
     el('p.lead', 'Живые цены из каталога Onliner (сотни магазинов Беларуси) и объявления Kufar. Подбор учитывает совместимость, мощность блока питания и охлаждение, а к каждой детали покажет альтернативы и б/у предложения.'),
     el('div.budget-row',
@@ -252,9 +304,9 @@ function renderForm() {
       }, st.title))),
       form.style ? el('div.dim.small', STYLES.find((x) => x.id === form.style).text + '. Фильтры стиля видны ниже — их можно поправить.') : null),
     setupBlock,
+    el('div.field.have-field', el('label', 'Уже есть — не покупать'), haveChips,
+      el('div.dim.small', 'Отметьте детали, которые у вас уже есть: подбор их не купит, а бюджет уйдёт на остальное.')),
     filtersBlock,
-    advBtn,
-    adv,
     renderPinsBlock(),
     el('div.form-foot', submitBtn, el('span.dim', 'Обычно занимает 3–8 секунд: приложение просматривает несколько тысяч товаров.')));
 }
@@ -326,6 +378,32 @@ async function fillSummary(box) {
 const SLOT_LABEL = Object.fromEntries(SLOTS.map((x) => [x.key, x.label]));
 
 /** Закрепить или открепить деталь: при пересборке закреплённое остаётся, остальное подбирается под бюджет. */
+/** Своя сборка → подбор недостающего: ваши детали закреплены, остальное под общий бюджет. */
+async function fillMissing() {
+  const v = current();
+  const have = totalOf(v.build.parts);
+  const value = await promptText('Подобрать недостающее', `Общий бюджет на всю сборку, ${money.currency} (ваши детали уже стоят ${money.fmt(have)})`, String(Math.round(money.toCur(have + 1500))));
+  if (!value) return;
+  const budget = parseFloat(String(value).replace(/\s/g, '').replace(',', '.'));
+  if (!(budget > 0)) return toast('Введите бюджет числом', 'err');
+  form.pins = Object.fromEntries(Object.entries(v.build.parts).filter(([, x]) => x).map(([k, x]) => [k, { ...slim(x), keep: true }]));
+  form.budget = budget;
+  form.mode = 'budget';
+  persistForm();
+  render();
+  submit();
+}
+
+/** Цена детали из другого магазина (своя сборка). */
+function editPrice(slotKey, it) {
+  promptText('Цена', `Цена «${it.name}», ${money.currency}`, String(Math.round(money.toCur(it.price || 0)))).then((val) => {
+    if (val == null) return;
+    const n = parseFloat(String(val).replace(/\s/g, '').replace(',', '.'));
+    if (!(n >= 0)) return toast('Введите цену числом', 'err');
+    replacePart(slotKey, { ...it, price: money.fromCur(n) });
+  });
+}
+
 /** Окно «Своя деталь»: ссылка, название, цена → деталь в сборке (закреплённая). */
 function openCustomPart(slotKey) {
   const slotSel = el('select.select', SLOTS.map((sl) => el('option', { value: sl.key, selected: sl.key === slotKey }, sl.label)));
@@ -442,7 +520,7 @@ async function submit() {
   let i = 0;
   const timer = setInterval(() => (step.textContent = STEPS[Math.min(++i, STEPS.length - 1)]), 1300);
   try {
-    const body = { ...form, budget: form.budget, currency: form.currency };
+    const body = { ...form, budget: form.budget, currency: form.currency, trustedOnly: !!state.settings.trustedOnly };
     state.result = await api('/api/build', { method: 'POST', body });
     state.lastBuildForm = { ...form, have: { ...form.have }, filters: JSON.parse(JSON.stringify(form.filters || {})) };
     state.variant = state.result.variants.find((v) => v.id === 'optimal' && v.build) ? 'optimal' : (state.result.variants.find((v) => v.build) || {}).id || 'optimal';
@@ -497,14 +575,14 @@ function renderResults() {
     out.push(el('div.notice', { style: { marginBottom: '12px' } }, icon('alert'), el('div', r.warnings.join('. '))));
   }
   const opt = r.variants.find((v) => v.id === 'optimal');
-  if (!opt || !opt.build) {
+  if (!r.custom && r.variants.some((v) => v.id === 'optimal') && (!opt || !opt.build)) {
     out.push(el('div.notice.err', icon('alert'), el('div',
       el('b', 'Бюджета не хватает на работающую сборку. '),
       r.minNeeded ? `Самая дешёвая совместимая сборка из того, что сейчас в наличии, стоит около ${money.fmt(r.minNeeded)}${money.currency !== 'BYN' ? ` (${money.fmt(r.minNeeded, 'BYN')})` : ''}`
         + (r.minSetup ? ` (компьютер ${money.fmt(r.minNeeded - r.minSetup)} + самая доступная периферия ${money.fmt(r.minSetup)})` : '') + '. ' : '',
       'Увеличьте бюджет, отметьте детали, которые у вас уже есть, или посмотрите б/у на Kufar через «Поиск».')));
   }
-  out.push(renderVariants());
+  if (!r.custom) out.push(renderVariants());
   const v = current();
   if (v && v.build) out.push(renderBuild(v));
   return out;
@@ -596,6 +674,7 @@ function renderBuild(v) {
     meter('Игровой индекс', idx.gaming, 300, idx.tier),
     meter('Рабочий индекс', idx.work, 300, 'монтаж, рендер, компиляция'),
     el('div.sum-actions',
+      b.custom ? el('button.btn.btn-primary', { title: 'Оставить ваши детали и подобрать недостающее под бюджет', onclick: fillMissing }, icon('sparkles'), 'Подобрать недостающее') : null,
       el('button.btn', { onclick: () => saveCurrent(v) }, icon('save'), 'Сохранить'),
       el('button.btn', { title: 'В каком магазине (или паре магазинов) есть вся сборка и сколько это стоит', onclick: () => openBuyPlan(Object.values(parts).concat(Object.values(b.setup || {}))) }, icon('store'), 'Где купить всё'),
       el('button.btn', { onclick: () => copyText(buildText(textTitle(v), parts, total, '', b.setup)) }, icon('copy'), 'Копировать список'),
@@ -723,6 +802,17 @@ function renderPart(slot, v) {
     if (panels[slot.key] === 'alts') row.append(el('div.part-panel', renderAlts(slot, v)));
     return row;
   }
+  if (!it && b.custom) {
+    if (slot.key === 'hdd') return null;
+    const optional = slot.key === 'gpu' ? 'не обязательно, если у процессора есть встроенная графика' : slot.key === 'cooler' ? 'не нужен, если кулер в комплекте с процессором' : 'не выбрано';
+    return el('div.part.empty.custom-slot',
+      el('div.part-main',
+        el('div.thumb.ph', icon(slot.icon)),
+        el('div', el('div.part-kind', icon(slot.icon), slot.label), el('div.part-name.muted', optional)),
+        el('div.part-side.row', { style: { gap: '6px', flexDirection: 'row' } },
+          el('button.btn.btn-sm', { onclick: () => document.dispatchEvent(new CustomEvent('goto-search', { detail: { cat: slot.cat, slot: slot.key } })) }, icon('search'), 'Найти'),
+          el('button.btn.btn-sm', { onclick: () => openCustomPart(slot.key) }, icon('plus'), 'Ссылка или название'))));
+  }
   if (!it) {
     if (slot.key === 'hdd') return null;
     if (slot.key === 'cooler' && !Compat.coolerNeed(b.parts.cpu)) return null;
@@ -750,6 +840,8 @@ function renderPart(slot, v) {
         el('div.part-name', el('a', { href: it.url, target: '_blank', rel: 'noopener' }, it.name)),
         el('div.part-specs', note ? el('span.chip.ok', note) : null,
           it.source === 'kufar' ? el('span.badge.kufar', 'Kufar · объявление') : null,
+          b.custom && !it.price ? el('button.chip.warn', { title: 'Укажите цену — иначе итог будет неполным', onclick: () => editPrice(slot.key, it) }, 'цена не указана — указать') : null,
+          it.shopUrl ? el('a.chip', { href: it.shopUrl, target: '_blank', rel: 'noopener' }, 'ссылка на магазин ↗') : null,
           it.usedCount && it.usedMin ? el('a.chip', { href: it.usedUrl, target: '_blank', rel: 'noopener', title: 'Б/у на барахолке Onliner' }, `б/у на Onliner от ${money.fmt(it.usedMin)}`) : null,
           it.kufarNote ? el('span.chip.warn', it.kufarNote) : null,
           specChips(slot.cat, it),
@@ -765,6 +857,7 @@ function renderPart(slot, v) {
       openBtn('used', 'recycle', 'Б/у на Kufar'),
       el('a.btn.btn-sm.btn-ghost', { href: it.url, target: '_blank', rel: 'noopener' }, icon('external'), 'Открыть'),
       watchButton(it, rerenderResults),
+      b.custom && !slot.setup ? el('button.btn.btn-sm.btn-ghost', { title: 'Поменять цену (например, цена в другом магазине)', onclick: () => editPrice(slot.key, it) }, icon('tag'), 'Цена') : null,
       !slot.setup ? el('button.btn.btn-sm.btn-ghost', {
         class: isPinned(slot.key, it) ? 'on' : '',
         title: isPinned(slot.key, it) ? 'Открепить' : 'Закрепить: при пересборке эта деталь останется, остальное подберётся под бюджет',
@@ -789,6 +882,7 @@ function togglePanel(slot, kind) {
 }
 
 function replacePart(slotKey, item, isSetup = false) {
+  queueMicrotask(saveCustomParts);
   const v = current();
   if (!v || !v.build) return;
   const b = v.build;

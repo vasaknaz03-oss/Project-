@@ -148,7 +148,7 @@ const PER_PAGE = 30;
 const norm = (x) => String(x || '').toLowerCase().replace(/ё/g, 'е');
 const words = (q) => norm(q).split(/[\s,;]+/).filter(Boolean);
 function textMatches(it, toks) {
-  const n = norm(it.name + ' ' + (it.description || ''));
+  const n = query.normalize(it.name + ' ' + (it.description || ''));
   const flat = n.replace(/[\s\-_]/g, '');
   return toks.every((t) => n.includes(t) || flat.includes(t.replace(/[\s\-_]/g, '')));
 }
@@ -160,7 +160,7 @@ async function searchOnlinerText(section, q, p) {
   const max = num(p.get('max'));
   const sort = p.get('sort') || '';
   const f = parseFilters(p);
-  const toks = words(q);
+  const toks = words(query.normalize(q));
   let items;
   let capped = false;
 
@@ -281,6 +281,91 @@ async function shopsPlan(items) {
     single,
     pairs: pairs.slice(0, 3),
   };
+}
+
+// Категория Onliner → слот сборки
+const SLOT_OF_SCHEMA = { cpu: 'cpu', videocard: 'gpu', motherboard: 'motherboard', dram: 'ram', ssd: 'ssd', hdd: 'hdd', powersupply: 'psu', chassis: 'case', fan: 'cooler' };
+// «Тип» объявления Kufar (cct) → слот
+const SLOT_OF_CCT = { 10: 'cpu', 11: 'gpu', 7: 'motherboard', 9: 'ram', 15: 'ssd', 13: 'hdd', 5: 'psu', 1: 'case', 3: 'cooler' };
+
+/** Название из адреса страницы магазина: «…/videokarta-asus-dual-rtx-4060-8gb/» → «videokarta asus dual rtx 4060 8gb». */
+function nameFromUrl(u) {
+  try {
+    const parts = new URL(u).pathname.split('/').filter(Boolean);
+    const slug = parts.sort((a, b) => b.length - a.length)[0] || '';
+    return decodeURIComponent(slug).replace(/\.(html?|php)$/i, '').replace(/[-_]+/g, ' ').replace(/\b\d{5,}\b/g, '')
+      .replace(/([a-z])(\d)/gi, '$1 $2').replace(/(\d)([a-z]{3,})/gi, '$1 $2').replace(/\s+/g, ' ').trim();
+  } catch {
+    return '';
+  }
+}
+
+/** Разбор списка ссылок и названий в детали сборки. */
+async function partsFromLinks(text) {
+  const lines = text.split(/\n|\s+(?=https?:\/\/)/).map((x) => x.trim()).filter(Boolean).slice(0, 20);
+  const items = [];
+  const unknown = [];
+  for (const line of lines) {
+    const url = (line.match(/https?:\/\/\S+/) || [])[0];
+    try {
+      if (url && /catalog\.onliner\.by\//.test(url)) {
+        const m = url.match(/catalog\.onliner\.by\/([\w-]+)\/(?:[\w-]+\/)?([\w.-]+?)(?:[/?#]|$)/);
+        const schema = m && m[1];
+        const it = m && await onliner.product(m[2], schema).catch((e) => {
+          if (e.status === 404) throw new Error('товар по этой ссылке на Onliner не найден');
+          throw e;
+        });
+        const slot = SLOT_OF_SCHEMA[schema] || (Catalog.setupById[schema] ? schema : null);
+        if (it && slot) items.push({ slot, setup: !SLOT_OF_SCHEMA[schema], item: it, from: 'onliner' });
+        else unknown.push({ line, guess: it ? it.name : '', reason: 'Этот товар Onliner не из комплектующих ПК' });
+        continue;
+      }
+      if (url && /kufar\.by\/item\/(\d+)/.test(url)) {
+        const id = url.match(/kufar\.by\/item\/(\d+)/)[1];
+        const ad = await kufar.item(id);
+        const cct = ad && ad.params && ad.params.cct ? Number(ad.params.cct.v) : null;
+        const slot = SLOT_OF_CCT[cct];
+        if (ad && slot) items.push({ slot, item: await kufarCompat.enrich(slot, ad), from: 'kufar' });
+        else unknown.push({ line, guess: ad ? ad.name : '', price: ad ? ad.price : null, reason: 'Не понял, что это за деталь — выберите тип вручную' });
+        continue;
+      }
+      // Другой магазин или просто название модели: ищем такую же модель в каталоге Onliner
+      const name = url ? nameFromUrl(url) : line;
+      let hit = null;
+      // 1) Умный поиск: понимает раздел и характеристики («2x16GB DDR5 6000» → память DDR5 32 ГБ)
+      const parsed = name ? await query.parse(name).catch(() => null) : null;
+      const sec = parsed && sectionOf(parsed.section);
+      // Слова с цифрами (модель, мощность, объём) должны совпасть в названии товара — иначе это «похожая» модель
+      const digitWords = query.normalize(name).trim().split(' ').filter((w) => w.length > 1 && /\d/.test(w));
+      const exact = (x) => digitWords.every((w) => query.normalize(x.name).includes(w));
+      let approx = false;
+      if (sec && SLOT_OF_SCHEMA[sec.onliner] && parsed.rest) {
+        const r = await searchOnlinerText(sec, parsed.rest, new URLSearchParams({ f: JSON.stringify(parsed.filters || {}) })).catch(() => null);
+        const list = r ? r.items : [];
+        hit = list.find((x) => exact(x) && x.price) || list.find(exact) || null;
+        if (!hit && list.length) {
+          hit = list.find((x) => x.price) || list[0];
+          approx = true;
+        }
+      }
+      // 2) Общий поиск Onliner: совпасть должны все слова с цифрами (модель, объём)
+      if (!hit && name) {
+        const found = await onliner.search(name).catch(() => ({ items: [] }));
+        const words = query.normalize(name).trim().split(' ').filter((w) => w.length > 1 && /\d/.test(w));
+        hit = found.items.find((x) => SLOT_OF_SCHEMA[x.category] && words.length && words.every((w) => query.normalize(`${x.name} ${x.description || ''}`).includes(w)));
+        approx = false;
+      }
+      if (hit) {
+        const it = await onliner.product(hit.id, hit.category).catch(() => hit);
+        // Ссылка на другой магазин: цена там своя — её спросим у пользователя (подставим цену Onliner, если есть)
+        items.push({ slot: SLOT_OF_SCHEMA[hit.category], item: url ? { ...it, shopUrl: url } : it, from: url ? 'shop' : 'name', url: url || null, approx, needPrice: !!url || !it.price });
+      }
+      else unknown.push({ line, guess: name, reason: url ? 'Магазин не из каталога Onliner: укажите тип и цену' : 'Такую модель в каталоге Onliner не нашёл' });
+    } catch (e) {
+      unknown.push({ line, guess: url ? nameFromUrl(url) : line, reason: 'Не удалось открыть: ' + e.message });
+    }
+  }
+  return { items, unknown };
 }
 
 /** Параметры поиска Kufar для раздела: категория, тип, фильтры пользователя, запасной текстовый запрос. */
@@ -573,6 +658,12 @@ async function route(req, res, url) {
     const price = Number(body.price) > 0 ? Number(body.price) : 0;
     const item = await kufarCompat.enrich(slot, { id: 'custom-' + Date.now(), name, price, url: url || null, params: {} });
     return send(res, 200, { item: { ...item, source: 'custom', fromKufar: false, kufarNote: ['своя деталь', item.kufarNote].filter(Boolean).join('; ') } });
+  }
+
+  // Своя сборка по ссылкам и названиям: каждая строка — ссылка (Onliner, Kufar, любой магазин) или модель
+  if (pathname === '/api/part/links' && req.method === 'POST') {
+    const body = await readBody(req);
+    return send(res, 200, await partsFromLinks(String(body.text || '').slice(0, 5000)));
   }
 
   // Объявление Kufar → деталь сборки (характеристики для проверки совместимости)

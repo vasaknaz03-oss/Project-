@@ -414,7 +414,8 @@ function sanitizePins(pins) {
   for (const slot of PIN_SLOTS) {
     const it = pins && pins[slot];
     // owned — деталь, которая у пользователя уже есть (апгрейд): цена 0
-    if (!it || typeof it !== 'object' || !it.name || (!(Number(it.price) > 0) && !it.owned)) continue;
+    // keep — деталь из «своей сборки»: оставляем, даже если цену пользователь не указал
+    if (!it || typeof it !== 'object' || !it.name || (!(Number(it.price) > 0) && !it.owned && !it.keep)) continue;
     out[slot] = { ...it, price: Number(it.price) || 0, specs: it.specs && typeof it.specs === 'object' ? it.specs : {}, pinned: true };
   }
   return out;

@@ -149,4 +149,10 @@ function isMulti(name) {
 
 const isJunk = (name) => JUNK.test(name || '') || isMulti(name);
 
-module.exports = { search, count, usedFor, ratesFromAds, isJunk, isMulti, CAT_COMPONENTS, CAT_COMPUTERS };
+/** Одно объявление по номеру (для ссылок вида kufar.by/item/123). */
+async function item(id) {
+  const data = await getJSON(`https://api.kufar.by/search-api/v2/item/${encodeURIComponent(id)}/rendered`, { ttl: 10 * 60 * 1000 });
+  return data && data.result ? normalize(data.result) : null;
+}
+
+module.exports = { search, count, usedFor, ratesFromAds, isJunk, isMulti, item, normalize, CAT_COMPONENTS, CAT_COMPUTERS };
