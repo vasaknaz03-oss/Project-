@@ -874,6 +874,12 @@ async function build(opts) {
   let minSetup = null;
   if (!opt.build) {
     minNeeded = minimalCost(pools, opts);
+    const pr = (pools.pins || {}).ram;
+    const ramType = pr && pr.specs && pr.specs.type;
+    if (!minNeeded && ramType && !sockets.some((sk) => (SOCKET_MEM[sk] || []).includes(ramType))) {
+      const list = sockets.map((sk) => `${sk} — ${(SOCKET_MEM[sk] || []).join('/')}`).join(', ');
+      warnings.push(`Закреплённая память ${ramType} не подходит к выбранной платформе (${list}). Открепите память или поменяйте «Платформу» и «Процессор» в тонких настройках.`);
+    }
     if (!minNeeded && !warnings.length) {
       warnings.push(Object.keys(pools.pins || {}).length
         ? 'С закреплёнными деталями совместимую сборку собрать не получилось: открепите часть деталей или ослабьте фильтры.'
