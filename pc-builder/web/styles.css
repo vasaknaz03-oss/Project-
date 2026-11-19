@@ -561,3 +561,21 @@ a.chip:hover { border-color: var(--accent); color: var(--text); }
   .watch-row { grid-template-columns: 48px minmax(0, 1fr) auto; }
   .watch-row .spark, .watch-row .target-input { display: none; }
 }
+
+/* ---------- история цены и магазины ---------- */
+.tbl-wrap { overflow-x: auto; }
+.tbl td.small { font-size: 12.5px; color: var(--text-2); }
+.history-block { display: flex; flex-direction: column; gap: 10px; }
+.price-chart { width: 100%; height: auto; max-height: 190px; display: block; }
+.price-chart .line { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; }
+.price-chart .area { fill: var(--accent-soft); stroke: none; }
+.price-chart .dot { fill: var(--surface); stroke: var(--accent); stroke-width: 2; }
+.price-chart .dot:hover { r: 5; }
+.price-chart .lbl { fill: var(--text-3); font-size: 11px; }
+.small-seg button { padding: 4px 10px; font-size: 12.5px; }
+.notice.ok { border-color: color-mix(in srgb, var(--ok) 50%, transparent); }
+.notice.ok [data-icon] { color: var(--ok); }
+.plan-list { display: flex; flex-direction: column; gap: 6px; }
+.plan-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg-2); }
+.plan-row.best { border-color: var(--ok); }
+.plan-price { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }

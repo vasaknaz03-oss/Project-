@@ -67,6 +67,14 @@ export const ICONS = {
   tag: P('<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z"/><circle cx="7" cy="7" r="1.5"/>'),
 };
 
+// Пустые части интерфейса (null / false) не должны превращаться в текст «null» при вставке в DOM
+for (const m of ['append', 'prepend', 'replaceChildren']) {
+  const orig = Element.prototype[m];
+  Element.prototype[m] = function (...args) {
+    return orig.apply(this, args.filter((a) => a != null && a !== false));
+  };
+}
+
 /** Создание DOM-узла: el('div.card#id', {attrs}, ...children). Текст вставляется безопасно. */
 export function el(sel, attrs, ...children) {
   const m = sel.match(/^([a-z0-9]+)?((?:[.#][\w-]+)*)$/i);

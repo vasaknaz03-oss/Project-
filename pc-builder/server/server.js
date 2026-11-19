@@ -211,6 +211,77 @@ async function searchOnlinerText(section, q, p) {
   return { items: items.slice((page - 1) * PER_PAGE, page * PER_PAGE), total, pages: Math.ceil(total / PER_PAGE), capped };
 }
 
+/**
+ * План покупки: в каком одном магазине (или паре магазинов) есть вся сборка и сколько это стоит
+ * по сравнению с покупкой каждой детали там, где она дешевле всего.
+ */
+async function shopsPlan(items) {
+  const offersBy = {};
+  await Promise.all(items.map(async (it) => {
+    try {
+      offersBy[it.id] = await onliner.offers(it.id);
+    } catch {
+      offersBy[it.id] = [];
+    }
+  }));
+  const shops = {};
+  let piecewise = 0;
+  const cheapestShops = new Set();
+  for (const it of items) {
+    const offers = offersBy[it.id];
+    if (!offers.length) continue;
+    piecewise += offers[0].price;
+    cheapestShops.add(offers[0].shopId);
+    for (const o of offers) {
+      const sh = (shops[o.shopId] = shops[o.shopId] || { shopId: o.shopId, shop: o.shop, url: o.shopUrl, rating: o.rating, reviews: o.reviews, town: o.town, prices: {}, installment: null, delivery: null });
+      if (!(it.id in sh.prices) || o.price < sh.prices[it.id]) sh.prices[it.id] = o.price;
+      if (o.installment && !sh.installment) sh.installment = o.installment;
+      if (o.delivery && !sh.delivery) sh.delivery = o.delivery;
+    }
+  }
+  const ids = items.filter((it) => offersBy[it.id].length).map((it) => it.id);
+  const sum = (sh) => ids.reduce((s, id) => s + (sh.prices[id] || 0), 0);
+  const all = Object.values(shops);
+  const single = all.filter((sh) => ids.every((id) => id in sh.prices)).map((sh) => ({ ...sh, total: Math.round(sum(sh) * 100) / 100 }))
+    .sort((a, b) => a.total - b.total).slice(0, 6);
+  // Пары магазинов: берём магазины с наибольшим охватом сборки
+  const top = all.sort((a, b) => Object.keys(b.prices).length - Object.keys(a.prices).length).slice(0, 25);
+  const pairs = [];
+  for (let i = 0; i < top.length; i++) {
+    for (let j = i + 1; j < top.length; j++) {
+      const a = top[i];
+      const b = top[j];
+      if (!ids.every((id) => id in a.prices || id in b.prices)) continue;
+      const assign = {};
+      let total = 0;
+      for (const id of ids) {
+        const pa = a.prices[id];
+        const pb = b.prices[id];
+        const useA = pb === undefined || (pa !== undefined && pa <= pb);
+        assign[id] = useA ? a.shopId : b.shopId;
+        total += useA ? pa : pb;
+      }
+      if (Object.values(assign).every((x) => x === a.shopId) || Object.values(assign).every((x) => x === b.shopId)) continue;
+      pairs.push({ shops: [a, b].map(({ prices, ...rest }) => rest), total: Math.round(total * 100) / 100, assign });
+    }
+  }
+  pairs.sort((x, y) => x.total - y.total);
+  // Если всей сборки нет ни в одном магазине: где больше всего деталей сразу
+  const names = Object.fromEntries(items.map((it) => [it.id, it.name]));
+  const coverage = all.map((sh) => {
+    const have = ids.filter((id) => id in sh.prices);
+    return { ...sh, prices: undefined, has: have.length, total: Math.round(have.reduce((a, id) => a + sh.prices[id], 0) * 100) / 100, missing: ids.filter((id) => !(id in sh.prices)).map((id) => names[id]) };
+  }).filter((x) => x.has >= 2).sort((a, b) => b.has - a.has || a.total - b.total).slice(0, 3);
+  return {
+    coverage,
+    count: ids.length,
+    missing: items.filter((it) => !offersBy[it.id].length).map((it) => it.name),
+    piecewise: { total: Math.round(piecewise * 100) / 100, shops: cheapestShops.size },
+    single,
+    pairs: pairs.slice(0, 3),
+  };
+}
+
 /** Параметры поиска Kufar для раздела: категория, тип, фильтры пользователя, запасной текстовый запрос. */
 function kufarQuery(section, q, p) {
   const f = kufarFilters.toParams(parseFilters(p));
@@ -370,6 +441,21 @@ async function route(req, res, url) {
     if (!params) return send(res, 200, { total: 0 });
     const r = await onliner.categoryPage(section.onliner, params, 1);
     return send(res, 200, { total: r.total, min: r.items.length ? r.items[0].price : null });
+  }
+
+  // История цены товара Onliner
+  if (pathname === '/api/history') {
+    const key = p.get('key');
+    if (!key || !/^[\w.-]+$/.test(key)) throw new Error('Не указан товар');
+    const period = ['', '6m', '12m'].includes(p.get('period')) ? p.get('period') : '6m';
+    return send(res, 200, await onliner.priceHistory(key, period));
+  }
+
+  // Где купить всю сборку: один магазин, два магазина или по частям
+  if (pathname === '/api/shops/plan' && req.method === 'POST') {
+    const body = await readBody(req);
+    const list = (Array.isArray(body.items) ? body.items : []).filter((x) => x && /^[\w.-]+$/.test(String(x.id || '')) && x.source === 'onliner').slice(0, 16);
+    return send(res, 200, await shopsPlan(list));
   }
 
   if (pathname === '/api/offers') {

@@ -4,6 +4,7 @@ import { state, SLOTS, specChips, shopLinks, linkFor, slim, saveBuilds, buildTex
 import { openFacetModal, loadFacets, summarize, countActive } from './facets.js';
 import { adChips, adLink, hideButton, isHidden, isViewed, hiddenToggle } from './kufarui.js';
 import { watchButton } from './watch.js';
+import { offersTable, historyBlock, openBuyPlan } from './shops.js';
 
 const Compat = window.Compat;
 const Catalog = window.Catalog;
@@ -477,6 +478,7 @@ function renderBuild(v) {
     meter('Рабочий индекс', idx.work, 300, 'монтаж, рендер, компиляция'),
     el('div.sum-actions',
       el('button.btn', { onclick: () => saveCurrent(v) }, icon('save'), 'Сохранить'),
+      el('button.btn', { title: 'В каком магазине (или паре магазинов) есть вся сборка и сколько это стоит', onclick: () => openBuyPlan(Object.values(parts).concat(Object.values(b.setup || {}))) }, icon('store'), 'Где купить всё'),
       el('button.btn', { onclick: () => copyText(buildText(textTitle(v), parts, total, '', b.setup)) }, icon('copy'), 'Копировать список'),
       el('button.btn', { onclick: () => download(`Сборка ${new Date().toLocaleDateString('ru-RU')}.txt`, buildText(textTitle(v), parts, total, '', b.setup)) }, icon('download'), 'В файл .txt')));
 
@@ -598,6 +600,7 @@ function renderPart(slot, v) {
         el('div.price-sub', it.offers ? `${it.offers} ${plural(it.offers, 'предложение', 'предложения', 'предложений')}` : ''))),
     el('div.part-actions',
       it.source === 'onliner' ? openBtn('shops', 'store', 'Магазины') : null,
+      it.source === 'onliner' ? openBtn('history', 'chart', 'История цены') : null,
       alts.length || (slot.key === 'gpu' && b.alternatives && b.alternatives.gpuSame && b.alternatives.gpuSame.length) ? openBtn('alts', 'swap', `Альтернативы (${alts.length + ((slot.key === 'gpu' && b.alternatives && b.alternatives.gpuSame) ? b.alternatives.gpuSame.length : 0)})`) : null,
       openBtn('used', 'recycle', 'Б/у на Kufar'),
       el('a.btn.btn-sm.btn-ghost', { href: it.url, target: '_blank', rel: 'noopener' }, icon('external'), 'Открыть'),
@@ -615,6 +618,7 @@ function renderPart(slot, v) {
     if (kind === 'shops') loadShops(panel, it);
     if (kind === 'alts') panel.append(renderAlts(slot, v));
     if (kind === 'used') loadUsed(panel, slot, it);
+    if (kind === 'history') historyBlock(it).then((node) => panel.append(node));
   }
   return row;
 }
@@ -716,15 +720,7 @@ async function loadShops(panel, it) {
   panel.append(el('div.row', el('div.spinner', { style: { width: '20px', height: '20px', borderWidth: '2px' } }), el('span.muted', 'Загружаем предложения магазинов…')));
   try {
     const { offers } = await api('/api/offers?key=' + encodeURIComponent(it.id));
-    const min = offers.length ? offers[0].price : null;
-    const table = el('table.tbl',
-      el('thead', el('tr', el('th', 'Магазин'), el('th', 'Город'), el('th', 'Рейтинг'), el('th', 'Гарантия'), el('th.num', 'Цена'))),
-      el('tbody', offers.slice(0, 15).map((o) => el('tr', { class: o.price === min ? 'best' : '' },
-        el('td', o.shopUrl ? el('a', { href: o.shopUrl, target: '_blank', rel: 'noopener' }, o.shop) : o.shop),
-        el('td', o.town || '—'),
-        el('td', o.rating ? `★ ${o.rating} (${o.reviews})` : '—'),
-        el('td', o.warranty ? `${o.warranty} мес.` : '—'),
-        el('td.num', el('b', money.fmt(o.price)))))));
+    const table = offersTable(offers, 15);
     const other = el('div', { style: { marginTop: '14px' } }, el('div.panel-title', 'Другие площадки'), el('div.muted.small', 'Ищем на Wildberries…'));
     loadOtherSites(other, it);
     panel.replaceChildren(

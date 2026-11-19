@@ -2,6 +2,7 @@
 import { el, icon, api, money, toast, modal, thumb, plural } from './util.js';
 import { adChips, adLink, hideButton, isHidden, isViewed, hiddenToggle } from './kufarui.js';
 import { isWatched, toggleWatch, saveKufarSearch } from './watch.js';
+import { offersTable, historyBlock } from './shops.js';
 import { state, CAT_TO_SLOT, CAT_ICON, specChips, shopLinks, linkFor } from './state.js';
 import { replaceFromSearch, hasActiveBuild, takeKufarToBuild } from './build.js';
 import { facetPanel, loadFacets, loadKufarFacets, countActive } from './facets.js';
@@ -348,18 +349,12 @@ async function showShops(it) {
   modal(it.name, body);
   try {
     const { offers } = await api('/api/offers?key=' + encodeURIComponent(it.id));
-    const min = offers.length ? offers[0].price : null;
+    const hist = el('div', { style: { marginTop: '14px' } });
     body.replaceChildren(
-      offers.length ? el('table.tbl',
-        el('thead', el('tr', el('th', 'Магазин'), el('th', 'Город'), el('th', 'Рейтинг'), el('th', 'Гарантия'), el('th.num', 'Цена'))),
-        el('tbody', offers.map((o) => el('tr', { class: o.price === min ? 'best' : '' },
-          el('td', o.shopUrl ? el('a', { href: o.shopUrl, target: '_blank', rel: 'noopener' }, o.shop) : o.shop),
-          el('td', o.town || '—'),
-          el('td', o.rating ? `★ ${o.rating} (${o.reviews})` : '—'),
-          el('td', o.warranty ? `${o.warranty} мес.` : '—'),
-          el('td.num', el('b', money.fmt(o.price)))))))
-        : el('p.muted', 'Сейчас нет предложений.'),
+      offers.length ? offersTable(offers, 40) : el('p.muted', 'Сейчас нет предложений.'),
+      hist,
       el('div.ext-links', el('a', { href: it.pricesUrl || it.url, target: '_blank', rel: 'noopener' }, 'Открыть на Onliner ↗')));
+    historyBlock(it).then((node) => hist.append(node));
   } catch (e) {
     body.replaceChildren(el('div.notice.err', icon('error'), el('div', e.message)));
   }

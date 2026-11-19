@@ -110,6 +110,27 @@ async function product(key, category) {
   return normalize({ ...data, schema: data.schema || { key: category, name: CATEGORIES[category] || '' } });
 }
 
+/** Доставка из предложения магазина: курьер и самовывоз (стоимость и срок в днях). */
+function deliveryOf(d) {
+  if (!d) return null;
+  const part = (x) => (x ? { text: x.price_text ? String(x.price_text).replace(/ƃ/g, 'р.') : null, days: Number.isFinite(x.time) ? x.time : null } : null);
+  const out = { courier: part(d.courier), pickup: part(d.pickup_point) };
+  return out.courier || out.pickup ? out : null;
+}
+
+/** История цены товара: period '' (месяц по дням), '6m' или '12m' (по месяцам). */
+async function priceHistory(key, period = '6m') {
+  const q = period ? `?period=${encodeURIComponent(period)}` : '';
+  const data = await getJSON(`${API}/products/${encodeURIComponent(key)}/prices-history${q}`, { ttl: 60 * 60 * 1000 });
+  const num = (m) => (m && m.amount ? parseFloat(m.amount) : null);
+  const pr = data.prices || {};
+  return {
+    current: num(pr.current), min: num(pr.min), max: num(pr.max),
+    median: num(data.sale && data.sale.min_prices_median),
+    items: ((data.chart_data && data.chart_data.items) || []).map((x) => ({ date: x.date, price: x.price ? parseFloat(x.price) : null })),
+  };
+}
+
 /** Предложения всех магазинов для товара (сравнение цен). */
 async function offers(productKey) {
   const url = `${SHOP_API}/products/${encodeURIComponent(productKey)}/positions`;
@@ -130,10 +151,13 @@ async function offers(productKey) {
       warranty: pos.warranty || null,
       comment: pos.comment || '',
       updated: pos.date_update || null,
+      delivery: deliveryOf(pos.delivery),
+      // «от 115,94 р./мес частями» — рассрочка или кредит магазина
+      installment: pos.payment_plans && pos.payment_plans.summary ? String(pos.payment_plans.summary).replace(/ƃ/g, 'р.') : null,
     };
   });
   list.sort((a, b) => a.price - b.price);
   return list;
 }
 
-module.exports = { CATEGORIES, category, categoryPage, search, offers, product, normalize, enrich };
+module.exports = { CATEGORIES, category, categoryPage, search, offers, product, priceHistory, normalize, enrich };
