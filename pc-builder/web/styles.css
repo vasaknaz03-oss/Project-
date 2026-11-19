@@ -643,3 +643,41 @@ a.chip:hover { border-color: var(--accent); color: var(--text); }
 .laptop-name { font-weight: 650; font-size: 15.5px; }
 .laptop-side { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 @media (max-width: 760px) { .laptop-card { grid-template-columns: 64px minmax(0, 1fr); } .laptop-card .thumb { width: 64px; height: 64px; } .laptop-side { grid-column: 1 / -1; align-items: flex-start; text-align: left; } }
+
+/* ---------- новости ---------- */
+.news-filters { display: flex; flex-direction: column; gap: 10px; }
+.news-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; margin-top: 16px; }
+.news-grid.compact { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.news-card { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; color: var(--text); text-decoration: none; transition: transform .15s, border-color .15s, box-shadow .15s; animation: fadeUp .3s ease-out both; }
+.news-card:hover { transform: translateY(-3px); border-color: var(--accent); box-shadow: 0 10px 30px rgba(0, 0, 0, .25); text-decoration: none; }
+.news-img { aspect-ratio: 16 / 9; background: var(--surface-2); overflow: hidden; }
+.news-img img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .4s; }
+.news-card:hover .news-img img { transform: scale(1.04); }
+.news-body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 6px; }
+.news-meta { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--text-3); flex-wrap: wrap; }
+.news-src { color: var(--accent); font-weight: 650; }
+.news-title { font-weight: 650; line-height: 1.35; }
+.news-summary { font-size: 13px; color: var(--text-2); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ---------- разгон ---------- */
+.oc-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.oc-tab { display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text-2); font-weight: 600; cursor: pointer; transition: all .15s; }
+.oc-tab svg { width: 16px; height: 16px; }
+.oc-tab:hover { color: var(--text); border-color: var(--border-2); }
+.oc-tab.on { background: linear-gradient(135deg, var(--accent), #38bdf8); color: #fff; border-color: transparent; box-shadow: 0 6px 20px var(--accent-soft); }
+.oc-section { animation: fadeUp .3s ease-out both; }
+.oc-section h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
+.oc-section h2 svg { width: 22px; height: 22px; color: var(--accent); }
+.oc-intro { color: var(--text-2); line-height: 1.55; max-width: 900px; }
+.oc-blocks { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; margin-top: 10px; }
+.oc-block { background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px 16px; }
+.oc-block h4 { margin: 0 0 8px; }
+.oc-steps, .oc-tips { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 7px; line-height: 1.5; color: var(--text-2); }
+.oc-steps li::marker { color: var(--accent); font-weight: 700; }
+.oc-tips li::marker { color: var(--accent); }
+.oc-table td:first-child { white-space: nowrap; width: 1%; }
+.oc-links { display: flex; flex-direction: column; gap: 8px; }
+.oc-link { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg-2); text-decoration: none; transition: border-color .15s, transform .15s; }
+.oc-link:hover { border-color: var(--accent); transform: translateX(3px); text-decoration: none; }
+.oc-link b { color: var(--text); }
+.oc-link span { color: var(--text-3); font-size: 12.5px; }

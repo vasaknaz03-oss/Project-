@@ -9,8 +9,10 @@ import { loadMarks } from './kufarui.js';
 import { initWatch, rerenderWatch } from './watch.js';
 import { initUpgrade, rerenderUpgrade } from './upgrade.js';
 import { initLaptops, rerenderLaptops } from './laptops.js';
+import { initNews, rerenderNews } from './news.js';
+import { initOc, rerenderOc } from './oc.js';
 
-const pages = ['build', 'upgrade', 'laptops', 'search', 'watch', 'saved', 'settings'];
+const pages = ['build', 'upgrade', 'laptops', 'search', 'watch', 'news', 'oc', 'saved', 'settings'];
 
 function go(page) {
   state.page = page;
@@ -20,6 +22,8 @@ function go(page) {
   if (page === 'watch') rerenderWatch();
   if (page === 'upgrade') rerenderUpgrade();
   if (page === 'laptops') rerenderLaptops();
+  if (page === 'news') rerenderNews();
+  if (page === 'oc') rerenderOc();
   renderTray();
   document.getElementById('main').scrollTop = 0;
 }
@@ -100,6 +104,8 @@ async function main() {
   await initWatch(document.getElementById('page-watch'));
   await initUpgrade(document.getElementById('page-upgrade'));
   await initLaptops(document.getElementById('page-laptops'));
+  initNews(document.getElementById('page-news'));
+  initOc(document.getElementById('page-oc'));
   initSettings(document.getElementById('page-settings'), async (force) => {
     await loadRates(force);
     rerenderBuild();
