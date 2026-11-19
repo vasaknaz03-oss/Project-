@@ -487,34 +487,89 @@ export function renderTray() {
   for (const n2 of tray.querySelectorAll('[data-icon]')) n2.style.width = n2.style.height = '18px';
 }
 
-/** Простой вывод по сравнению: какой товар в чём лучше. */
+/** Короткое имя для вывода: без кода модели производителя в конце («GV-N507TGAMING OC-16GD»). */
+function shortItemName(i) {
+  const words = String(i.name || '').split(/\s+/);
+  while (words.length > 3) {
+    const w = words[words.length - 1];
+    if ((/\d/.test(w) && /-/.test(w)) || /^[A-Z0-9]{7,}$/.test(w) || /^\(.*\)$/.test(w)) words.pop();
+    else break;
+  }
+  const n = words.join(' ');
+  return n.length > 52 ? n.slice(0, 50) + '…' : n;
+}
+
+/** Простой вывод по сравнению: какой товар в чём лучше — и честно, когда разницы нет. */
 function compareVerdict(items, revs) {
   const out = [];
-  const name = (i) => i.name.length > 48 ? i.name.slice(0, 46) + '…' : i.name;
+  const name = shortItemName;
   const priced = items.filter((i) => i.price);
-  if (priced.length >= 2) {
-    const cheap = priced.reduce((a, b) => (a.price <= b.price ? a : b));
-    out.push(`Дешевле всех — ${name(cheap)}.`);
-  }
+  const cheap = priced.length >= 2 ? priced.reduce((a, b) => (a.price <= b.price ? a : b)) : null;
+  const dear = priced.length >= 2 ? priced.reduce((a, b) => (a.price >= b.price ? a : b)) : null;
+  if (cheap && dear && dear.price > cheap.price) out.push(`Дешевле всех — ${name(cheap)} (на ${money.fmt(dear.price - cheap.price)} дешевле самого дорогого).`);
   const pf = priced.filter((i) => perfOfItem(i));
+  let pick = null;
+  let pickWhy = '';
   if (pf.length >= 2) {
     const fast = pf.reduce((a, b) => (perfOfItem(a) >= perfOfItem(b) ? a : b));
-    const value = pf.reduce((a, b) => (perfOfItem(a) / a.price >= perfOfItem(b) / b.price ? a : b));
     const slow = pf.reduce((a, b) => (perfOfItem(a) <= perfOfItem(b) ? a : b));
     const gain = Math.round((perfOfItem(fast) / perfOfItem(slow) - 1) * 100);
-    const extra = Math.round((fast.price / slow.price - 1) * 100);
-    out.push(`Самый быстрый — ${name(fast)}${gain > 0 ? `: на ${gain}% быстрее, чем ${name(slow)}, при цене ${extra >= 0 ? `+${extra}%` : `${extra}%`}` : ''}.`);
-    if (value !== fast) out.push(`Выгоднее всего по цене за производительность — ${name(value)}.`);
-  }
-  const rv = items.map((i, k) => ({ i, r: revs[k] })).filter((x) => x.r && x.r.total >= 3);
-  if (rv.length >= 2) {
-    const best = rv.reduce((a, b) => (a.r.rating >= b.r.rating ? a : b));
-    out.push(`Лучшие отзывы — у ${name(best.i)} (${best.r.rating.toFixed(1)} из 5).`);
-    for (const x of rv) {
-      const c = (x.r.summary.cons || []).filter((k) => k.count >= 2);
-      if (c.length) out.push(`У ${name(x.i)} покупатели повторно жалуются: ${c.slice(0, 2).map((k) => k.text).join(', ')}.`);
+    if (gain < 3) {
+      out.push('Производительность практически одинаковая — это один и тот же чип, разница только в охлаждении, размерах, шуме и цене.');
+    } else {
+      const extra = Math.round((fast.price / slow.price - 1) * 100);
+      out.push(`Самый быстрый — ${name(fast)}: на ${gain}% быстрее, чем ${name(slow)}, при цене ${extra >= 0 ? `+${extra}%` : `${extra}%`}.`);
+      const value = pf.reduce((a, b) => (perfOfItem(a) / a.price >= perfOfItem(b) / b.price ? a : b));
+      if (value !== fast) out.push(`Больше всего производительности за рубль — ${name(value)}.`);
+      pick = value;
+      pickWhy = 'лучшее соотношение цены и производительности';
     }
   }
+  const rv = items.map((i, k) => ({ i, r: revs[k] })).filter((x) => x.r && x.r.total >= 3);
+  let common = [];
+  // Проблемные жалобы (брак, шум, писк, нагрев) важнее, чем «дорого»
+  const SERIOUS = ['quality', 'coil', 'temp', 'quiet', 'software'];
+  const serious = (x) => (x.r.summary.cons || []).filter((c) => SERIOUS.includes(c.id) && (c.count >= 2 || x.r.total <= 6));
+  if (rv.length >= 2) {
+    const ratings = rv.map((x) => x.r.rating);
+    if (Math.max(...ratings) - Math.min(...ratings) < 0.2) out.push(`Отзывы у всех ${Math.min(...ratings) >= 4.5 ? 'отличные' : 'похожие'} (${Math.min(...ratings).toFixed(1)}–${Math.max(...ratings).toFixed(1)} из 5).`);
+    else {
+      const best = rv.reduce((a, b) => (a.r.rating >= b.r.rating ? a : b));
+      out.push(`Лучшие отзывы — у ${name(best.i)} (${best.r.rating.toFixed(1)} из 5).`);
+    }
+    const ids = rv.map((x) => new Set((x.r.summary.cons || []).filter((c) => c.count >= 2 || x.r.total <= 6).map((c) => c.id)));
+    common = [...ids[0]].filter((id) => ids.every((set) => set.has(id)));
+    const texts = Object.fromEntries(rv.flatMap((x) => (x.r.summary.cons || []).map((c) => [c.id, c.text])));
+    if (common.length) out.push(`Общая жалоба у всех: ${common.map((id) => texts[id]).join(', ')} — на выбор между ними не влияет.`);
+    for (const x of rv) {
+      const own = serious(x).filter((c) => !common.includes(c.id));
+      if (own.length) out.push(`У ${name(x.i)} покупатели жалуются: ${own.slice(0, 2).map((c) => c.text).join(', ')}.`);
+    }
+  }
+  // Совет: если по скорости разницы нет — самый дешёвый без серьёзных жалоб
+  // (жалобы, общие для всех, на выбор не влияют)
+  if (!pick && cheap) {
+    const own = (i) => {
+      const x = rv.find((y) => y.i === i);
+      return x ? serious(x).filter((c) => !common.includes(c.id)) : [];
+    };
+    const okRating = (i) => {
+      const x = rv.find((y) => y.i === i);
+      return !x || x.r.rating >= 4.3;
+    };
+    const clean = priced.filter((i) => !own(i).length && okRating(i)).sort((a, b) => a.price - b.price);
+    if (clean.length) {
+      pick = clean[0];
+      const others = [...new Set(priced.filter((i) => i !== pick).flatMap((i) => own(i).map((c) => c.text)))];
+      pickWhy = pick === cheap
+        ? 'дешевле остальных' + (others.length ? `, и без жалоб на ${others.join(', ')}` : ', и серьёзных жалоб нет')
+        : `на ${money.fmt(pick.price - cheap.price)} дороже самого дешёвого, зато без жалоб на ${others.join(', ') || 'качество'}`;
+    } else {
+      pick = cheap;
+      pickWhy = 'при одинаковой скорости разумно взять самый дешёвый, но почитайте жалобы в отзывах';
+    }
+  }
+  if (pick && items.length >= 2) out.push(`Совет: ${name(pick)} — ${pickWhy}.`);
   if (!out.length) out.push('Добавьте товары одного раздела — тогда будет понятнее, что в чём лучше.');
   return out;
 }
@@ -546,7 +601,7 @@ function showCompare() {
       row('Хвалят', (i) => el('div.small', { 'data-rev': 'pros', 'data-id': i.id }, i.source === 'onliner' && i.reviews ? '…' : '—')),
       row('Жалуются', (i) => el('div.small', { 'data-rev': 'cons', 'data-id': i.id }, i.source === 'onliner' && i.reviews ? '…' : '—')),
       row('Характеристики', (i) => el('div.small.muted', i.description || i.location || '—'))));
-  const verdictBox = el('div.verdict.compare-verdict', { class: 'v-good' }, icon('sparkles'), el('div', el('b', 'Коротко: '), compareVerdict(items, []).join(' ')));
+  const verdictBox = el('div.verdict.compare-verdict', { class: 'v-good' }, icon('sparkles'), el('div', el('b', 'Коротко: '), compareVerdict(items, []).join(' '), items.some((i) => i.source === 'onliner' && i.reviews) ? el('span.dim', ' Загружаем отзывы…') : null));
   modal('Сравнение товаров', el('div', verdictBox, el('div', { style: { overflowX: 'auto', marginTop: '12px' } }, table)));
   // Отзывы подгружаем отдельно — таблица видна сразу
   Promise.all(items.map((i) => (i.source === 'onliner' && i.reviews ? loadReviews(i).catch(() => null) : Promise.resolve(null)))).then((revs) => {
