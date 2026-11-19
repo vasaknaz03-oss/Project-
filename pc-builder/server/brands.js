@@ -1,6 +1,6 @@
 'use strict';
-// Качество брендов по категориям. Малоизвестные (часто китайский noname или перемаркировка)
-// получают штраф в оценке подбора: берутся, только если заметно дешевле. «Только известные бренды» их исключает.
+// Качество брендов по категориям. Малоизвестные (часто китайские) бренды разрешены, но получают
+// небольшой штраф в оценке: при равной цене выигрывает известный бренд. «Только известные бренды» их исключает.
 
 const NONAME = {
   videocard: /sinotex|ninja|afox|pcwinmax|kissin|\bcbr\b|ocpc|arktek|soyo|jieshuo|mllse|veineda|szmz|yeston|kllisre|machinist/i,
@@ -28,6 +28,6 @@ function isNoname(cat, name) {
 }
 
 // Штраф к оценке сборки за малоизвестный бренд
-const PENALTY = { videocard: 0.86, motherboard: 0.985, dram: 0.94, ssd: 0.95, chassis: 0.985 };
+const PENALTY = { videocard: 0.92, motherboard: 0.985, dram: 0.94, ssd: 0.95, chassis: 0.985 };
 
 module.exports = { isNoname, PENALTY, NONAME, KNOWN };

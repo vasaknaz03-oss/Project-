@@ -184,7 +184,7 @@ function renderForm() {
     el('div.field', el('label', 'Пожелания'),
       el('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } },
         check('wifi', 'Wi-Fi на материнской плате'),
-        check('trustedOnly', 'Только известные бренды', 'Исключить малоизвестные бренды видеокарт и плат (часто восстановленные)'))),
+        check('trustedOnly', 'Только известные бренды', 'Исключить малоизвестные (часто китайские) видеокарты, платы, память и SSD'))),
     el('div.field.span-3', el('label', 'У меня уже есть (не включать в сборку)'), haveChips),
   );
   const advBtn = el('button.btn.btn-ghost.btn-sm.adv-toggle', {

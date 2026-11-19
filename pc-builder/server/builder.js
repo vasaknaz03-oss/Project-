@@ -330,8 +330,6 @@ function preparePools(raw, opts, B, F = {}) {
   // Память: обычные DIMM, без серверной
   const ramOk = (r) => inStock(r) && r.specs.type && (r.specs.form === 'DIMM' || r.specs.form === 'CUDIMM') && !r.specs.registered && r.specs.totalGb;
   pools.ramAll = (raw.ram || []).filter(ramOk).map((r) => ((r.noname = Brands.isNoname('dram', r.name)), r)).filter((r) => !(strict && r.noname));
-  // Память малоизвестных брендов (чаще всего китайский noname) не предлагаем, пока есть известные
-  pools.ramAll = pools.ramAll.filter((r) => !r.noname || !pools.ramAll.some((k) => !k.noname && k.specs.type === r.specs.type));
   pools.ram = {};
   for (const mem of ['DDR4', 'DDR5']) {
     const list = pools.ramAll.filter((r) => r.specs.type === mem && r.specs.form === 'DIMM');
@@ -356,9 +354,7 @@ function preparePools(raw, opts, B, F = {}) {
 
   // SSD: по 2 варианта на объём (NVMe и SATA)
   const ssds = (raw.ssd || []).filter((s) => inStock(s) && s.specs.capacityGb)
-    .map((x) => ((x.noname = Brands.isNoname('ssd', x.name)), x)).filter((x) => !(strict && x.noname))
-    // Малоизвестный SSD — только если такого объёма у известных брендов нет
-    .filter((x, _, all) => !x.noname || !all.some((k) => !k.noname && Math.abs(k.specs.capacityGb - x.specs.capacityGb) <= x.specs.capacityGb * 0.1));
+    .map((x) => ((x.noname = Brands.isNoname('ssd', x.name)), x)).filter((x) => !(strict && x.noname));
   pools.ssdAll = ssds;
   pools.ssd = cheapestBy(ssds, (x) => Math.round(x.specs.capacityGb / 100) + ':' + (x.specs.iface || '?') + (x.noname ? ':nn' : ''));
 
