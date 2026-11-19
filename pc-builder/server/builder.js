@@ -302,6 +302,8 @@ function preparePools(raw, opts, B, F = {}) {
   // Память: обычные DIMM, без серверной
   const ramOk = (r) => inStock(r) && r.specs.type && (r.specs.form === 'DIMM' || r.specs.form === 'CUDIMM') && !r.specs.registered && r.specs.totalGb;
   pools.ramAll = (raw.ram || []).filter(ramOk).map((r) => ((r.noname = Brands.isNoname('dram', r.name)), r)).filter((r) => !(strict && r.noname));
+  // Память малоизвестных брендов (чаще всего китайский noname) не предлагаем, пока есть известные
+  pools.ramAll = pools.ramAll.filter((r) => !r.noname || !pools.ramAll.some((k) => !k.noname && k.specs.type === r.specs.type));
   pools.ram = {};
   for (const mem of ['DDR4', 'DDR5']) {
     const list = pools.ramAll.filter((r) => r.specs.type === mem && r.specs.form === 'DIMM');
@@ -326,7 +328,9 @@ function preparePools(raw, opts, B, F = {}) {
 
   // SSD: по 2 варианта на объём (NVMe и SATA)
   const ssds = (raw.ssd || []).filter((s) => inStock(s) && s.specs.capacityGb)
-    .map((x) => ((x.noname = Brands.isNoname('ssd', x.name)), x)).filter((x) => !(strict && x.noname));
+    .map((x) => ((x.noname = Brands.isNoname('ssd', x.name)), x)).filter((x) => !(strict && x.noname))
+    // Малоизвестный SSD — только если такого объёма у известных брендов нет
+    .filter((x, _, all) => !x.noname || !all.some((k) => !k.noname && Math.abs(k.specs.capacityGb - x.specs.capacityGb) <= x.specs.capacityGb * 0.1));
   pools.ssdAll = ssds;
   pools.ssd = cheapestBy(ssds, (x) => Math.round(x.specs.capacityGb / 100) + ':' + (x.specs.iface || '?') + (x.noname ? ':nn' : ''));
 
@@ -367,6 +371,7 @@ function preparePools(raw, opts, B, F = {}) {
     pools.caseFor[form] = bestCase(pred);
     // Корпус тоже участвует в переборе: можно сэкономить на нём ради видеокарты
     pools.caseOpts[form] = [pools.caseFor[form], cheapCase(pred)].filter((c, i, a) => c && a.indexOf(c) === i);
+    if (pools.caseFor[form]) pools.caseFor[form].goodCase = true;
   }
 
   // Кулеры
@@ -433,14 +438,16 @@ function makePickers(pools, opts, B) {
     const key = need.rec;
     if (psuMemo.has(key)) return psuMemo.get(key);
     let list = pools.psuAll;
-    if (B > 4000 && !pools.psuUserBrand) {
+    if (B > 2500 && !pools.psuUserBrand) {
       const good = list.filter((p) => GOOD_PSU.test(p.name));
       if (good.some((p) => p.specs.watts >= need.rec)) list = good;
     }
     const bronze = list.find((p) => p.specs.watts >= need.rec && p.specs.cert >= 2);
     const gold = list.find((p) => p.specs.watts >= need.rec && p.specs.cert >= 4);
     let pick = bronze || list.find((p) => p.specs.watts >= need.rec) || undefined;
-    if (gold && bronze && (B > 4000 || need.rec >= 750) && gold.price <= bronze.price * 1.3) pick = gold;
+    // Чем дороже сборка, тем важнее надёжный БП: на дорогих — Gold, даже если он заметно дороже Bronze
+    const goldLimit = B >= 9000 || need.rec >= 850 ? 2.4 : B >= 6000 ? 1.8 : 1.3;
+    if (gold && bronze && (B > 4000 || need.rec >= 750) && gold.price <= bronze.price * goldLimit) pick = gold;
     psuMemo.set(key, pick);
     return pick;
   }
@@ -452,9 +459,13 @@ function makePickers(pools, opts, B) {
     if (pools.coolerPinned) return pools.coolerPinned;
     if (!need) return null;
     const fam = COOLER_FAMILY[cpu.specs.socket];
-    const key = fam + ':' + need;
+    // В дорогой сборке — кулер с запасом: тише и не даёт процессору сбрасывать частоты
+    const want = B >= 12000 ? Math.max(need, 250) : B >= 7000 ? Math.max(need, 220) : B >= 4500 ? Math.max(need, 180) : need;
+    const key = fam + ':' + need + ':' + want;
     if (coolMemo.has(key)) return coolMemo.get(key);
-    const pick = pools.coolerAll.find((c) => c.family === fam && c.specs.tdp >= need && (!c.specs.heightMm || c.specs.heightMm >= 70));
+    const fitsH = (c) => c.family === fam && (!c.specs.heightMm || c.specs.heightMm >= 70);
+    const pick = pools.coolerAll.find((c) => fitsH(c) && c.specs.tdp >= want && c.price <= Math.max(150, B * 0.015))
+      || pools.coolerAll.find((c) => fitsH(c) && c.specs.tdp >= need);
     coolMemo.set(key, pick);
     return pick;
   }
@@ -492,15 +503,18 @@ function makePickers(pools, opts, B) {
 }
 
 function scoreParts(prof, purpose, cpu, gpu, ram, ssd, mb, haveGpu, kase) {
-  let g = haveGpu ? 100 : gpu ? gpu.perf.score * (gpu.noname ? 0.92 : 1) : Math.max(1, cpu.perf.igpu || 1);
+  let g = haveGpu ? 100 : gpu ? gpu.perf.score : Math.max(1, cpu.perf.igpu || 1);
   if (prof.gpuCap) g = Math.min(g, prof.gpuCap);
+  // Штраф за малоизвестный бренд — после ограничения, иначе для офиса он теряется
+  if (gpu && gpu.noname) g *= Brands.PENALTY.videocard;
   // Для офиса сверхмощный процессор не нужен: выше порога производительность не засчитывается
   const cg = prof.cpuCapG ? Math.min(cpu.perf.gaming, prof.cpuCapG) : cpu.perf.gaming;
   const cm = prof.cpuCapM ? Math.min(cpu.perf.multi, prof.cpuCapM) : cpu.perf.multi;
   let s = Math.pow(g, prof.wGpu) * Math.pow(cg, prof.wCpuG) * Math.pow(cm, prof.wCpuM);
   if (ram) {
     s *= stepFactor(RAM_F[purpose], ram.specs.totalGb);
-    if (ram.specs.modules === 1) s *= purpose === 'office' ? 0.98 : 0.93;
+    // Встроенной графике нужен двухканальный режим: с одной планкой она теряет до трети скорости
+    if (ram.specs.modules === 1) s *= purpose === 'office' ? (!gpu && !haveGpu ? 0.97 : 0.98) : !gpu && !haveGpu ? 0.9 : 0.93;
     const mhz = ram.specs.mhz || 0;
     if (ram.specs.type === 'DDR4' && mhz < 3000) s *= 0.975;
     if (ram.specs.type === 'DDR5' && mhz < 5600) s *= 0.985;
@@ -514,11 +528,14 @@ function scoreParts(prof, purpose, cpu, gpu, ram, ssd, mb, haveGpu, kase) {
   }
   if (kase) {
     if (kase.noname) s *= Brands.PENALTY.chassis;
+    // Хороший продув важен мощному железу: при дорогой видеокарте «удачный» корпус в приоритете
+    if (kase.goodCase && gpu && gpu.price >= 2500) s *= 1.012;
     if (!kase.specs.fans) s *= 0.99; // без вентиляторов придётся докупать
   }
   // Офису отдельная видеокарта почти ничего не даёт, а шумит и тратит деньги
-  if (purpose === 'office' && gpu) s *= 0.95;
-  if (mb && ENTRY_CHIPSETS.test(mb.specs.chipset || '')) s *= 0.99;
+  if (purpose === 'office' && gpu) s *= 0.92;
+  // Дорогому процессору — плата не начального уровня (питание, слоты, разгон памяти)
+  if (mb && ENTRY_CHIPSETS.test(mb.specs.chipset || '')) s *= cpu.price >= 1200 ? 0.97 : cpu.price >= 700 ? 0.98 : 0.99;
   if (mb && mb.noname) s *= 0.985;
   return s;
 }

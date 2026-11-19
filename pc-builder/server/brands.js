@@ -28,6 +28,6 @@ function isNoname(cat, name) {
 }
 
 // Штраф к оценке сборки за малоизвестный бренд
-const PENALTY = { videocard: 0.92, motherboard: 0.985, dram: 0.94, ssd: 0.95, chassis: 0.985 };
+const PENALTY = { videocard: 0.86, motherboard: 0.985, dram: 0.94, ssd: 0.95, chassis: 0.985 };
 
 module.exports = { isNoname, PENALTY, NONAME, KNOWN };
