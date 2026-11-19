@@ -6,6 +6,7 @@ import { initSearch, rerenderSearch, openSearchFor, renderTray } from './search.
 import { initSaved, rerenderSaved } from './saved.js';
 import { initSettings, rerenderSettings } from './settings.js';
 import { loadMarks } from './kufarui.js';
+import { applyTheme, themeDots } from './themes.js';
 import { initWatch, rerenderWatch } from './watch.js';
 import { initUpgrade, rerenderUpgrade } from './upgrade.js';
 import { initLaptops, rerenderLaptops } from './laptops.js';
@@ -53,15 +54,6 @@ function renderRates() {
   document.getElementById('ratesSrc').textContent = r.source;
 }
 
-function applyTheme(theme) {
-  document.documentElement.dataset.theme = theme;
-  const btn = document.getElementById('themeBtn');
-  btn.querySelector('[data-icon]').dataset.icon = theme === 'dark' ? 'sun' : 'moon';
-  btn.querySelector('[data-icon]').innerHTML = '';
-  hydrateIcons(btn);
-  document.getElementById('themeLabel').textContent = theme === 'dark' ? 'Светлая тема' : 'Тёмная тема';
-}
-
 async function main() {
   hydrateIcons();
   for (const b of document.querySelectorAll('.nav-item')) b.addEventListener('click', () => go(b.dataset.page));
@@ -83,13 +75,20 @@ async function main() {
   } catch {
     state.settings = {};
   }
-  applyTheme(state.settings.theme || 'dark');
-  document.getElementById('themeBtn').addEventListener('click', () => {
-    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-    applyTheme(next);
-    saveSettings({ theme: next }).catch(() => {});
-  });
-
+  // Тема: по умолчанию — фирменная Iron Prince
+  const pickTheme = (id) => {
+    applyTheme(id);
+    saveSettings({ theme: id }).catch(() => {});
+  };
+  // Один раз переводим со старых тем (тёмная/светлая) на новые фирменные
+  if (!state.settings.themeV2) {
+    const next = state.settings.theme === 'light' ? 'iron-light' : 'iron';
+    state.settings.theme = next;
+    saveSettings({ theme: next, themeV2: true }).catch(() => {});
+  }
+  applyTheme(state.settings.theme || 'iron');
+  document.getElementById('themeDots').replaceChildren(...themeDots(state.settings.theme || 'iron', pickTheme));
+  document.addEventListener('theme-pick', (e) => pickTheme(e.detail));
   await loadRates();
   loadBuilds().catch(() => {});
   await loadMarks();

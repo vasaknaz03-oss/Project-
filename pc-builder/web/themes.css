@@ -1,0 +1,275 @@
+/* ПодборПК — темы оформления. Подключается после styles.css и переопределяет цвета.
+   data-theme на <html>: iron (по умолчанию), iron-light, neon, emerald, ocean, dark (классика), light. */
+
+/* ---------- Iron Prince: тёплый тёмный, золото и бронза ---------- */
+:root, [data-theme="iron"] {
+  --bg: #110f0d;
+  --bg-2: #16130f;
+  --surface: #1c1814;
+  --surface-2: #241f1a;
+  --surface-3: #2e2721;
+  --border: #322a23;
+  --border-2: #463a2f;
+  --text: #f5eee4;
+  --text-2: #c6b8a7;
+  --text-3: #8d806f;
+  --accent: #d9a24b;
+  --accent-2: #f1c27b;
+  --accent-soft: rgba(217, 162, 75, 0.16);
+  --grad: linear-gradient(135deg, #f3c97f 0%, #d49544 50%, #a65a2c 100%);
+  --ok: #5fd39a;
+  --ok-soft: rgba(95, 211, 154, 0.13);
+  --warn: #f2b84b;
+  --warn-soft: rgba(242, 184, 75, 0.13);
+  --err: #f0786c;
+  --err-soft: rgba(240, 120, 108, 0.13);
+  --info: #86b8ff;
+  --info-soft: rgba(134, 184, 255, 0.12);
+  --glow: rgba(217, 162, 75, 0.35);
+  --aurora-1: rgba(217, 162, 75, 0.10);
+  --aurora-2: rgba(166, 90, 44, 0.12);
+  --shadow: 0 12px 34px rgba(0, 0, 0, 0.45);
+  color-scheme: dark;
+}
+
+/* ---------- Iron Prince светлая: бежевый и графит, как на визитке ---------- */
+[data-theme="iron-light"] {
+  --bg: #ece6de;
+  --bg-2: #e4ddd3;
+  --surface: #f9f5ef;
+  --surface-2: #f1ebe2;
+  --surface-3: #e8dfd3;
+  --border: #dacfc1;
+  --border-2: #c6b8a6;
+  --text: #24211d;
+  --text-2: #5b5248;
+  --text-3: #8c8174;
+  --accent: #a8722b;
+  --accent-2: #8a5718;
+  --accent-soft: rgba(168, 114, 43, 0.13);
+  --grad: linear-gradient(135deg, #c99247 0%, #a8722b 55%, #7a4a1f 100%);
+  --ok: #2f8f5f;
+  --ok-soft: rgba(47, 143, 95, 0.12);
+  --warn: #b7791f;
+  --warn-soft: rgba(183, 121, 31, 0.12);
+  --err: #c2412d;
+  --err-soft: rgba(194, 65, 45, 0.1);
+  --info: #2f6db3;
+  --info-soft: rgba(47, 109, 179, 0.1);
+  --glow: rgba(168, 114, 43, 0.25);
+  --aurora-1: rgba(201, 146, 71, 0.18);
+  --aurora-2: rgba(36, 33, 29, 0.05);
+  --shadow: 0 12px 30px rgba(60, 40, 20, 0.12);
+  color-scheme: light;
+}
+
+/* ---------- Неон: глубокий фиолетовый, маджента и бирюза ---------- */
+[data-theme="neon"] {
+  --bg: #08061a;
+  --bg-2: #0c0922;
+  --surface: #120d2c;
+  --surface-2: #191238;
+  --surface-3: #221945;
+  --border: #2a2050;
+  --border-2: #3b2d6b;
+  --text: #f1edff;
+  --text-2: #b9b0dc;
+  --text-3: #7d73a8;
+  --accent: #ff4fd8;
+  --accent-2: #3ee8ff;
+  --accent-soft: rgba(255, 79, 216, 0.16);
+  --grad: linear-gradient(135deg, #ff4fd8 0%, #8b5cff 50%, #3ee8ff 100%);
+  --ok: #45f0a6;
+  --ok-soft: rgba(69, 240, 166, 0.13);
+  --warn: #ffd166;
+  --warn-soft: rgba(255, 209, 102, 0.13);
+  --err: #ff6b8b;
+  --err-soft: rgba(255, 107, 139, 0.13);
+  --info: #6cc3ff;
+  --info-soft: rgba(108, 195, 255, 0.13);
+  --glow: rgba(255, 79, 216, 0.45);
+  --aurora-1: rgba(255, 79, 216, 0.12);
+  --aurora-2: rgba(62, 232, 255, 0.10);
+  --shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
+  color-scheme: dark;
+}
+
+/* ---------- Изумруд: тёмно-зелёный, мята и лайм ---------- */
+[data-theme="emerald"] {
+  --bg: #07110e;
+  --bg-2: #0a1612;
+  --surface: #0f1d18;
+  --surface-2: #142620;
+  --surface-3: #1b3029;
+  --border: #1f352d;
+  --border-2: #2b4a3f;
+  --text: #e9f7f0;
+  --text-2: #a8c7b9;
+  --text-3: #6f8f81;
+  --accent: #2ee59d;
+  --accent-2: #a6f07a;
+  --accent-soft: rgba(46, 229, 157, 0.14);
+  --grad: linear-gradient(135deg, #a6f07a 0%, #2ee59d 50%, #12a6a6 100%);
+  --ok: #5ff0a8;
+  --ok-soft: rgba(95, 240, 168, 0.12);
+  --warn: #f6c453;
+  --warn-soft: rgba(246, 196, 83, 0.12);
+  --err: #ff7b72;
+  --err-soft: rgba(255, 123, 114, 0.12);
+  --info: #6fc6ff;
+  --info-soft: rgba(111, 198, 255, 0.12);
+  --glow: rgba(46, 229, 157, 0.35);
+  --aurora-1: rgba(46, 229, 157, 0.09);
+  --aurora-2: rgba(18, 166, 166, 0.10);
+  --shadow: 0 12px 34px rgba(0, 0, 0, 0.45);
+  color-scheme: dark;
+}
+
+/* ---------- Океан: тёмно-синий, лазурь и аква ---------- */
+[data-theme="ocean"] {
+  --bg: #061018;
+  --bg-2: #08151f;
+  --surface: #0c1c2a;
+  --surface-2: #112535;
+  --surface-3: #172f43;
+  --border: #1a3247;
+  --border-2: #26465f;
+  --text: #e8f3fc;
+  --text-2: #a4bfd6;
+  --text-3: #6b8aa3;
+  --accent: #3aa8ff;
+  --accent-2: #5ef0d6;
+  --accent-soft: rgba(58, 168, 255, 0.15);
+  --grad: linear-gradient(135deg, #5ef0d6 0%, #3aa8ff 55%, #5b6cff 100%);
+  --ok: #4ee6a3;
+  --ok-soft: rgba(78, 230, 163, 0.12);
+  --warn: #ffc85c;
+  --warn-soft: rgba(255, 200, 92, 0.12);
+  --err: #ff7a85;
+  --err-soft: rgba(255, 122, 133, 0.12);
+  --info: #7cc4ff;
+  --info-soft: rgba(124, 196, 255, 0.12);
+  --glow: rgba(58, 168, 255, 0.38);
+  --aurora-1: rgba(58, 168, 255, 0.10);
+  --aurora-2: rgba(94, 240, 214, 0.08);
+  --shadow: 0 12px 34px rgba(0, 0, 0, 0.45);
+  color-scheme: dark;
+}
+
+[data-theme="dark"] { --glow: rgba(124, 92, 255, 0.35); --aurora-1: rgba(124, 92, 255, 0.08); --aurora-2: rgba(34, 211, 238, 0.06); }
+[data-theme="light"] { --glow: rgba(106, 70, 255, 0.22); --aurora-1: rgba(106, 70, 255, 0.07); --aurora-2: rgba(14, 165, 198, 0.06); }
+
+/* ---------- цвета разделов: у каждого типа детали свой ---------- */
+:root {
+  --c-cpu: #5aa9ff;
+  --c-board: #2dd4bf;
+  --c-ram: #a78bfa;
+  --c-gpu: #34d399;
+  --c-ssd: #f59e0b;
+  --c-hdd: #fb923c;
+  --c-psu: #facc15;
+  --c-case: #9aa8bd;
+  --c-cooler: #22d3ee;
+  --c-setup: #f472b6;
+}
+[data-theme="iron-light"], [data-theme="light"] {
+  --c-cpu: #2f6fd1; --c-board: #0f9488; --c-ram: #7c5ad6; --c-gpu: #12935f; --c-ssd: #c07a06;
+  --c-hdd: #d0661c; --c-psu: #a68505; --c-case: #5d6b80; --c-cooler: #0e8fa8; --c-setup: #c43c86;
+}
+.part[data-slot="cpu"] { --cat: var(--c-cpu); }
+.part[data-slot="motherboard"] { --cat: var(--c-board); }
+.part[data-slot="ram"] { --cat: var(--c-ram); }
+.part[data-slot="gpu"] { --cat: var(--c-gpu); }
+.part[data-slot="ssd"] { --cat: var(--c-ssd); }
+.part[data-slot="hdd"] { --cat: var(--c-hdd); }
+.part[data-slot="psu"] { --cat: var(--c-psu); }
+.part[data-slot="case"] { --cat: var(--c-case); }
+.part[data-slot="cooler"] { --cat: var(--c-cooler); }
+.part[data-setup] { --cat: var(--c-setup); }
+.part { position: relative; }
+.part::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--cat, var(--accent)); opacity: .9; }
+.part .part-kind, .part .part-kind [data-icon] { color: var(--cat, var(--text-3)); }
+.part .thumb.ph { background: color-mix(in srgb, var(--cat, var(--accent)) 14%, var(--surface-3)); color: var(--cat, var(--text-3)); }
+
+/* Навигация: свой цвет у каждого раздела */
+.nav-item[data-page="build"] { --nav: #f1c27b; }
+.nav-item[data-page="upgrade"] { --nav: #5fd39a; }
+.nav-item[data-page="laptops"] { --nav: #5aa9ff; }
+.nav-item[data-page="search"] { --nav: #22d3ee; }
+.nav-item[data-page="watch"] { --nav: #f59e0b; }
+.nav-item[data-page="news"] { --nav: #a78bfa; }
+.nav-item[data-page="oc"] { --nav: #f0786c; }
+.nav-item[data-page="saved"] { --nav: #f472b6; }
+.nav-item[data-page="settings"] { --nav: #9aa8bd; }
+[data-theme="iron-light"] .nav-item, [data-theme="light"] .nav-item { --nav: var(--accent); }
+.nav-item .nav-ico { color: var(--nav, var(--text-3)); transition: transform .2s; }
+.nav-item:hover .nav-ico { transform: scale(1.12); }
+.nav-item { position: relative; transition: background .2s, color .2s; }
+.nav-item.active { background: linear-gradient(90deg, color-mix(in srgb, var(--nav, var(--accent)) 18%, transparent), transparent 85%); }
+.nav-item.active::before { content: ''; position: absolute; left: -14px; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--nav, var(--accent)); box-shadow: 0 0 12px var(--nav, var(--accent)); }
+.nav-item.active .nav-ico { color: var(--nav, var(--accent)); }
+
+/* ---------- фон, заголовки, кнопки ---------- */
+body {
+  background:
+    radial-gradient(1100px 620px at 88% -12%, var(--aurora-1), transparent 60%),
+    radial-gradient(900px 520px at -8% 112%, var(--aurora-2), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
+}
+.sidebar { background: color-mix(in srgb, var(--bg-2) 88%, transparent); backdrop-filter: blur(10px); }
+.brand-name, .page-head h1, .hero h1 { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.page-head h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.025em; }
+.hero h1 { font-weight: 800; }
+.btn { transition: transform .12s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease; }
+.btn:hover:not(:disabled) { transform: translateY(-1px); }
+.btn:active:not(:disabled) { transform: translateY(0) scale(.98); }
+.btn-primary { background: var(--grad); background-size: 180% 180%; color: #fff; box-shadow: 0 8px 24px var(--glow); animation: gradShift 7s ease infinite; text-shadow: 0 1px 2px rgba(0, 0, 0, .25); }
+.btn-primary:hover:not(:disabled) { background: var(--grad); background-size: 180% 180%; box-shadow: 0 12px 30px var(--glow); filter: brightness(1.06); }
+@keyframes gradShift { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+.card, .part, .variant, .pcard { transition: border-color .2s ease, box-shadow .25s ease, transform .2s ease; }
+.card:hover, .part:hover { border-color: var(--border-2); }
+.pcard:hover, .variant:hover:not(:disabled) { transform: translateY(-2px); box-shadow: var(--shadow); }
+.variant.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 10px 28px var(--glow); }
+.chip.accent { color: var(--accent-2); border-color: color-mix(in srgb, var(--accent) 40%, transparent); background: var(--accent-soft); }
+.summary .t { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.purpose.on, .mode-tab.on, .oc-tab.on { box-shadow: 0 6px 20px var(--glow); }
+.purpose { transition: transform .15s, border-color .2s, box-shadow .2s; }
+.purpose:hover { transform: translateY(-2px); }
+.mode-tab.on { background: var(--grad); }
+a { color: var(--accent-2); }
+
+/* ---------- анимации появления ---------- */
+.page:not([hidden]) { animation: pageIn .35s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes pageIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.parts > .part, .grid > .pcard, .variants > .variant, .news-grid > .news-card, .laptop-list > .laptop-card, .up-scenarios > .up-card { animation: fadeUp .4s cubic-bezier(.2, .8, .2, 1) both; }
+.parts > :nth-child(2), .grid > :nth-child(2), .variants > :nth-child(2), .news-grid > :nth-child(2) { animation-delay: .04s; }
+.parts > :nth-child(3), .grid > :nth-child(3), .variants > :nth-child(3), .news-grid > :nth-child(3) { animation-delay: .08s; }
+.parts > :nth-child(4), .grid > :nth-child(4), .variants > :nth-child(4), .news-grid > :nth-child(4) { animation-delay: .12s; }
+.parts > :nth-child(5), .grid > :nth-child(5), .news-grid > :nth-child(5) { animation-delay: .16s; }
+.parts > :nth-child(6), .grid > :nth-child(6), .news-grid > :nth-child(6) { animation-delay: .2s; }
+.parts > :nth-child(7), .grid > :nth-child(7), .news-grid > :nth-child(7) { animation-delay: .24s; }
+.parts > :nth-child(8), .grid > :nth-child(8), .news-grid > :nth-child(8) { animation-delay: .28s; }
+.parts > :nth-child(n+9), .grid > :nth-child(n+9), .news-grid > :nth-child(n+9) { animation-delay: .32s; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.spinner { border-top-color: var(--accent) !important; }
+.loading .spinner { box-shadow: 0 0 24px var(--glow); border-radius: 50%; }
+
+/* ---------- выбор темы ---------- */
+.theme-pick { display: flex; flex-direction: column; gap: 8px; }
+.theme-pick .label { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: .08em; }
+.theme-dots { display: flex; flex-wrap: wrap; gap: 8px; }
+.theme-dot { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--border-2); cursor: pointer; padding: 0; transition: transform .15s, border-color .15s, box-shadow .2s; }
+.theme-dot:hover { transform: scale(1.12); }
+.theme-dot.on { border-color: var(--text); box-shadow: 0 0 0 3px var(--accent-soft), 0 0 14px var(--glow); }
+.theme-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.theme-card { border-radius: 12px; border: 2px solid var(--border); padding: 10px; cursor: pointer; text-align: left; transition: transform .15s, border-color .2s; background: var(--surface-2); color: var(--text); }
+.theme-card:hover { transform: translateY(-2px); }
+.theme-card.on { border-color: var(--accent); box-shadow: 0 8px 22px var(--glow); }
+.theme-card .sw { height: 46px; border-radius: 8px; margin-bottom: 8px; }
+.theme-card b { display: block; font-size: 13px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+@media (max-width: 760px) { .theme-pick { display: none; } }

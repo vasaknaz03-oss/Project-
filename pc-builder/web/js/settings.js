@@ -1,6 +1,7 @@
 // Страница «Настройки».
 import { el, icon, api, money, toast } from './util.js';
 import { state, saveSettings, DEFAULT_LINKS, shopLinks } from './state.js';
+import { themeCards } from './themes.js';
 
 let root;
 let onRatesChanged = () => {};
@@ -18,6 +19,8 @@ export function rerenderSettings() {
 function render() {
   root.replaceChildren(
     el('div.page-head', el('div', el('h1', 'Настройки'), el('p', 'Валюта, курсы, ссылки на магазины и данные приложения.'))),
+    el('div.card', { style: { marginBottom: '16px' } }, el('h3', 'Оформление'), el('p.dim.small', 'Цветовая тема программы. Сменить можно и кружками внизу боковой панели.'),
+      themeCards(state.settings.theme || 'iron', (id) => document.dispatchEvent(new CustomEvent('theme-pick', { detail: id })))),
     el('div.set-grid', currencyCard(), pickCard(), ratesCard(), powerCard(), linksCard(), aboutCard()));
 }
 

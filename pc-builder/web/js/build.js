@@ -805,7 +805,7 @@ function renderPart(slot, v) {
   if (!it && b.custom) {
     if (slot.key === 'hdd') return null;
     const optional = slot.key === 'gpu' ? 'не обязательно, если у процессора есть встроенная графика' : slot.key === 'cooler' ? 'не нужен, если кулер в комплекте с процессором' : 'не выбрано';
-    return el('div.part.empty.custom-slot',
+    return el('div.part.empty.custom-slot', { 'data-slot': slot.key },
       el('div.part-main',
         el('div.thumb.ph', icon(slot.icon)),
         el('div', el('div.part-kind', icon(slot.icon), slot.label), el('div.part-name.muted', optional)),
@@ -818,7 +818,7 @@ function renderPart(slot, v) {
     if (slot.key === 'cooler' && !Compat.coolerNeed(b.parts.cpu)) return null;
     if (slot.key === 'gpu' && !have.gpu && !alts.length) return null;
     const why = have[slot.key] ? 'У вас уже есть' : slot.key === 'gpu' ? 'Встроенная графика процессора' : 'Не выбрано';
-    const row = el('div.part.empty',
+    const row = el('div.part.empty', { 'data-slot': slot.key },
       el('div.part-main',
         el('div.thumb.ph', icon(slot.icon)),
         el('div', el('div.part-kind', icon(slot.icon), slot.label), el('div.part-name.muted', why)),
@@ -831,7 +831,7 @@ function renderPart(slot, v) {
   const note = slot.setup && b.setupNotes && b.setupNotes[slot.key] && !changed ? b.setupNotes[slot.key] : null;
   const openBtn = (kind, ic, label) => el('button.btn.btn-sm', { class: panels[slot.key] === kind ? 'on' : '', onclick: () => togglePanel(slot.key, kind) }, icon(ic), label);
 
-  const row = el('div.part', { class: changed ? 'changed' : '' },
+  const row = el('div.part', { class: changed ? 'changed' : '', 'data-slot': slot.key, 'data-setup': slot.setup ? '1' : null },
     el('div.part-main',
       thumb(it.image, slot.icon),
       el('div',

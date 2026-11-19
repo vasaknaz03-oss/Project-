@@ -154,7 +154,7 @@ if (!app.requestSingleInstanceLock()) {
       height: 900,
       minWidth: 980,
       minHeight: 640,
-      backgroundColor: '#0b0e14',
+      backgroundColor: '#110f0d',
       title: 'ПодборПК',
       icon: isMac ? undefined : path.join(__dirname, 'web', 'icon.png'),
       show: false,
