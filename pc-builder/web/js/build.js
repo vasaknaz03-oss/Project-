@@ -27,7 +27,7 @@ const HAVE = [
 
 const DEFAULT_FORM = {
   budget: 3500, currency: 'BYN', purpose: 'gaming', cpuBrand: 'any', gpuBrand: 'any', ram: 'auto', storage: 'auto',
-  hdd: 0, platform: 'any', form: 'any', wifi: false, trustedOnly: false, have: {}, advOpen: false, filters: {}, setup: [],
+  hdd: 0, platform: 'any', form: 'any', wifi: false, trustedOnly: false, have: {}, advOpen: false, filters: {}, setup: [], pins: {},
 };
 
 // Фильтры Onliner по комплектующим: [категория Onliner, название, иконка, ключ «у меня уже есть»]
@@ -67,6 +67,7 @@ export function initBuild(container, savedForm) {
       ...DEFAULT_FORM, ...savedForm, have: { ...(savedForm.have || {}) },
       filters: JSON.parse(JSON.stringify(savedForm.filters || {})),
       setup: Array.isArray(savedForm.setup) ? savedForm.setup.filter((id) => Catalog.setupById[id]) : [],
+      pins: savedForm.pins && typeof savedForm.pins === 'object' ? { ...savedForm.pins } : {},
     };
   }
   if (state.settings.currency && !savedForm) form.currency = state.settings.currency;
@@ -211,6 +212,7 @@ function renderForm() {
     filtersBlock,
     advBtn,
     adv,
+    renderPinsBlock(),
     el('div.form-foot', submitBtn, el('span.dim', 'Обычно занимает 3–8 секунд: приложение просматривает несколько тысяч товаров.')));
 }
 
@@ -274,6 +276,39 @@ async function fillSummary(box) {
       }, icon('x'))));
   }
   box.replaceChildren(...rows);
+}
+
+// ------------------------------------------------------------------ закреплённые детали
+
+const SLOT_LABEL = Object.fromEntries(SLOTS.map((x) => [x.key, x.label]));
+
+/** Закрепить или открепить деталь: при пересборке закреплённое остаётся, остальное подбирается под бюджет. */
+function pinPart(slotKey, item, on) {
+  if (on && item) form.pins[slotKey] = slim(item);
+  else delete form.pins[slotKey];
+  persistForm();
+  const old = document.getElementById('pinsBlock');
+  if (old) old.replaceWith(renderPinsBlock());
+}
+
+function isPinned(slotKey, item) {
+  const p = form.pins[slotKey];
+  return !!(p && item && p.id === item.id && p.source === item.source);
+}
+
+function renderPinsBlock() {
+  const keys = Object.keys(form.pins || {}).filter((k) => form.pins[k]);
+  if (!keys.length) return el('div#pinsBlock', { hidden: true });
+  return el('div.pins-block#pinsBlock',
+    el('div.row.wrap', { style: { justifyContent: 'space-between' } },
+      el('div.label', icon('pin'), ' Закреплённые детали — подбор оставит их и подберёт остальное'),
+      el('button.btn.btn-ghost.btn-sm', { type: 'button', onclick: () => { form.pins = {}; persistForm(); pinPart('', null, false); rerenderResults(); } }, 'Открепить все')),
+    el('div.filter-summary', keys.map((k) => {
+      const it = form.pins[k];
+      return el('div.filter-line', el('b', (SLOT_LABEL[k] || k) + ':'),
+        el('span.muted', ` ${it.name} · ${money.fmt(it.price)} · ${it.source === 'kufar' ? 'Kufar (объявление)' : 'Onliner'}`),
+        el('button.icon-btn.small-x', { type: 'button', title: 'Открепить', onclick: () => { pinPart(k, null, false); rerenderResults(); } }, icon('x')));
+    })));
 }
 
 // ------------------------------------------------------------------ сетап целиком
@@ -444,7 +479,8 @@ function renderBuild(v) {
 
   const partsBox = el('div.parts', SLOTS.map((s) => renderPart(s, v)).filter(Boolean));
   if (b.original) {
-    partsBox.prepend(el('div.notice.info', icon('info'), el('div.grow', 'Сборка изменена вручную. Совместимость и итог пересчитаны.'),
+    partsBox.prepend(el('div.notice.info', icon('info'), el('div.grow', 'Сборка изменена вручную, выбранные детали закреплены. Совместимость и итог пересчитаны.'),
+      el('button.btn.btn-sm.btn-primary', { onclick: submit, title: 'Оставить закреплённые детали и подобрать остальное под бюджет' }, icon('sparkles'), 'Пересобрать остальное'),
       el('button.btn.btn-sm', { onclick: () => { b.parts = { ...b.original }; delete b.original; rerenderResults(); } }, 'Вернуть как было')));
   }
   // Сетап: монитор, периферия, рабочее место
@@ -547,7 +583,10 @@ function renderPart(slot, v) {
         el('div.part-kind', icon(slot.icon), slot.label, it.perf && it.perf.score ? el('span.chip', { style: { marginLeft: '6px' } }, `индекс ${it.perf.score}`) : null,
           it.perf && it.perf.gaming ? el('span.chip', { style: { marginLeft: '6px' } }, `игры ${it.perf.gaming} · многопоток ${it.perf.multi}`) : null),
         el('div.part-name', el('a', { href: it.url, target: '_blank', rel: 'noopener' }, it.name)),
-        el('div.part-specs', note ? el('span.chip.ok', note) : null, specChips(slot.cat, it),
+        el('div.part-specs', note ? el('span.chip.ok', note) : null,
+          it.source === 'kufar' ? el('span.badge.kufar', 'Kufar · объявление') : null,
+          it.kufarNote ? el('span.chip.warn', it.kufarNote) : null,
+          specChips(slot.cat, it),
           slot.setup && it.reviews ? el('span.chip', `★ ${it.rating.toFixed(1)} · ${it.reviews} ${plural(it.reviews, 'отзыв', 'отзыва', 'отзывов')}`) : null)),
       el('div.part-side',
         el('div.price', p.main),
@@ -558,6 +597,11 @@ function renderPart(slot, v) {
       alts.length || (slot.key === 'gpu' && b.alternatives && b.alternatives.gpuSame && b.alternatives.gpuSame.length) ? openBtn('alts', 'swap', `Альтернативы (${alts.length + ((slot.key === 'gpu' && b.alternatives && b.alternatives.gpuSame) ? b.alternatives.gpuSame.length : 0)})`) : null,
       openBtn('used', 'recycle', 'Б/у на Kufar'),
       el('a.btn.btn-sm.btn-ghost', { href: it.url, target: '_blank', rel: 'noopener' }, icon('external'), 'Открыть'),
+      !slot.setup ? el('button.btn.btn-sm.btn-ghost', {
+        class: isPinned(slot.key, it) ? 'on' : '',
+        title: isPinned(slot.key, it) ? 'Открепить' : 'Закрепить: при пересборке эта деталь останется, остальное подберётся под бюджет',
+        onclick: () => { pinPart(slot.key, it, !isPinned(slot.key, it)); rerenderResults(); },
+      }, icon('pin'), isPinned(slot.key, it) ? 'Закреплено' : 'Закрепить') : null,
       el('button.btn.btn-sm.btn-ghost', { title: 'Убрать из сборки', onclick: () => replacePart(slot.key, null, slot.setup) }, icon('trash'))));
   const kind = panels[slot.key];
   if (kind) {
@@ -587,6 +631,9 @@ function replacePart(slotKey, item, isSetup = false) {
   } else {
     if (!b.original) b.original = { ...b.parts };
     b.parts = { ...b.parts, [slotKey]: item };
+    // Выбранное вручную закрепляем: при пересборке оно останется
+    if (item) pinPart(slotKey, item, true);
+    else pinPart(slotKey, null, false);
   }
   panels[slotKey] = null;
   rerenderResults();
@@ -597,6 +644,14 @@ export function replaceFromSearch(item, slotKey, isSetup = false) {
   const v = current();
   if (!v || !v.build) return false;
   replacePart(slotKey, item, isSetup);
+  return true;
+}
+
+/** Из поиска: объявление Kufar → в сборку (для комплектующих) или в сетап. */
+export async function takeKufarToBuild(slotKey, u, isSetup = false) {
+  const slot = isSetup ? SETUP_SLOTS.find((x) => x.key === slotKey) : SLOTS.find((x) => x.key === slotKey);
+  if (!slot || !hasActiveBuild()) return false;
+  await takeFromKufar(slot, u);
   return true;
 }
 
@@ -695,33 +750,96 @@ async function fetchUsed(it) {
   const key = it.perf ? it.perf.key || '' : '';
   const q = usedQuery(it);
   const r = await api(`/api/used?kind=${kind}&key=${encodeURIComponent(key)}&q=${encodeURIComponent(q)}&price=${it.price || ''}`);
-  usedCache[it.id] = r.items;
-  return r.items;
+  usedCache[it.id] = { items: r.items, total: r.total || r.items.length, url: r.url };
+  return usedCache[it.id];
+}
+
+function kufarRow(slot, u, it, label = 'В сборку') {
+  return el('div.alt',
+    thumb(u.image, slot.icon),
+    el('div',
+      el('div.alt-name', el('a', { href: u.url, target: '_blank', rel: 'noopener' }, u.name)),
+      el('div.alt-note', [u.perf && u.perf.name ? u.perf.name : null, u.perf && u.perf.gaming && it && it.perf && it.perf.gaming ? `игры ${perfDiff(u.perf.gaming, it.perf.gaming)}` : null,
+        u.perf && u.perf.score && it && it.perf && it.perf.score ? `мощность ${perfDiff(u.perf.score, it.perf.score)}` : null,
+        u.condition, u.location, u.date ? new Date(u.date).toLocaleDateString('ru-RU') : null, u.company ? 'магазин' : 'частное лицо'].filter(Boolean).join(' · '))),
+    el('div.alt-price', el('b', money.fmt(u.price)), it && it.price ? savingTag(u.price, it.price) : null),
+    el('div.row', { style: { gap: '6px' } },
+      el('a.btn.btn-sm.btn-ghost', { href: u.url, target: '_blank', rel: 'noopener', title: 'Открыть объявление' }, icon('external')),
+      el('button.btn.btn-sm', { onclick: (e) => takeFromKufar(slot, u, e.currentTarget) }, icon('plus'), label)));
+}
+
+function perfDiff(a, b) {
+  const d = Math.round((a / b - 1) * 100);
+  return d === 0 ? '±0%' : (d > 0 ? '+' : '') + d + '%';
+}
+
+/** Взять объявление Kufar в сборку: получаем характеристики, заменяем и закрепляем деталь. */
+async function takeFromKufar(slot, u, btn) {
+  if (btn) btn.disabled = true;
+  try {
+    if (slot.setup) {
+      replacePart(slot.key, { ...u, category: slot.cat }, true);
+      return;
+    }
+    const { item } = await api('/api/kufar/enrich', { method: 'POST', body: { slot: slot.key, item: u } });
+    replacePart(slot.key, item);
+    pinPart(slot.key, item, true);
+    toast('Деталь с Kufar добавлена и закреплена. Нажмите «Пересобрать остальное», чтобы подобрать остальное под неё.');
+  } catch (e) {
+    toast('Не удалось добавить: ' + e.message, 'err');
+    if (btn) btn.disabled = false;
+  }
+}
+
+/** Контекст совместимости для поиска на Kufar. */
+function kufarCtx(b, slotKey) {
+  const p = b.parts || {};
+  const ctx = {};
+  if (p.cpu && p.cpu.specs) ctx.socket = p.cpu.specs.socket;
+  if (p.motherboard && p.motherboard.specs) {
+    ctx.socket = ctx.socket || p.motherboard.specs.socket;
+    ctx.mem = p.motherboard.specs.mem;
+  }
+  if (slotKey === 'psu') ctx.need = Compat.psuNeed(p.cpu, p.gpu, 0).rec;
+  return ctx;
 }
 
 async function loadUsed(panel, slot, it) {
-  panel.append(el('div.row', el('div.spinner', { style: { width: '20px', height: '20px', borderWidth: '2px' } }), el('span.muted', 'Ищем б/у на Kufar…')));
-  try {
-    const items = await fetchUsed(it);
-    const q = usedQuery(it);
-    if (!items.length) {
-      panel.replaceChildren(el('div.muted', `Подходящих объявлений «${q}» дешевле нового не нашлось. `),
-        el('div.ext-links', el('a', { href: linkFor('https://www.kufar.by/l?query={q}', q), target: '_blank', rel: 'noopener' }, 'Открыть поиск на Kufar')));
+  const v = current();
+  const b = v.build;
+  panel.append(el('div.row', el('div.spinner', { style: { width: '20px', height: '20px', borderWidth: '2px' } }), el('span.muted', 'Ищем на Kufar…')));
+  const q = usedQuery(it);
+  const sameBox = el('div');
+  const compBox = el('div', { style: { marginTop: '14px' } });
+  // 1) Та же модель б/у
+  const same = fetchUsed(it).then((r) => {
+    if (!r.items.length) {
+      sameBox.replaceChildren(el('div.panel-title', `Та же модель «${q}»`), el('div.muted.small', 'Объявлений этой модели дешевле нового не нашлось.'));
       return;
     }
-    panel.replaceChildren(
-      el('div.panel-title', `Б/у «${q}» на Kufar: ${items.length}`),
-      el('div.alt-list', items.slice(0, 8).map((u) => el('div.alt',
-        thumb(u.image, slot.icon),
-        el('div',
-          el('div.alt-name', el('a', { href: u.url, target: '_blank', rel: 'noopener' }, u.name)),
-          el('div.alt-note', [u.condition, u.location, u.date ? new Date(u.date).toLocaleDateString('ru-RU') : null, u.company ? 'магазин' : 'частное лицо'].filter(Boolean).join(' · '))),
-        el('div.alt-price', el('b', money.fmt(u.price)), savingTag(u.price, it.price)),
-        el('a.btn.btn-sm', { href: u.url, target: '_blank', rel: 'noopener' }, icon('external'), 'Открыть')))),
-      el('p.dim.small', 'Б/у покупайте с проверкой: тесты, отсутствие следов вскрытия, по возможности — с остатком гарантии.'));
-  } catch (e) {
-    panel.replaceChildren(el('div.notice.err', icon('error'), el('div', e.message)));
-  }
+    sameBox.replaceChildren(
+      el('div.panel-title', `Та же модель «${q}» б/у: ${r.total}`, el('a.link-btn', { href: r.url, target: '_blank', rel: 'noopener', style: { marginLeft: '10px' } }, 'все на Kufar ↗')),
+      el('div.alt-list', r.items.slice(0, 10).map((u) => kufarRow(slot, u, it))));
+  }).catch((e) => sameBox.replaceChildren(el('div.notice.err', icon('error'), el('div', e.message))));
+  // 2) Совместимые варианты (тот же сокет / тип памяти / видеокарты близкой мощности)
+  const comp = slot.setup ? Promise.resolve() : api('/api/kufar/compatible', { method: 'POST', body: { slot: slot.key, part: slimForApi(it), ctx: kufarCtx(b, slot.key) } }).then((r) => {
+    const list = r.items.filter((u) => !(u.sameModel));
+    compBox.replaceChildren(
+      el('div.panel-title', `Совместимые на Kufar${r.criteria ? ` (${r.criteria})` : ''}: ${r.total.toLocaleString('ru-RU')} объявлений`,
+        r.url ? el('a.link-btn', { href: r.url, target: '_blank', rel: 'noopener', style: { marginLeft: '10px' } }, 'все на Kufar ↗') : null),
+      list.length ? el('div.alt-list', list.slice(0, 15).map((u) => kufarRow(slot, u, it)))
+        : el('div.muted.small', 'Подходящих объявлений не нашлось.'),
+      list.length > 15 ? el('div.dim.small', { style: { marginTop: '6px' } }, `Показаны 15 самых дешёвых из ${list.length} подходящих. Остальные — по ссылке «все на Kufar».`) : null);
+  }).catch((e) => compBox.replaceChildren(el('div.notice.err', icon('error'), el('div', e.message))));
+  await Promise.allSettled([same, comp]);
+  panel.replaceChildren(sameBox, slot.setup ? null : compBox,
+    el('p.dim.small', 'Б/у покупайте с проверкой: тесты, отсутствие следов вскрытия, по возможности — с остатком гарантии. «В сборку» добавит объявление и закрепит деталь.'));
+}
+
+function slimForApi(it) {
+  if (!it) return null;
+  const { name, price, specs, perf } = it;
+  return { name, price, specs, perf };
 }
 
 // ------------------------------------------------------------------ б/у сводка
@@ -738,7 +856,7 @@ function renderUsedSummary(v) {
   for (const key of ['gpu', 'cpu']) {
     const it = v.build.parts[key];
     if (!it) continue;
-    const items = usedCache[it.id];
+    const items = usedCache[it.id] && usedCache[it.id].items;
     const label = key === 'gpu' ? 'Видеокарта' : 'Процессор';
     if (!items) rows.push(el('div.row.small', el('span.muted.grow', label), el('span.dim', 'ищем…')));
     else if (!items.length) rows.push(el('div.row.small', el('span.muted.grow', label), el('span.dim', 'не найдено')));
@@ -759,7 +877,7 @@ function renderUsedSummary(v) {
 async function prefetchUsed() {
   const v = current();
   if (!v || !v.build) return;
-  const jobs = ['gpu', 'cpu'].map((k) => v.build.parts[k]).filter(Boolean).map((it) => fetchUsed(it).catch(() => (usedCache[it.id] = [])));
+  const jobs = ['gpu', 'cpu'].map((k) => v.build.parts[k]).filter((it) => it && it.source === 'onliner').map((it) => fetchUsed(it).catch(() => (usedCache[it.id] = { items: [], total: 0 })));
   await Promise.all(jobs);
   const old = document.getElementById('usedSummary');
   const cur = current();

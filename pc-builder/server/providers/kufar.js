@@ -33,6 +33,8 @@ function normalize(ad) {
     componentType: param(ad, 'computers_component_type') || '',
     categoryName: param(ad, 'category') || '',
     company: !!ad.company_ad,
+    // Характеристики из объявления (сокет, тип памяти и т. п.) — для проверки совместимости
+    params: Object.fromEntries((ad.ad_parameters || []).filter((p) => p.pu && typeof p.v !== 'object').map((p) => [p.pu, { v: p.v, vl: p.vl }])),
     exchange: !!param(ad, 'possible_exchange'),
     date: ad.list_time,
   };
@@ -95,17 +97,24 @@ async function count(opts = {}) {
 }
 
 // Внимание: \b в JS не работает с кириллицей, поэтому границы слов заданы явно
-const JUNK = /куплю|комплект|сборк|(?:^|[^а-яё])пк(?:$|[^а-яё])|компьютер|ноутбук|коробк|нерабоч|не\s*рабоч|запчаст|под\s*ремонт|только\s*обмен|\+/i;
+const JUNK = /куплю|комплект|сборк|(?:^|[^а-яё])пк(?:$|[^а-яё])|компьютер|ноутбук|коробк|нерабоч|не\s*рабоч|запчаст|под\s*ремонт|только\s*обмен|\+|заброниров|продан[оа]?\b|деф+ект|неисправ|артефакт|(?:^|[^а-яёa-z])(cmp|смр)\s*\d|frankenstein|франкен/i;
 
 /**
  * Б/у предложения конкретной модели (для альтернатив в сборке).
  * kind: 'cpu' | 'videocard'; key — ключ из perfdb; newPrice — цена нового в BYN.
  */
 async function usedFor(kind, key, query, newPrice) {
-  const res = await search({ query, condition: 'used', size: 50 });
+  // Две страницы по 50 объявлений, чтобы не терять предложения
+  const first = await search({ query, condition: 'used', size: 50 });
+  let pool = first.items;
+  if (first.next) {
+    try {
+      pool = pool.concat((await search({ query, condition: 'used', size: 50, cursor: first.next })).items);
+    } catch {}
+  }
   const matcher = kind === 'cpu' ? perf.cpuKey : perf.gpuKey;
   const floor = newPrice ? newPrice * 0.2 : 1;
-  const items = res.items.filter((it) => {
+  const items = pool.filter((it) => {
     if (!it.price || it.price < floor) return false;
     if (newPrice && it.price > newPrice * 1.05) return false;
     if (JUNK.test(it.name)) return false;

@@ -25,6 +25,7 @@ const TYPES = {
 
 const Catalog = require('../web/catalog');
 const kufarFilters = require('./providers/kufarFilters');
+const kufarCompat = require('./kufarCompat');
 const PC_SCHEMAS = new Set(Object.keys(onliner.CATEGORIES));
 
 /** Раздел каталога по id (или категории Onliner — для подбора). */
@@ -236,18 +237,34 @@ async function route(req, res, url) {
     return send(res, 200, { items: out });
   }
 
+  // Совместимые б/у на Kufar: тот же сокет / тип памяти / видеокарты близкой мощности
+  if (pathname === '/api/kufar/compatible' && req.method === 'POST') {
+    const body = await readBody(req);
+    if (!kufarCompat.TYPE[body.slot]) throw new Error('Неизвестный слот');
+    return send(res, 200, await kufarCompat.compatible(body.slot, body.part || null, body.ctx || {}));
+  }
+
+  // Объявление Kufar → деталь сборки (характеристики для проверки совместимости)
+  if (pathname === '/api/kufar/enrich' && req.method === 'POST') {
+    const body = await readBody(req);
+    if (!kufarCompat.TYPE[body.slot] || !body.item || !body.item.name) throw new Error('Нечего добавлять');
+    return send(res, 200, { item: await kufarCompat.enrich(body.slot, body.item) });
+  }
+
   if (pathname === '/api/used') {
     const kind = p.get('kind');
     const key = p.get('key');
     const q = (p.get('q') || '').slice(0, 120);
     const price = num(p.get('price'));
+    const url = 'https://www.kufar.by/l/r~belarus?' + new URLSearchParams({ query: q, cnd: '1' });
     if ((kind === 'cpu' || kind === 'videocard') && key) {
-      return send(res, 200, { items: (await kufar.usedFor(kind, key, q, price)).slice(0, 12) });
+      const all = await kufar.usedFor(kind, key, q, price);
+      return send(res, 200, { items: all.slice(0, 30), total: all.length, url });
     }
     // Для остальных деталей — просто поиск б/у по названию модели
     const r = await kufar.search({ query: q, condition: 'used', size: 30 });
     const items = r.items.filter((it) => it.price > 0 && (!price || it.price < price * 1.05)).sort((a, b) => a.price - b.price);
-    return send(res, 200, { items: items.slice(0, 12) });
+    return send(res, 200, { items: items.slice(0, 30), total: items.length, url });
   }
 
   const m = pathname.match(/^\/api\/store\/(\w+)$/);

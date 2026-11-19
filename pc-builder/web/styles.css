@@ -492,3 +492,9 @@ html.mac-os .select { padding-right: 32px; }
 .setup-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; padding: 4px 4px 0; }
 .setup-head h3 { display: flex; align-items: center; gap: 8px; font-size: 16px; }
 .setup-head h3 [data-icon] { width: 18px; height: 18px; color: var(--accent-2); }
+
+/* ---------- закреплённые детали ---------- */
+.pins-block { margin-top: 18px; padding: 12px 16px; border: 1px solid var(--accent); border-radius: 14px; background: var(--accent-soft); }
+.pins-block .label { display: flex; align-items: center; gap: 6px; }
+.pins-block .label [data-icon] { width: 15px; height: 15px; }
+.part-actions .btn.on [data-icon="pin"] { color: var(--accent); }

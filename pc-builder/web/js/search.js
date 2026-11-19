@@ -1,7 +1,7 @@
 // Страница «Поиск комплектующих»: Onliner (новые, цены магазинов) и Kufar (объявления).
 import { el, icon, api, money, toast, modal, thumb, plural } from './util.js';
 import { state, CAT_TO_SLOT, CAT_ICON, specChips, shopLinks, linkFor } from './state.js';
-import { replaceFromSearch, hasActiveBuild } from './build.js';
+import { replaceFromSearch, hasActiveBuild, takeKufarToBuild } from './build.js';
 import { facetPanel, loadFacets, loadKufarFacets, countActive } from './facets.js';
 
 const Catalog = window.Catalog;
@@ -231,7 +231,7 @@ function renderResults() {
   if (S.error) out.push(el('div.notice.err', { style: { marginTop: '16px' } }, icon('error'), el('div', S.error)));
   if (S.items.length) {
     out.push(el('div.dim.small', { style: { marginTop: '14px' } },
-      S.src === 'kufar' ? `Найдено объявлений: ${S.total.toLocaleString('ru-RU')}` : S.cat ? `Товаров в разделе: ${S.total.toLocaleString('ru-RU')}` : 'Результаты каталога Onliner: компьютеры, периферия, мониторы и всё для сетапа'));
+      S.src === 'kufar' ? `Найдено объявлений: ${S.total.toLocaleString('ru-RU')} · показано ${S.items.length}${S.next ? ' — ниже кнопка «Показать ещё»' : ''}` : S.cat ? `Товаров в разделе: ${S.total.toLocaleString('ru-RU')}` : 'Результаты каталога Onliner: компьютеры, периферия, мониторы и всё для сетапа'));
     out.push(el('div.grid', S.items.map(card)));
   } else if (!S.loading && !S.error) {
     out.push(el('div.card.empty-state', { style: { marginTop: '16px' } }, el('h3', 'Ничего не нашлось'), el('p.muted', 'Попробуйте короче: например, «4060» вместо полного названия.')));
@@ -271,6 +271,14 @@ function card(it) {
         isOnliner && it.offers ? el('div.price-sub', `${it.offers} ${plural(it.offers, 'магазин', 'магазина', 'магазинов')}${it.usedCount ? ` · б/у: ${it.usedCount}` : ''}`) : null),
       el('div.pcard-actions',
         isOnliner && it.offers ? el('button.icon-btn', { title: 'Цены в магазинах', onclick: () => showShops(it) }, icon('store')) : null,
+        !isOnliner && hasActiveBuild() && S.cat && (CAT_TO_SLOT[S.cat] || Catalog.setupById[S.cat]) ? el('button.btn.btn-sm', {
+          title: CAT_TO_SLOT[S.cat] ? 'Взять объявление в сборку и закрепить' : 'Добавить объявление в сетап',
+          onclick: async (e) => {
+            e.currentTarget.disabled = true;
+            const ok = CAT_TO_SLOT[S.cat] ? await takeKufarToBuild(CAT_TO_SLOT[S.cat], it) : await takeKufarToBuild(S.cat, it, true);
+            if (ok) document.dispatchEvent(new CustomEvent('goto-page', { detail: 'build' }));
+          },
+        }, CAT_TO_SLOT[S.cat] ? 'В сборку' : 'В сетап') : null,
         el('button.icon-btn', { title: inCompare ? 'Убрать из сравнения' : 'Добавить к сравнению', style: inCompare ? { color: 'var(--accent)' } : null, onclick: () => toggleCompare(it) }, icon('scale')),
         setupSlot && it.price && hasActiveBuild() ? el('button.btn.btn-sm', {
           title: 'Добавить в сетап текущей сборки',

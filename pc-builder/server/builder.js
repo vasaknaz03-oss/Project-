@@ -22,6 +22,7 @@ const ENTRY_CHIPSETS = /^(A320|A520|A620A?|B840|H610|H510|H410)$/;
 const OLD_AM4_CHIPSETS = /^(A320|B350|X370)$/;
 // Малоизвестные бренды (часто восстановленные карты из Китая) — штраф в оценке или исключение
 const Brands = require('./brands');
+const perf = require('./perfdb');
 const SERVER_CPU = /epyc|xeon|threadripper|opteron/i;
 // Процессоры AM4 до Ryzen (A-серия, Athlon X4 на Bristol Ridge): почти ни одна плата в продаже их не поддерживает
 const PRE_RYZEN = /athlon\s*x4|\bA(4|6|8|10|12)[- ]\d{4}|bristol|excavator|carrizo/i;
@@ -372,7 +373,54 @@ function preparePools(raw, opts, B, F = {}) {
   pools.coolerAll = cheapestBy((raw.coolers || []).filter((c) => inStock(c) && c.specs.tdp), (c) => c.id + c.family);
 
   pools.prof = prof;
+  applyPins(pools, opts);
   return pools;
+}
+
+const PIN_SLOTS = ['cpu', 'gpu', 'motherboard', 'ram', 'ssd', 'hdd', 'psu', 'case', 'cooler'];
+
+/** Закреплённые пользователем детали (из Onliner, Kufar или поиска) — подбор строится вокруг них. */
+function sanitizePins(pins) {
+  const out = {};
+  for (const slot of PIN_SLOTS) {
+    const it = pins && pins[slot];
+    if (!it || typeof it !== 'object' || !it.name || !(Number(it.price) > 0)) continue;
+    out[slot] = { ...it, price: Number(it.price), specs: it.specs && typeof it.specs === 'object' ? it.specs : {}, pinned: true };
+  }
+  return out;
+}
+
+function applyPins(pools, opts) {
+  const pins = sanitizePins(opts.pins);
+  pools.pins = pins;
+  if (pins.cpu) {
+    const c = pins.cpu;
+    if (!c.perf || c.perf.gaming == null) c.perf = perf.cpuPerf(c.name, c.specs) || { gaming: 80, multi: 80, igpu: 0 };
+    if (!c.specs.mem || !c.specs.mem.length) c.specs.mem = { AM4: ['DDR4'], AM5: ['DDR5'], LGA1700: ['DDR4', 'DDR5'], LGA1851: ['DDR5'], LGA1200: ['DDR4'] }[c.specs.socket] || ['DDR4', 'DDR5'];
+    pools.cpus = [c];
+  }
+  if (pins.gpu) {
+    const g = pins.gpu;
+    if (!g.perf || g.perf.score == null) {
+      const key = perf.gpuKey(g.name);
+      g.perf = key ? { key, ...perf.gpuPerf(key, g.specs.vramGb) } : { score: 60, watts: 200, name: g.name };
+    }
+    pools.gpus = [g];
+  }
+  if (pins.motherboard) pools.boardAll = [pins.motherboard];
+  if (pins.ram) {
+    const r = pins.ram;
+    pools.ram = { DDR4: [], DDR5: [] };
+    pools.ram[r.specs.type || 'DDR4'] = [r];
+  }
+  if (pins.ssd) pools.ssd = [pins.ssd];
+  if (pins.hdd) pools.hdd = pins.hdd;
+  if (pins.psu) pools.psuPinned = pins.psu;
+  if (pins.case) {
+    for (const f of Object.keys(pools.caseOpts)) pools.caseOpts[f] = [pins.case];
+    pools.caseFor = { ATX: pins.case, mATX: pins.case, ITX: pins.case };
+  }
+  if (pins.cooler) pools.coolerPinned = pins.cooler;
 }
 
 // ------------------------------------------------------------------ оптимизация
@@ -381,6 +429,7 @@ function makePickers(pools, opts, B) {
   const psuMemo = new Map();
   function pickPsu(need) {
     if (opts.have && opts.have.psu) return null;
+    if (pools.psuPinned) return pools.psuPinned;
     const key = need.rec;
     if (psuMemo.has(key)) return psuMemo.get(key);
     let list = pools.psuAll;
@@ -400,6 +449,7 @@ function makePickers(pools, opts, B) {
   function pickCooler(cpu) {
     if (opts.have && opts.have.cooler) return null;
     const need = Compat.coolerNeed(cpu);
+    if (pools.coolerPinned) return pools.coolerPinned;
     if (!need) return null;
     const fam = COOLER_FAMILY[cpu.specs.socket];
     const key = fam + ':' + need;
@@ -478,8 +528,9 @@ function optimize(pools, opts, budget) {
   const purpose = opts.purpose in PROFILES ? opts.purpose : 'gaming';
   const have = opts.have || {};
   const P = makePickers(pools, opts, budget);
-  const userRam = pools.F && pools.F.dram && pools.F.dram.volume_dram;
+  const userRam = (pools.F && pools.F.dram && pools.F.dram.volume_dram) || (pools.pins && pools.pins.ram);
   const minRam = userRam ? 0 : opts.ram && opts.ram !== 'auto' ? Number(opts.ram) : prof.minRam;
+  const pinnedGpu = pools.pins && pools.pins.gpu;
   const ssdOpts = have.ssd ? [null] : pools.ssd;
   const hdd = pools.hdd;
   const hddCost = hdd ? hdd.price : 0;
@@ -490,13 +541,14 @@ function optimize(pools, opts, budget) {
     if (cpu.price > budget) continue;
     const cooler = P.pickCooler(cpu);
     if (cooler === undefined) continue;
-    const gpuOpts = have.gpu ? [null] : [...(cpu.specs.hasIgpu ? [null] : []), ...pools.gpus];
+    const gpuOpts = have.gpu ? [null] : pinnedGpu ? [pinnedGpu] : [...(cpu.specs.hasIgpu ? [null] : []), ...pools.gpus];
     for (const mb of P.boardsFor(cpu)) {
       const caseList = P.caseOptions(mb.specs.form);
       if (!caseList.length) continue;
       const rams = (pools.ram[mb.specs.mem] || []).filter((r) => r.specs.totalGb >= minRam * 0.94 && r.specs.modules <= (mb.specs.memSlots || 4));
       for (const kase of caseList)
       for (const ram of rams) {
+        if (kase && kase.pinned && !Compat.boardFitsCase(mb.specs.form, kase)) continue;
         const plat = cpu.price + mb.price + ram.price + (cooler ? cooler.price : 0) + (kase ? kase.price : 0) + hddCost;
         if (plat > budget) continue;
         for (const gpu of gpuOpts) {

@@ -1,0 +1,206 @@
+'use strict';
+// Kufar для подбора: совместимые б/у альтернативы (по сокету, типу памяти, близкой мощности)
+// и превращение объявления в «деталь сборки» с характеристиками для проверки совместимости.
+
+const kufar = require('./providers/kufar');
+const kf = require('./providers/kufarFilters');
+const perf = require('./perfdb');
+const onliner = require('./providers/onliner');
+const { normSocket, capacityGb } = require('./parsers');
+
+// «Тип» в категории «Комплектующие» Kufar для каждого слота сборки
+const TYPE = { cpu: '10', gpu: '11', motherboard: '7', ram: '9', ssd: '15', hdd: '13', psu: '5', case: '1', cooler: '3' };
+const SCHEMA = { cpu: 'cpu', gpu: 'videocard', motherboard: 'motherboard', ram: 'dram', ssd: 'ssd', hdd: 'hdd', psu: 'powersupply', case: 'chassis', cooler: 'fan' };
+const JUNK = /куплю|коробк|нерабоч|не\s*рабоч|запчаст|под\s*ремонт|только\s*обмен|на\s*детали|деф+ект|неисправ|сломан|битая|битый|восстанов|артефакт|без\s*видео|не\s*стартует|не\s*определяется|заброниров|продан[оа]?\b|(?:^|[^а-яёa-z])(cmp|смр)\s*\d|frankenstein|франкен|\d{4}\s*m\b|mobile|мобильн/i;
+
+const norm = (s) => String(s || '').toUpperCase().replace(/[\s_-]+/g, '');
+
+/** id значения фильтра Kufar по его названию («AM5», «DDR5», «16 ГБ»). */
+async function valueId(slot, param, label) {
+  if (!label) return null;
+  let meta;
+  try {
+    meta = await kf.facets(16010, { cct: TYPE[slot] }, ['cct']);
+  } catch {
+    return null;
+  }
+  const item = meta.groups.flatMap((g) => g.items).find((i) => i.id === param);
+  if (!item || !item.values) return null;
+  const want = norm(label);
+  const v = item.values.find((x) => norm(x.name) === want);
+  return v ? v.id : null;
+}
+
+async function valuesOf(slot, param) {
+  try {
+    const meta = await kf.facets(16010, { cct: TYPE[slot] }, ['cct']);
+    const item = meta.groups.flatMap((g) => g.items).find((i) => i.id === param);
+    return (item && item.values) || [];
+  } catch {
+    return [];
+  }
+}
+
+function webUrl(params, query) {
+  const qs = new URLSearchParams({ cat: '16010', ...params });
+  if (query) qs.set('query', query);
+  return 'https://www.kufar.by/l/r~belarus?' + qs;
+}
+
+/**
+ * Совместимые предложения Kufar для слота. part — текущая деталь, ctx — {socket, mem, need, gpuScore}.
+ * Возвращает { items, total, url, criteria }.
+ */
+async function compatible(slot, part, ctx = {}) {
+  if (!TYPE[slot]) return { items: [], total: 0, url: null, criteria: '' };
+  const params = { cct: TYPE[slot] };
+  let query;
+  const crit = [];
+  const s = (part && part.specs) || {};
+
+  if (slot === 'cpu' || slot === 'motherboard') {
+    const socket = s.socket || ctx.socket;
+    const id = await valueId(slot, 'ccsct', socket);
+    if (id) params.ccsct = id;
+    else if (socket) query = socket;
+    if (socket) crit.push('сокет ' + socket);
+    if (slot === 'motherboard') {
+      const mem = s.mem || ctx.mem;
+      const mid = await valueId(slot, 'ccrt', mem);
+      if (mid) params.ccrt = mid;
+      if (mem) crit.push(mem);
+    }
+  } else if (slot === 'ram') {
+    const id = await valueId(slot, 'ccrt', s.type);
+    if (id) params.ccrt = id;
+    if (s.type) crit.push(s.type);
+    if (s.totalGb) {
+      const vid = await valueId(slot, 'cdr', `${s.totalGb} ГБ`);
+      if (vid) params.cdr = vid;
+      crit.push(`${s.totalGb} ГБ`);
+    }
+  } else if (slot === 'gpu') {
+    // Видеокарты близкой мощности: от −20% до +50% к текущей
+    const cur = (part && part.perf && part.perf.score) || ctx.gpuScore || 100;
+    const chips = (await valuesOf(slot, 'ccvc')).filter((v) => {
+      const key = perf.gpuKey(v.name);
+      const p = key && perf.gpuPerf(key);
+      return p && p.score >= cur * 0.8 && p.score <= cur * 1.5;
+    });
+    if (chips.length) params.ccvc = 'v.or:' + chips.map((c) => c.id).join(',');
+    else if (part && part.perf) query = part.perf.name;
+    crit.push('видеокарты близкой мощности');
+  } else if (slot === 'psu') {
+    params.cpct = '1'; // блоки питания для ПК
+    const need = ctx.need || 0;
+    if (need >= 750) params.ccpw = '3';
+    else if (need >= 650) params.ccpw = '2';
+    else if (need >= 500) params.ccpw = '1';
+    if (need) crit.push(`от ${need} Вт`);
+  }
+
+  // Две страницы по 50 объявлений
+  const all = [];
+  let total = 0;
+  let cursor;
+  for (let page = 0; page < 2; page++) {
+    const r = await kufar.search({ cat: 16010, params, query, size: 50, cursor });
+    total = r.total;
+    all.push(...r.items);
+    if (!r.next) break;
+    cursor = r.next;
+  }
+  // Цены-приманки («1 р.», «10 р.») и неисправное — отбрасываем
+  const floor = Math.max(20, ((part && part.price) || 0) * 0.15);
+  const items = all.filter((it) => it.price >= floor && !JUNK.test(it.name));
+  // Производительность для процессоров и видеокарт
+  for (const it of items) {
+    if (slot === 'cpu') {
+      const key = perf.cpuKey(it.name);
+      if (key) it.perf = perf.cpuPerf(it.name, {});
+    } else if (slot === 'gpu') {
+      const key = perf.gpuKey(it.name) || perf.gpuKey((it.params.ccvc || {}).vl || '');
+      if (key) it.perf = { key, ...perf.gpuPerf(key) };
+    }
+    if (part && part.perf && it.perf && part.perf.key && it.perf.key === part.perf.key) it.sameModel = true;
+  }
+  items.sort((a, b) => a.price - b.price);
+  return { items: items.slice(0, 40), total, url: webUrl(params, query), criteria: crit.join(', ') };
+}
+
+// ---------------------------------------------------------------- объявление → деталь сборки
+
+const MEM_BY_SOCKET = { AM4: ['DDR4'], AM5: ['DDR5'], LGA1700: ['DDR4', 'DDR5'], LGA1851: ['DDR5'], LGA1200: ['DDR4'] };
+const CHIPSET_SOCKET = [
+  [/^[ABX](6\d0|8\d0)/, 'AM5'], [/^[ABX](3\d0|4\d0|5\d0)/, 'AM4'],
+  [/^[BHZQ](6\d0|7\d0)/, 'LGA1700'], [/^[BHZQ]8\d0/, 'LGA1851'], [/^[BHZQ](4\d0|5\d0)/, 'LGA1200'],
+];
+
+const pv = (it, pu) => (it.params && it.params[pu] ? String(it.params[pu].vl) : '');
+
+/** Ищем ту же модель в каталоге Onliner, чтобы взять точные характеристики. */
+async function onlinerTwin(schema, query, keyFn, key) {
+  try {
+    const r = await onliner.search(query);
+    return r.items.find((x) => x.category === schema && (!keyFn || keyFn(x.name) === key)) || null;
+  } catch {
+    return null;
+  }
+}
+
+async function enrich(slot, item) {
+  const out = { ...item, source: 'kufar', category: SCHEMA[slot], specs: {}, offers: 0, fromKufar: true };
+  const name = item.name || '';
+  const notes = [];
+
+  if (slot === 'cpu') {
+    const key = perf.cpuKey(name);
+    const twin = key ? await onlinerTwin('cpu', name.replace(/процессор/i, ''), perf.cpuKey, key) : null;
+    if (twin) out.specs = { ...twin.specs, withCooler: /box|кулер/i.test(name) && twin.specs.withCooler };
+    else {
+      const socket = normSocket(pv(item, 'ccsct')) || null;
+      out.specs = { socket, mem: MEM_BY_SOCKET[socket] || [], tdp: 65, hasIgpu: /\d{4}g\b|\d{5}\b(?!f)/i.test(name) };
+      notes.push('характеристики процессора взяты из объявления');
+    }
+    out.perf = perf.cpuPerf(twin ? twin.name : name, out.specs);
+  } else if (slot === 'gpu') {
+    const key = perf.gpuKey(name) || perf.gpuKey(pv(item, 'ccvc'));
+    const vram = parseFloat(pv(item, 'cdr')) || (name.match(/(\d{1,2})\s*(gb|гб)/i) || [])[1];
+    out.specs = { vramGb: vram ? Number(vram) : null };
+    if (key) out.perf = { key, ...perf.gpuPerf(key, out.specs.vramGb) };
+    else notes.push('модель видеокарты не распознана');
+  } else if (slot === 'motherboard') {
+    const chipset = (pv(item, 'ccch').match(/([ABHXZQ]\d{3}[A-Z]?)/) || name.toUpperCase().match(/\b([ABHXZQ]\d{3}[A-Z]?)\b/) || [])[1] || null;
+    let socket = normSocket(pv(item, 'ccsct')) || null;
+    if (!socket && chipset) for (const [re, sk] of CHIPSET_SOCKET) if (re.test(chipset)) { socket = sk; break; }
+    let mem = (pv(item, 'ccrt').match(/DDR\d/) || [])[0];
+    if (!mem) mem = /ddr5|d5\b/i.test(name) ? 'DDR5' : /ddr4|d4\b/i.test(name) ? 'DDR4' : (MEM_BY_SOCKET[socket] || [])[0];
+    const ffRaw = pv(item, 'ccff') || name;
+    const form = /itx/i.test(ffRaw) ? 'ITX' : /m-?atx|micro/i.test(ffRaw) || /\d{3}M\b|M-/i.test(name) ? 'mATX' : 'ATX';
+    out.specs = { socket, mem, form, chipset, memSlots: Number(pv(item, 'ccns')) || 2, m2: 1 };
+    if (!pv(item, 'ccsct')) notes.push('сокет определён по названию');
+  } else if (slot === 'ram') {
+    const type = (pv(item, 'ccrt').match(/DDR\d/) || name.toUpperCase().match(/DDR\d/) || [])[0] || null;
+    const total = parseFloat(pv(item, 'cdr')) || capacityGb(name) || null;
+    const kit = name.match(/(\d)\s*[xх×]\s*(\d{1,2})\s*(gb|гб)?/i);
+    out.specs = {
+      type, form: /so-?dimm/i.test(name + pv(item, 'ccrt')) ? 'SO-DIMM' : 'DIMM', totalGb: kit ? Number(kit[1]) * Number(kit[2]) : total,
+      modules: kit ? Number(kit[1]) : /комплект|kit/i.test(name) ? 2 : 1, mhz: Number((name.match(/(\d{4})\s*(mhz|мгц)/i) || [])[1]) || null,
+    };
+  } else if (slot === 'ssd' || slot === 'hdd') {
+    out.specs = { capacityGb: capacityGb(pv(item, 'ccscp')) || capacityGb(name), iface: /nvme|m\.2/i.test(name + pv(item, 'ccsi')) ? 'NVMe' : 'SATA', form: /m\.2/i.test(name + pv(item, 'ccff')) ? 'M.2' : '2.5"' };
+  } else if (slot === 'psu') {
+    const w = Number((name.match(/(\d{3,4})\s*(w|вт)\b/i) || [])[1]) || null;
+    out.specs = { watts: w, cert: /gold|золот/i.test(name) ? 4 : /bronze|бронз/i.test(name) ? 2 : 0, form: 'ATX' };
+    out.specs.certName = ['нет', '80+', 'Bronze', 'Silver', 'Gold'][out.specs.cert] || '';
+    if (!w) notes.push('мощность не указана — уточните у продавца');
+  } else if (slot === 'case') {
+    out.specs = { boards: /mini|itx/i.test(name) ? ['mATX', 'ITX'] : ['ATX', 'mATX', 'ITX'], fans: 0 };
+  } else if (slot === 'cooler') {
+    out.specs = { tdp: Number((name.match(/(\d{3})\s*(w|вт)/i) || [])[1]) || 150, heightMm: null };
+  }
+  out.kufarNote = notes.join('; ');
+  return out;
+}
+
+module.exports = { compatible, enrich, TYPE, SCHEMA };

@@ -41,6 +41,7 @@ export const ICONS = {
   down: P('<path d="m6 9 6 6 6-6"/>'),
   sparkles: P('<path d="M12 3 13.9 8.1 19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM19 3v4M17 5h4M5 17v4M3 19h4"/>'),
   open: P('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
+  pin: P('<path d="M12 17v5M8 3h8l-1 6 3 3v2H6v-2l3-3z"/>'),
   monitor: P('<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>'),
   keyboard: P('<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 14h6"/>'),
   mouse: P('<rect x="6" y="2" width="12" height="20" rx="6"/><path d="M12 6v4"/>'),

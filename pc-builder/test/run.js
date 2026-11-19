@@ -215,6 +215,17 @@ test('каталог: у каждого раздела есть источник
   assert.strictEqual(C.setupTarget('display', 100000), 3500);
 });
 
+test('объявление Kufar → материнская плата с характеристиками', async () => {
+  const KC = require('../server/kufarCompat');
+  const ad = { name: 'Материнская плата Asus Prime B650M-K AM5 DDR5', price: 250, params: { ccsct: { vl: 'AM5' }, ccrt: { vl: 'DDR5' }, ccff: { vl: 'mATX' }, ccns: { vl: '2' }, ccch: { vl: 'AMD B650' } } };
+  const mb = await KC.enrich('motherboard', ad);
+  assert.deepStrictEqual([mb.specs.socket, mb.specs.mem, mb.specs.form, mb.specs.chipset], ['AM5', 'DDR5', 'mATX', 'B650']);
+  const guess = await KC.enrich('motherboard', { name: 'Gigabyte B760M DS3H DDR4', price: 200, params: {} });
+  assert.deepStrictEqual([guess.specs.socket, guess.specs.mem, guess.specs.form], ['LGA1700', 'DDR4', 'mATX']);
+  const ram = await KC.enrich('ram', { name: 'Kingston Fury 2x16GB DDR5 6000', price: 600, params: {} });
+  assert.deepStrictEqual([ram.specs.type, ram.specs.totalGb, ram.specs.modules], ['DDR5', 32, 2]);
+});
+
 console.log('Сетап');
 test('класс монитора по мощности видеокарты', () => {
   const Setup = require('../server/setup');
