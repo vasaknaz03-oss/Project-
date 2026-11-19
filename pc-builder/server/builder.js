@@ -103,10 +103,13 @@ function userFilters(opts) {
  * Загрузка категории с учётом фильтров пользователя.
  * Если условия подбора и фильтры противоречат друг другу, запрос не делается.
  */
-function makeFetcher(F, warnings) {
+function makeFetcher(F, warnings, conflicts) {
   return function fetchCat(schema, params, pages, what) {
     const merged = filters.merge(params, F[schema]);
-    if (!merged) return Promise.resolve([]);
+    if (!merged) {
+      if (conflicts) conflicts.add(schema); // фильтр противоречит условию подбора
+      return Promise.resolve([]);
+    }
     return safe(onliner.category(schema, merged, pages), warnings, what);
   };
 }
@@ -132,7 +135,8 @@ async function gather(opts, B) {
   const prof = PROFILES[opts.purpose] || PROFILES.gaming;
   const have = opts.have || {};
   const F = userFilters(opts);
-  const fetchCat = makeFetcher(F, warnings);
+  const conflicts = new Set();
+  const fetchCat = makeFetcher(F, warnings, conflicts);
   const sockets = opts.platform === 'modern' ? MODERN_SOCKETS : ALL_SOCKETS;
   const cpuMfr = opts.cpuBrand === 'amd' ? ['amd'] : opts.cpuBrand === 'intel' ? ['intel'] : undefined;
   let useSockets = sockets.filter((s) => {
@@ -253,7 +257,11 @@ async function gather(opts, B) {
     if (!filters.countActive(f)) continue;
     const list = raw[RAW_KEY[schema]];
     if (list && !list.some(inStock)) {
-      warnings.push(`По вашим фильтрам для «${SCHEMA_LABEL[schema]}» в наличии ничего не нашлось в пределах бюджета — ослабьте фильтры`);
+      if (conflicts.has(schema)) {
+        warnings.push(`Фильтр для «${SCHEMA_LABEL[schema]}» противоречит тонким настройкам (например, в фильтре видеокарта AMD, а в настройках — NVIDIA, или сокет не того производителя) — уберите одно из условий`);
+      } else {
+        warnings.push(`По вашим фильтрам для «${SCHEMA_LABEL[schema]}» в наличии ничего не нашлось в пределах бюджета — ослабьте фильтры`);
+      }
     }
   }
   return { raw, warnings, F, sockets: useSockets.map((s) => SOCKET_NAME[s]) };
