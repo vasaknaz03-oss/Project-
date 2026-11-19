@@ -669,9 +669,11 @@ function renderBuild(v) {
 
   const summary = el('div.card.summary',
     el('div.sum-total',
-      el('div.dim.small', `${state.result.purposeLabel} · ${v.label.toLowerCase()}`),
+      el('div.dim.small', b.custom ? 'Своя сборка — итог по вашим деталям' : `${state.result.purposeLabel} · ${v.label.toLowerCase()}`),
       el('div.t', t.main),
-      el('div.s', t.sub ? t.sub + ' · ' : '', left >= 0 ? `остаток от бюджета ${money.fmt(left)}` : `больше бюджета на ${money.fmt(-left)}`),
+      b.custom
+        ? (t.sub ? el('div.s', t.sub) : null)
+        : el('div.s', t.sub ? t.sub + ' · ' : '', left >= 0 ? `остаток от бюджета ${money.fmt(left)}` : `больше бюджета на ${money.fmt(-left)}`),
       hasSetup(b) ? el('div.s', `компьютер ${money.fmt(pcTotal)} + сетап ${money.fmt(setupTotal)}`) : null),
     meter('Игровой индекс', idx.gaming, 300, idx.tier),
     meter('Рабочий индекс', idx.work, 300, 'монтаж, рендер, компиляция'),
