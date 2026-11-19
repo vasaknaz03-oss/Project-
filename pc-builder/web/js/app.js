@@ -7,8 +7,10 @@ import { initSaved, rerenderSaved } from './saved.js';
 import { initSettings, rerenderSettings } from './settings.js';
 import { loadMarks } from './kufarui.js';
 import { initWatch, rerenderWatch } from './watch.js';
+import { initUpgrade, rerenderUpgrade } from './upgrade.js';
+import { initLaptops, rerenderLaptops } from './laptops.js';
 
-const pages = ['build', 'search', 'watch', 'saved', 'settings'];
+const pages = ['build', 'upgrade', 'laptops', 'search', 'watch', 'saved', 'settings'];
 
 function go(page) {
   state.page = page;
@@ -16,6 +18,8 @@ function go(page) {
   for (const b of document.querySelectorAll('.nav-item')) b.classList.toggle('active', b.dataset.page === page);
   if (page === 'saved') rerenderSaved();
   if (page === 'watch') rerenderWatch();
+  if (page === 'upgrade') rerenderUpgrade();
+  if (page === 'laptops') rerenderLaptops();
   renderTray();
   document.getElementById('main').scrollTop = 0;
 }
@@ -94,6 +98,8 @@ async function main() {
   initSearch(document.getElementById('page-search'));
   initSaved(document.getElementById('page-saved'));
   await initWatch(document.getElementById('page-watch'));
+  await initUpgrade(document.getElementById('page-upgrade'));
+  await initLaptops(document.getElementById('page-laptops'));
   initSettings(document.getElementById('page-settings'), async (force) => {
     await loadRates(force);
     rerenderBuild();

@@ -413,8 +413,9 @@ function sanitizePins(pins) {
   const out = {};
   for (const slot of PIN_SLOTS) {
     const it = pins && pins[slot];
-    if (!it || typeof it !== 'object' || !it.name || !(Number(it.price) > 0)) continue;
-    out[slot] = { ...it, price: Number(it.price), specs: it.specs && typeof it.specs === 'object' ? it.specs : {}, pinned: true };
+    // owned — деталь, которая у пользователя уже есть (апгрейд): цена 0
+    if (!it || typeof it !== 'object' || !it.name || (!(Number(it.price) > 0) && !it.owned)) continue;
+    out[slot] = { ...it, price: Number(it.price) || 0, specs: it.specs && typeof it.specs === 'object' ? it.specs : {}, pinned: true };
   }
   return out;
 }
@@ -1003,4 +1004,105 @@ async function hybrid(opts) {
   };
 }
 
-module.exports = { build, hybrid, PROFILES, boardSuitable };
+// ------------------------------------------------------------------ апгрейд своего ПК
+
+const UPGRADE_SCENARIOS = [
+  { id: 'gpu', title: 'Только видеокарта', replace: ['gpu'] },
+  { id: 'gpu-psu', title: 'Видеокарта и блок питания', replace: ['gpu', 'psu'] },
+  { id: 'cpu', title: 'Только процессор (на ту же плату)', replace: ['cpu'] },
+  { id: 'ram', title: 'Оперативная память', replace: ['ram'] },
+  { id: 'platform', title: 'Платформа: процессор, плата и память', replace: ['cpu', 'motherboard', 'ram'] },
+  { id: 'platform-gpu', title: 'Платформа и видеокарта', replace: ['cpu', 'motherboard', 'ram', 'gpu', 'psu'] },
+];
+
+/** Текущие детали пользователя → объекты деталей с характеристиками (цена 0). */
+async function ownedParts(cur) {
+  const KC = require('./kufarCompat');
+  const own = (slot, it, name) => (it ? { ...it, id: 'owned-' + slot, source: 'owned', owned: true, price: 0, offers: 0, name: it.name || name, kufarNote: 'уже есть' } : null);
+  const out = {};
+  if (!cur || !cur.cpu || !cur.cpu.name) throw new Error('Укажите процессор');
+  const cpu = await KC.enrich('cpu', { name: String(cur.cpu.name).slice(0, 120), price: 0, params: {} });
+  if (!cpu.perf || !cpu.specs.socket) throw new Error(`Не удалось распознать процессор «${cur.cpu.name}». Напишите модель полностью, например «Ryzen 5 3600» или «Core i5-10400F».`);
+  out.cpu = own('cpu', cpu);
+  if (cur.gpu && cur.gpu.name) {
+    const gpu = await KC.enrich('gpu', { name: String(cur.gpu.name).slice(0, 120), price: 0, params: {} });
+    if (!gpu.perf) throw new Error(`Не удалось распознать видеокарту «${cur.gpu.name}». Например: «RTX 3060» или «RX 6600».`);
+    out.gpu = own('gpu', gpu);
+  }
+  const memType = (cur.ram && cur.ram.type) || (cpu.specs.mem || [])[0] || 'DDR4';
+  let mb = null;
+  if (cur.motherboard && cur.motherboard.name) mb = await KC.enrich('motherboard', { name: String(cur.motherboard.name).slice(0, 120), price: 0, params: {} });
+  if (!mb || !mb.specs.socket) mb = { name: 'Ваша материнская плата', specs: { socket: cpu.specs.socket, mem: memType, form: 'mATX', chipset: null, memSlots: 4, m2: 1 } };
+  if (!mb.specs.mem) mb.specs.mem = memType;
+  out.motherboard = own('motherboard', mb, 'Ваша материнская плата');
+  const totalGb = Number(cur.ram && cur.ram.totalGb) || 16;
+  const modules = Number(cur.ram && cur.ram.modules) || 2;
+  out.ram = own('ram', { name: `Ваша память ${memType} ${totalGb} ГБ (${modules}×${Math.round(totalGb / modules)})`, specs: { type: memType, form: 'DIMM', totalGb, modules, mhz: Number(cur.ram && cur.ram.mhz) || null } });
+  const watts = Number(cur.psu && cur.psu.watts) || 500;
+  out.psu = own('psu', { name: `Ваш блок питания ${watts} Вт`, specs: { watts, cert: 2, certName: 'Bronze', form: 'ATX' } });
+  return out;
+}
+
+/** Что ограничивает текущий ПК. */
+function bottleneck(parts) {
+  const c = parts.cpu.perf.gaming;
+  const g = parts.gpu ? parts.gpu.perf.score : parts.cpu.perf.igpu || 1;
+  const rs = parts.ram.specs;
+  const notes = [];
+  if (!parts.gpu) notes.push('Нет отдельной видеокарты: для игр это главное узкое место.');
+  else if (g > c * 1.6) notes.push(`Процессор слабее видеокарты: в играх он не даёт ей раскрыться (процессор ${c}, видеокарта ${g} по нашему индексу).`);
+  else if (g < c * 0.65) notes.push(`Видеокарта — слабое место: процессор потянет карту заметно мощнее (процессор ${c}, видеокарта ${g}).`);
+  else notes.push(`Процессор и видеокарта примерно сбалансированы (процессор ${c}, видеокарта ${g}).`);
+  if (rs.totalGb < 16) notes.push(`Памяти ${rs.totalGb} ГБ мало для современных игр и браузера — нужно хотя бы 16 ГБ, лучше 32 ГБ.`);
+  if (rs.modules === 1) notes.push('Одна планка памяти работает в одноканальном режиме — вторая такая же планка добавит заметно FPS.');
+  return notes;
+}
+
+/**
+ * Апгрейд: какие детали заменить, чтобы получить больше за бюджет.
+ * opts: { current: {cpu:{name}, gpu:{name}, motherboard:{name}, ram:{type,totalGb,modules}, psu:{watts}}, budgetByn, purpose }
+ */
+async function upgrade(opts) {
+  const budget = Number(opts.budgetByn);
+  if (!(budget >= 100)) throw new Error('Укажите бюджет на апгрейд');
+  const owned = await ownedParts(opts.current);
+  const purpose = opts.purpose in PROFILES ? opts.purpose : 'gaming';
+  const nowIdx = Compat.indices(owned, false);
+  const key = purpose === 'work' ? 'work' : 'gaming';
+  // Пулы: бюджет на апгрейд может уйти целиком в одну деталь
+  const o = { ...opts, purpose, setup: [], pins: {}, have: { ssd: true, case: true, hdd: true } };
+  const { raw, F } = await gather({ ...o, platform: 'any', cpuBrand: 'any' }, Math.max(budget * 2, 1200));
+  const results = [];
+  for (const sc of UPGRADE_SCENARIOS) {
+    if (sc.id === 'ram' && owned.ram.specs.totalGb >= 32 && owned.ram.specs.modules >= 2) continue;
+    const pins = {};
+    for (const slot of ['cpu', 'gpu', 'motherboard', 'ram', 'psu']) if (owned[slot] && !sc.replace.includes(slot)) pins[slot] = owned[slot];
+    // Новый процессор на другой сокет — нужен и кулер; при той же плате старый кулер обычно подходит
+    const so = { ...o, pins, have: { ...o.have, cooler: !sc.replace.includes('motherboard') } };
+    if (!owned.gpu && !sc.replace.includes('gpu')) so.have.gpu = false;
+    let pools;
+    try {
+      pools = preparePools(raw, so, Math.max(budget * 2, 1200), F);
+    } catch {
+      continue;
+    }
+    if (!pools.cpus.length) continue;
+    const best = optimize(pools, so, budget);
+    if (!best) continue;
+    const parts = { ...best.parts };
+    const checks = Compat.check(parts, so.have);
+    if (checks.some((c) => c.level === 'error')) continue;
+    const idx = Compat.indices(parts, false);
+    const before = nowIdx[key] || 1;
+    const gain = Math.round(((idx[key] || 0) / before - 1) * 100);
+    const buy = Object.entries(parts).filter(([, x]) => x && !x.owned).map(([slot, x]) => ({ slot, item: x }));
+    if (!buy.length || gain < 3) continue;
+    results.push({ id: sc.id, title: sc.title, cost: Math.round(best.total * 100) / 100, index: idx, gain, buy, parts, checks: checks.filter((c) => c.level !== 'ok') });
+  }
+  results.sort((a, b) => b.gain - a.gain || a.cost - b.cost);
+  // Лучший по «приросту за рубль» — отдельно
+  const value = results.slice().sort((a, b) => b.gain / Math.max(1, b.cost) - a.gain / Math.max(1, a.cost))[0] || null;
+  return { current: owned, index: nowIdx, bottleneck: bottleneck(owned), scenarios: results, best: results[0] ? results[0].id : null, value: value ? value.id : null, purpose };
+}
+
+module.exports = { build, hybrid, upgrade, PROFILES, boardSuitable };

@@ -608,3 +608,38 @@ a.chip:hover { border-color: var(--accent); color: var(--text); }
 .style-field { margin-top: 14px; }
 .style-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .style-chip { padding: 7px 14px; }
+
+/* ---------- апгрейд ---------- */
+.up-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 18px; }
+.up-grid .field { display: flex; flex-direction: column; gap: 6px; }
+.up-grid .row .select { flex: 1; min-width: 0; }
+.budget-input.small input { font-size: 20px; padding: 8px 12px; }
+.check.small { font-size: 12.5px; font-weight: 500; }
+.upgrade-now { margin-top: 16px; }
+.up-now { display: flex; gap: 22px; align-items: center; margin: 4px 0 10px; }
+.big-num { font-size: 38px; font-weight: 800; letter-spacing: -0.03em; background: linear-gradient(135deg, var(--accent), #38bdf8); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.bottleneck { display: flex; flex-direction: column; gap: 6px; }
+.up-scenarios { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; margin-top: 16px; }
+.up-card { margin: 0 !important; display: flex; flex-direction: column; gap: 10px; animation: fadeUp .3s ease-out both; }
+.up-card.best { border-color: var(--ok); box-shadow: 0 0 0 1px color-mix(in srgb, var(--ok) 35%, transparent); }
+.up-card-head { display: flex; justify-content: space-between; gap: 12px; }
+.up-card-head h3 { margin: 0 0 6px; }
+.up-gain { text-align: right; }
+.up-gain b { font-size: 26px; color: var(--ok); }
+.up-buy { display: flex; flex-direction: column; gap: 6px; }
+.up-buy-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.up-buy-row .thumb { width: 40px; height: 40px; }
+.up-fps { display: flex; flex-wrap: wrap; gap: 6px; }
+.up-checks { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.up-grid .field.wide { grid-column: span 2; }
+@media (max-width: 760px) { .up-grid .field.wide { grid-column: auto; } }
+
+/* ---------- ноутбуки ---------- */
+.laptop-list { display: flex; flex-direction: column; gap: 10px; }
+.laptop-card { display: grid; grid-template-columns: 96px minmax(0, 1fr) 170px; gap: 16px; align-items: center; margin: 0 !important; animation: fadeUp .3s ease-out both; }
+.laptop-card .thumb { width: 96px; height: 96px; }
+.laptop-card.best { border-color: var(--ok); }
+.laptop-main { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.laptop-name { font-weight: 650; font-size: 15.5px; }
+.laptop-side { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+@media (max-width: 760px) { .laptop-card { grid-template-columns: 64px minmax(0, 1fr); } .laptop-card .thumb { width: 64px; height: 64px; } .laptop-side { grid-column: 1 / -1; align-items: flex-start; text-align: left; } }

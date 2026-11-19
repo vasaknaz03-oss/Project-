@@ -44,7 +44,7 @@ function sectionOf(cat) {
   if (Catalog.ONLINER_SCHEMAS.has(cat)) return { id: cat, onliner: cat };
   return null;
 }
-const STORE_KEYS = new Set(['builds', 'settings', 'lastForm', 'kufarMarks']);
+const STORE_KEYS = new Set(['builds', 'settings', 'lastForm', 'kufarMarks', 'upgradeForm', 'laptopForm']);
 
 function send(res, status, body, type = 'application/json; charset=utf-8') {
   const data = typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body);
@@ -365,6 +365,24 @@ async function route(req, res, url) {
     result.rate = rate;
     result.ratesSource = rates.source;
     return send(res, 200, result);
+  }
+
+  // Подбор ноутбука под бюджет
+  if (pathname === '/api/laptops' && req.method === 'POST') {
+    const body = await readBody(req);
+    const rates = await currency.getRates();
+    const rate = rates.rates[body.currency || 'BYN'];
+    if (!rate) throw new Error('Неизвестная валюта');
+    return send(res, 200, await require('./laptops').pick({ ...body, budgetByn: Number(body.budget) * rate }));
+  }
+
+  // Апгрейд своего ПК
+  if (pathname === '/api/upgrade' && req.method === 'POST') {
+    const body = await readBody(req);
+    const rates = await currency.getRates();
+    const rate = rates.rates[body.currency || 'BYN'];
+    if (!rate) throw new Error('Неизвестная валюта');
+    return send(res, 200, await builder.upgrade({ ...body, budgetByn: Number(body.budget) * rate }));
   }
 
   // Вариант «новое + б/у» (процессор и видеокарта могут быть с Kufar)
