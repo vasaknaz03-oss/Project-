@@ -367,6 +367,17 @@ async function route(req, res, url) {
     return send(res, 200, result);
   }
 
+  // Вариант «новое + б/у» (процессор и видеокарта могут быть с Kufar)
+  if (pathname === '/api/build/hybrid' && req.method === 'POST') {
+    const body = await readBody(req);
+    const rates = await currency.getRates();
+    const rate = rates.rates[body.currency || 'BYN'];
+    if (!rate) throw new Error('Неизвестная валюта');
+    const budgetByn = Number(body.budget) * rate;
+    if (!(budgetByn >= 300) || budgetByn > 200000) return send(res, 200, { none: true, reason: 'Для этого бюджета вариант с б/у не считается.' });
+    return send(res, 200, await builder.hybrid({ ...body, budgetByn }));
+  }
+
   // Wildberries: цены за пределами Onliner (может быть недоступен — тогда только ссылка)
   if (pathname === '/api/wb') {
     const q = (p.get('q') || '').trim().slice(0, 200);

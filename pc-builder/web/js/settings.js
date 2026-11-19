@@ -18,7 +18,23 @@ export function rerenderSettings() {
 function render() {
   root.replaceChildren(
     el('div.page-head', el('div', el('h1', 'Настройки'), el('p', 'Валюта, курсы, ссылки на магазины и данные приложения.'))),
-    el('div.set-grid', currencyCard(), ratesCard(), linksCard(), aboutCard()));
+    el('div.set-grid', currencyCard(), ratesCard(), powerCard(), linksCard(), aboutCard()));
+}
+
+/** Тариф и часы использования — для расчёта счёта за электроэнергию в сборке. */
+function powerCard() {
+  const st = state.settings;
+  const field = (key, label, def, step, hint) => el('div.field', el('label', label),
+    el('input.input', {
+      type: 'number', min: '0', step, value: st[key] != null ? st[key] : def,
+      onchange: async (e) => { await saveSettings({ [key]: +e.target.value }); toast('Сохранено'); },
+    }), hint ? el('div.dim.small', hint) : null);
+  return el('div.card',
+    el('h3', 'Электроэнергия'),
+    el('p', 'Для оценки, сколько сборка будет стоить по свету в месяц (показывается в карточке «Питание и охлаждение»).'),
+    field('tariff', 'Тариф, р. за кВт·ч', 0.27, '0.01', 'Посмотрите в квитанции за электроэнергию'),
+    field('gameHours', 'Часов игр в день', 4, '0.5'),
+    field('officeHours', 'Часов работы, учёбы, браузера в день', 4, '0.5'));
 }
 
 function currencyCard() {

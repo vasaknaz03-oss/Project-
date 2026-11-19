@@ -135,6 +135,18 @@ async function usedFor(kind, key, query, newPrice) {
   return items;
 }
 
-const isJunk = (name) => JUNK.test(name || '');
+// Объявление сразу с несколькими моделями («Ryzen 5 5600, 3600, 2600», «RTX 3060 Ti и RTX 3060»):
+// цена в нём относится к одной из них, для подбора и оценки рынка такие не годятся
+function isMulti(name) {
+  const n = String(name || '').toLowerCase();
+  // Две и больше упоминаний модели: «RTX 3060 Ti и RTX 3060», «i5-9400F, i7-8700»
+  const models = n.match(/(?:rtx|gtx|rx|gt|arc|ryzen\s*\d|i[3579])[\s-]*\d{3,5}/g) || [];
+  if (models.length >= 2) return true;
+  // Перечень номеров моделей: «5600, 3600, 2600, 2400G»
+  const nums = new Set(n.match(/(?<![\d.])\d{4,5}(?!\d)/g) || []);
+  return nums.size >= 3;
+}
 
-module.exports = { search, count, usedFor, ratesFromAds, isJunk, CAT_COMPONENTS, CAT_COMPUTERS };
+const isJunk = (name) => JUNK.test(name || '') || isMulti(name);
+
+module.exports = { search, count, usedFor, ratesFromAds, isJunk, isMulti, CAT_COMPONENTS, CAT_COMPUTERS };

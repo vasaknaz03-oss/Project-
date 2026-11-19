@@ -531,10 +531,13 @@ function scoreParts(prof, purpose, cpu, gpu, ram, ssd, mb, haveGpu, kase) {
   if (prof.gpuCap) g = Math.min(g, prof.gpuCap);
   // Штраф за малоизвестный бренд — после ограничения, иначе для офиса он теряется
   if (gpu && gpu.noname) g *= Brands.PENALTY.videocard;
+  // Б/у с Kufar: без гарантии магазина — берём, только если выгода заметная
+  if (gpu && gpu.fromKufar) g *= 0.95;
   // Для офиса сверхмощный процессор не нужен: выше порога производительность не засчитывается
   const cg = prof.cpuCapG ? Math.min(cpu.perf.gaming, prof.cpuCapG) : cpu.perf.gaming;
   const cm = prof.cpuCapM ? Math.min(cpu.perf.multi, prof.cpuCapM) : cpu.perf.multi;
   let s = Math.pow(g, prof.wGpu) * Math.pow(cg, prof.wCpuG) * Math.pow(cm, prof.wCpuM);
+  if (cpu.fromKufar) s *= 0.98;
   if (ram) {
     s *= stepFactor(RAM_F[purpose], ram.specs.totalGb);
     // Встроенной графике нужен двухканальный режим: с одной планкой она теряет до трети скорости
@@ -909,4 +912,92 @@ async function build(opts) {
   };
 }
 
-module.exports = { build, PROFILES, boardSuitable };
+// ------------------------------------------------------------------ вариант «новое + б/у»
+
+/** Объявления Kufar с процессорами или видеокартами, у которых известна производительность. */
+async function kufarUsedParts(kind, pools, opts, budget) {
+  const kufar = require('./providers/kufar');
+  const market = require('./market');
+  const cct = kind === 'gpu' ? '11' : '10';
+  const all = [];
+  let cursor;
+  for (let i = 0; i < 4; i++) {
+    const r = await kufar.search({ cat: 16010, params: { cct }, condition: 'used', sort: 'new', size: 50, priceMin: 40, priceMax: Math.round(budget * (kind === 'gpu' ? 0.65 : 0.45)), cursor });
+    all.push(...r.items);
+    if (!r.next) break;
+    cursor = r.next;
+  }
+  await market.annotate(all, kind);
+  const out = [];
+  const twins = kind === 'gpu' ? pools.gpus : pools.cpus;
+  for (const ad of all) {
+    if (!ad.price || kufar.isJunk(ad.name)) continue;
+    if (ad.market && ad.market.deal === 'suspicious') continue; // слишком дёшево — риск
+    const key = kind === 'gpu' ? perf.gpuKey(ad.name) || perf.gpuKey((ad.params.ccvc || {}).vl || '') : perf.cpuKey(ad.name);
+    if (!key) continue;
+    // Характеристики берём у той же модели из каталога (сокет, память, питание)
+    const twin = twins.find((t) => t.perf && t.perf.key === key);
+    if (!twin) continue;
+    if (kind === 'gpu') {
+      if (opts.gpuBrand === 'nvidia' && !/^(rtx|gtx)/.test(key)) continue;
+      if (opts.gpuBrand === 'amd' && !/^rx/.test(key)) continue;
+    }
+    out.push({
+      ...twin, id: 'kufar-' + ad.id, source: 'kufar', name: ad.name, price: ad.price, url: ad.url, image: ad.image,
+      offers: 0, fromKufar: true, noname: false, market: ad.market || null, location: ad.location, date: ad.date,
+      delivery: ad.delivery, safedeal: ad.safedeal, company: ad.company,
+      specs: kind === 'cpu' ? { ...twin.specs, withCooler: false } : twin.specs,
+      kufarNote: 'б/у с Kufar — проверьте перед покупкой',
+    });
+  }
+  // По каждой модели — два самых дешёвых нормальных объявления
+  const byKey = {};
+  for (const it of out.sort((a, b) => a.price - b.price)) {
+    const k = it.perf.key;
+    byKey[k] = byKey[k] || [];
+    if (byKey[k].length < 2) byKey[k].push(it);
+  }
+  return Object.values(byKey).flat();
+}
+
+/**
+ * Вариант «новое + б/у»: процессор и видеокарта могут быть с Kufar, остальное — новое.
+ * Возвращает сборку на «оптимальный» бюджет и сравнение с полностью новой.
+ */
+async function hybrid(opts) {
+  const budget = Number(opts.budgetByn);
+  if (!(budget > 0)) throw new Error('Укажите бюджет');
+  const o = { ...opts, setup: [] };
+  const { raw, F } = await gather(o, budget * 1.15);
+  const pools = preparePools(raw, o, budget * 1.15, F);
+  if (!pools.cpus.length) throw new Error('Нет данных о процессорах');
+  const base = optimize(pools, o, budget);
+  const pins = pools.pins || {};
+  const [gpus, cpus] = await Promise.all([
+    o.have && o.have.gpu || pins.gpu ? [] : kufarUsedParts('gpu', pools, o, budget).catch(() => []),
+    pins.cpu ? [] : kufarUsedParts('cpu', pools, o, budget).catch(() => []),
+  ]);
+  if (!gpus.length && !cpus.length) return { none: true, reason: 'Подходящих б/у процессоров и видеокарт на Kufar сейчас не нашлось.' };
+  const mixed = { ...pools, gpus: pools.gpus.concat(gpus), cpus: pools.cpus.concat(cpus) };
+  const best = optimize(mixed, o, budget);
+  if (!best) return { none: true, reason: 'Совместимую сборку с б/у деталями собрать не получилось.' };
+  const used = Object.entries(best.parts).filter(([, x]) => x && x.fromKufar).map(([k]) => k);
+  if (!used.length) return { none: true, reason: 'Б/у варианты на Kufar сейчас не выгоднее новых — полностью новая сборка лучше.' };
+  const result = {
+    total: Math.round(best.total * 100) / 100,
+    parts: best.parts,
+    need: best.need,
+    index: Compat.indices(best.parts, o.have && o.have.gpu),
+    checks: Compat.check(best.parts, o.have),
+    used,
+  };
+  result.alternatives = alternatives(result, mixed, o);
+  const baseIdx = base ? Compat.indices(base.parts, o.have && o.have.gpu) : null;
+  return {
+    build: result,
+    budget,
+    base: base ? { total: Math.round(base.total * 100) / 100, index: baseIdx } : null,
+  };
+}
+
+module.exports = { build, hybrid, PROFILES, boardSuitable };

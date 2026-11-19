@@ -5,6 +5,7 @@ import { openFacetModal, loadFacets, summarize, countActive } from './facets.js'
 import { adChips, adLink, hideButton, isHidden, isViewed, hiddenToggle } from './kufarui.js';
 import { watchButton } from './watch.js';
 import { offersTable, historyBlock, openBuyPlan } from './shops.js';
+import { fpsTable, powerDraw, monthlyCost, RESOLUTIONS } from './games.js';
 
 const Compat = window.Compat;
 const Catalog = window.Catalog;
@@ -373,6 +374,7 @@ async function submit() {
     results.replaceChildren(...renderResults());
     results.scrollIntoView({ behavior: 'smooth', block: 'start' });
     prefetchUsed();
+    loadHybrid(body, state.result);
   } catch (e) {
     results.replaceChildren(el('div.notice.err', icon('error'), el('div', el('b', 'Не получилось подобрать. '), e.message)));
   } finally {
@@ -432,25 +434,66 @@ function renderResults() {
   return out;
 }
 
+/** Четвёртый вариант «Новое + б/у»: считается отдельно, после основного подбора (нужен Kufar). */
+async function loadHybrid(body, result) {
+  const opt = result.variants.find((v) => v.id === 'optimal');
+  if (!opt || !opt.build) return;
+  const v = { id: 'hybrid', label: 'Новое + б/у', hint: 'Процессор и/или видеокарта с Kufar, остальное новое', budget: opt.budget, build: null, loading: true };
+  result.variants.push(v);
+  const redraw = () => {
+    if (state.result !== result) return;
+    const box = document.getElementById('variantsBox');
+    if (box) box.replaceWith(renderVariants());
+  };
+  redraw();
+  try {
+    const r = await api('/api/build/hybrid', { method: 'POST', body });
+    if (r.none) v.none = r.reason;
+    else {
+      v.build = r.build;
+      v.base = r.base;
+    }
+  } catch (e) {
+    v.none = e.message;
+  }
+  v.loading = false;
+  redraw();
+}
+
+function hybridTag(v) {
+  if (!v.build || !v.base) return null;
+  const opt = state.result.variants.find((x) => x.id === 'optimal');
+  const saved = Math.round(v.base.total - v.build.total);
+  const gain = v.base.index && v.base.index.gaming && v.build.index.gaming ? Math.round((v.build.index.gaming / v.base.index.gaming - 1) * 100) : 0;
+  const text = gain >= 3 ? `мощнее на ${gain}%` : saved > 30 ? `дешевле на ${money.fmt(saved, money.currency, { round: true })}` : 'с б/у деталями';
+  return el('span.chip.v-tag.ok', { title: `По сравнению с полностью новой сборкой на тот же бюджет${opt ? '' : ''}` }, text);
+}
+
 function renderVariants() {
   const r = state.result;
   const box = el('div.variants', r.variants.map((v) => {
     const b = v.build;
     const total = b ? fullTotal(b) : null;
+    if (v.id === 'hybrid' && !b) {
+      return el('button.variant.hybrid', { type: 'button', disabled: true, title: v.none || '' },
+        el('div.v-label', icon('recycle'), ' ', v.label),
+        el('div.v-total', v.loading ? el('span.spinner.inline') : '—'),
+        el('div.v-tier', v.loading ? 'Ищем выгодные б/у процессоры и видеокарты на Kufar…' : v.none || 'Не получилось'));
+    }
     return el('button.variant', {
-      type: 'button', class: v.id === state.variant ? 'on' : '', disabled: !b,
+      type: 'button', class: (v.id === state.variant ? 'on ' : '') + (v.id === 'hybrid' ? 'hybrid' : ''), disabled: !b,
       onclick: () => {
         state.variant = v.id;
         document.getElementById('results').replaceChildren(...renderResults());
         prefetchUsed();
       },
     },
-    el('div.v-label', v.label),
+    el('div.v-label', v.id === 'hybrid' ? icon('recycle') : null, v.id === 'hybrid' ? ' ' : null, v.label),
     el('div.v-total', b ? money.fmt(total) : '—'),
     el('div.v-tier', b ? Compat.indices(b.parts, ((state.lastBuildForm && state.lastBuildForm.have) || {}).gpu).tier : `Не уложиться в ${money.fmt(v.budget)}`),
-    v.same ? el('span.chip.v-tag', 'как оптимальная') : el('span.chip.v-tag', { title: v.hint }, `до ${money.fmt(v.budget, money.currency, { round: true })}`));
+    v.id === 'hybrid' ? hybridTag(v) : v.same ? el('span.chip.v-tag', 'как оптимальная') : el('span.chip.v-tag', { title: v.hint }, `до ${money.fmt(v.budget, money.currency, { round: true })}`));
   }));
-  return el('div', box,
+  return el('div#variantsBox', box,
     el('div.row', { style: { justifyContent: 'flex-end', marginTop: '8px' } },
       el('button.btn.btn-ghost.btn-sm', { onclick: compareVariants }, icon('scale'), 'Сравнить варианты')));
 }
@@ -506,13 +549,15 @@ function renderBuild(v) {
     el('div.card',
       el('h3', 'Совместимость'),
       el('div.checks', checks.map((c) => el('div.ck', { class: c.level }, icon({ ok: 'check', warn: 'alert', error: 'error', info: 'info' }[c.level], 'ci'), el('div', c.text))))),
+    renderFps(parts, have),
     el('div.card',
       el('h3', 'Питание и охлаждение'),
       el('div.kv',
         el('span', 'Пиковая нагрузка'), el('span', `~${need.load} Вт`),
         el('span', 'Рекомендуемый БП'), el('span', `от ${need.rec} Вт`),
         el('span', 'Выбранный БП'), el('span', parts.psu ? `${parts.psu.specs.watts} Вт` : have.psu ? 'ваш' : '—'),
-        el('span', 'Нужен кулер'), el('span', Compat.coolerNeed(parts.cpu) ? `от ${Compat.coolerNeed(parts.cpu)} Вт` : 'в комплекте'))),
+        el('span', 'Нужен кулер'), el('span', Compat.coolerNeed(parts.cpu) ? `от ${Compat.coolerNeed(parts.cpu)} Вт` : 'в комплекте')),
+      renderPowerCost(parts)),
     renderUsedSummary(v),
     el('div.card',
       el('h3', 'Откуда цены'),
@@ -521,6 +566,42 @@ function renderBuild(v) {
         `Подбор занял ${(state.result.stats.ms / 1000).toFixed(1)} с, просмотрено ${state.result.stats.cpus} процессоров, ${state.result.stats.gpus} моделей видеокарт, ${state.result.stats.boards} плат.`)));
 
   return el('div', summary, el('div.layout-2', partsBox, side));
+}
+
+let fpsRes = '1080';
+
+/** Примерный FPS в популярных играх. */
+function renderFps(parts, have) {
+  const rows = fpsTable(parts, fpsRes, have.gpu);
+  if (!rows) return null;
+  const card = el('div.card.fps-card');
+  const seg = el('div.seg.small-seg', RESOLUTIONS.map(([v, l]) => el('button', {
+    class: v === fpsRes ? 'on' : '', type: 'button',
+    onclick: () => { fpsRes = v; card.replaceWith(renderFps(parts, have)); },
+  }, l)));
+  const max = Math.max(...rows.map((r) => r.fps), 60);
+  card.append(
+    el('div.card-head', el('h3', icon('gamepad'), ' FPS в играх'), seg),
+    el('div.fps-list', rows.map((r) => el('div.fps-row', { title: `${r.preset}. Ограничивает ${r.limit === 'cpu' ? 'процессор' : 'видеокарта'}` },
+      el('span.fps-game', r.name),
+      el('span.fps-bar', el('i', { class: r.fps >= 144 ? 'hi' : r.fps >= 60 ? 'mid' : 'lo', style: { width: `${Math.min(100, (r.fps / Math.min(max, 300)) * 100)}%` } })),
+      el('b.fps-num', r.fps >= 300 ? '300+' : String(r.fps))))),
+    el('p.dim.small', 'Ориентир ±20% для высоких настроек без апскейлинга (DLSS/FSR добавят 30–60%). Наведите на игру — покажем, что ограничивает FPS.'));
+  return card;
+}
+
+/** Потребление и счёт за электроэнергию. */
+function renderPowerCost(parts) {
+  const draw = powerDraw(parts);
+  if (!draw) return null;
+  const st = state.settings;
+  const opts = { tariff: +st.tariff || 0.27, gameHours: st.gameHours != null ? +st.gameHours : 4, officeHours: st.officeHours != null ? +st.officeHours : 4 };
+  const m = monthlyCost(draw, opts);
+  return el('div.kv', { style: { marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border)' } },
+    el('span', 'В играх'), el('span', `~${draw.game} Вт`),
+    el('span', 'Браузер, офис'), el('span', `~${draw.office} Вт`),
+    el('span', { title: `${opts.gameHours} ч игр и ${opts.officeHours} ч работы в день, тариф ${opts.tariff} р. за кВт·ч — меняется в «Настройках»` }, 'Свет в месяц'),
+    el('span', `≈ ${money.fmt(m.cost)} (${m.kwh} кВт·ч)`));
 }
 
 function textTitle(v) {
