@@ -15,7 +15,9 @@ function ramKey(it) {
   const text = `${it.name} ${pv(it, 'ccrt')}`;
   if (/so-?dimm|ноутбук/i.test(text)) return null;
   const type = (text.toUpperCase().match(/DDR[345]/) || [])[0];
-  const gb = parseFloat(pv(it, 'cdr')) || capacityGb(it.name);
+  // «2x8GB» — комплект на 16 ГБ
+  const kit = String(it.name || '').match(/(\d)\s*[xх×]\s*(\d{1,2})\s*(?:gb|гб)/i);
+  const gb = parseFloat(pv(it, 'cdr')) || (kit ? kit[1] * kit[2] : capacityGb(it.name));
   return type && gb ? `${type}-${gb}` : null;
 }
 
@@ -159,24 +161,38 @@ function valueScore(it, kind) {
   }
   if (!it.perf && kind === 'cpu' && perf.cpuKey(it.name)) it.perf = perf.cpuPerf(it.name, {});
   let base = null;
-  if (kind === 'gpu' && it.perf && it.perf.score) base = Math.pow(it.perf.score, 1.4) / it.price;
-  else if (kind === 'cpu' && it.perf && it.perf.gaming) base = Math.pow(it.perf.gaming, 1.8) / it.price;
-  else if (kind === 'ram' && ramKey(it)) base = Math.pow(Number(ramKey(it).split('-')[1]), 1.15) / it.price;
-  else if (kind === 'ssd' && ssdKey(it)) {
-    const [t, gb] = ssdKey(it).split('-');
-    base = Number(gb) * (t === 'nvme' ? 1.15 : 1) / it.price;
+  // Устаревшее железо (RX 580, GTX 1050, Core i5 4-го поколения) дёшево, но это не «выгодно» — опускаем
+  const dated = (v, lo, mid) => (v < lo ? 0.55 : v < mid ? 0.85 : 1);
+  if (kind === 'gpu' && it.perf && it.perf.score) base = (Math.pow(it.perf.score, 1.6) / it.price) * dated(it.perf.score, 40, 60);
+  else if (kind === 'cpu' && it.perf && it.perf.gaming) base = (Math.pow(it.perf.gaming, 2) / it.price) * dated(it.perf.gaming, 70, 90);
+  else if (kind === 'ram' && ramKey(it) && !multiOption(it.name)) {
+    const [t, gbs] = ramKey(it).split('-');
+    base = (Math.pow(Number(gbs), 1.15) / it.price) * (t === 'DDR3' ? 0.35 : 1) * (Number(gbs) < 8 ? 0.6 : 1);
+  } else if (kind === 'ssd' && ssdKey(it) && !multiOption(it.name)) {
+    const [t, gbs] = ssdKey(it).split('-');
+    const g = Number(gbs);
+    base = (g * (t === 'nvme' ? 1.15 : 1) / it.price) * (g < 240 ? 0.5 : g < 480 ? 0.8 : 1);
   }
   const m = it.market;
   const bad = (m && m.deal === 'suspicious')
     || ((kind === 'gpu' || kind === 'cpu') && kufar.isJunk(it.name))
     || /куплю|нерабоч|не\s*рабоч|запчаст|под\s*ремонт|неисправ/i.test(it.name || '');
   let f = 1;
-  if (m && typeof m.pct === 'number') f *= Math.max(0.7, Math.min(1.4, 1 - m.pct / 100));
+  if (m && typeof m.pct === 'number') f *= Math.max(0.75, Math.min(1.3, 1 - m.pct / 100));
   if (KNOWN_BRAND.test(it.name || '')) f *= 1.08;
+  else if (kind === 'ssd' || kind === 'ram') f *= 0.85;
   if (it.safedeal) f *= 1.04;
   if (it.delivery) f *= 1.02;
   const tier = bad ? 0 : base === null && KIND_OF[kind] ? 1 : 2;
   return { tier, v: (base === null ? 1 / it.price : base) * f };
+}
+
+/** «8/16/32 GB», «4Gb, 8GB 16Gb», «DDR3 DDR4» — в одном объявлении несколько вариантов: цена непонятна. */
+function multiOption(name) {
+  // «2x8GB» — это комплект на 16 ГБ, а не второй вариант
+  const n = String(name || '').replace(/(\d+)\s*[xх×]\s*(\d+)\s*(gb|гб)/gi, (m0, a, b) => `${a * b}gb`);
+  const caps = new Set((n.match(/\d+\s*(?:gb|гб|tb|тб)/gi) || []).map((x) => x.replace(/\s+/g, '').toLowerCase().replace('гб', 'gb').replace('тб', 'tb')));
+  return caps.size >= 2 || /\d+\s*\/\s*\d+\s*\/\s*\d+/.test(n) || new Set(n.toUpperCase().match(/DDR[2-5]/g) || []).size >= 2;
 }
 
 /** Сортировка объявлений «сначала выгодные»; лучшим трём ставится отметка best. */

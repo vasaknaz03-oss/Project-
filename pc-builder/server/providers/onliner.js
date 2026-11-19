@@ -131,21 +131,28 @@ async function priceHistory(key, period = '6m') {
   };
 }
 
-/** Отзывы покупателей Onliner: оценка, плюсы, минусы, текст. */
-async function reviews(key, limit = 10) {
-  const data = await getJSON(`${API}/products/${encodeURIComponent(key)}/reviews?order=created_at:desc`, { ttl: 6 * 60 * 60 * 1000 });
+/** Отзывы покупателей Onliner: оценка, плюсы, минусы, текст. page — страница по 10 отзывов. */
+async function reviews(key, limit = 10, page = 1) {
+  const data = await getJSON(`${API}/products/${encodeURIComponent(key)}/reviews?order=created_at:desc${page > 1 ? '&page=' + page : ''}`, { ttl: 6 * 60 * 60 * 1000 });
   const clean = (t) => String(t || '').replace(/\s+/g, ' ').trim();
   const items = (data.reviews || []).slice(0, limit).map((r) => ({
-    rating: r.rating || null,
+    // Оценка отзыва 1–5 (у товара в целом — 0–50)
+    rating: r.rating > 5 ? r.rating / 10 : r.rating || null,
     summary: clean(r.summary),
-    pros: clean(r.pros) === '-' ? '' : clean(r.pros),
-    cons: clean(r.cons) === '-' ? '' : clean(r.cons),
-    text: clean(r.text).slice(0, 600),
+    pros: /^[-—.\s]*$/.test(clean(r.pros)) ? '' : clean(r.pros),
+    cons: /^[-—.\s]*$/.test(clean(r.cons)) ? '' : clean(r.cons),
+    text: clean(r.text).slice(0, 700),
     author: (r.author && r.author.name) || '',
     date: r.created_at || null,
+    model: r.original_product && r.original_product.product_id !== key ? r.original_product.full_name || '' : '',
   }));
-  // Оценка у Onliner хранится по шкале 0–50
-  return { total: data.total || items.length, rating: typeof data.rating === 'number' ? data.rating / 10 : null, stars: (data.counters && data.counters.rating) || null, items };
+  return {
+    total: data.total || items.length,
+    rating: typeof data.rating === 'number' ? data.rating / 10 : null,
+    stars: (data.counters && data.counters.rating) || null,
+    pages: (data.page && data.page.last) || 1,
+    items,
+  };
 }
 
 /** Предложения всех магазинов для товара (сравнение цен). */

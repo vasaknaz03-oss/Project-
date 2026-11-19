@@ -1,5 +1,7 @@
 // Страница «Подбор по бюджету».
 import { el, icon, api, money, toast, modal, closeModal, promptText, copyText, download, thumb, plural } from './util.js';
+import { reviewsPanel, reviewChip } from './reviews.js';
+import { explainPart } from './explain.js';
 import { state, SLOTS, specChips, shopLinks, linkFor, slim, saveBuilds, buildText } from './state.js';
 import { openFacetModal, loadFacets, summarize, countActive } from './facets.js';
 import { adChips, adLink, hideButton, isHidden, isViewed, hiddenToggle } from './kufarui.js';
@@ -845,12 +847,14 @@ function renderPart(slot, v) {
           it.usedCount && it.usedMin ? el('a.chip', { href: it.usedUrl, target: '_blank', rel: 'noopener', title: 'Б/у на барахолке Onliner' }, `б/у на Onliner от ${money.fmt(it.usedMin)}`) : null,
           it.kufarNote ? el('span.chip.warn', it.kufarNote) : null,
           specChips(slot.cat, it),
-          slot.setup && it.reviews ? el('span.chip', `★ ${it.rating.toFixed(1)} · ${it.reviews} ${plural(it.reviews, 'отзыв', 'отзыва', 'отзывов')}`) : null)),
+          reviewChip(it))),
       el('div.part-side',
         el('div.price', p.main),
         p.sub ? el('div.price-sub', p.sub) : null,
         el('div.price-sub', it.offers ? `${it.offers} ${plural(it.offers, 'предложение', 'предложения', 'предложений')}` : ''))),
     el('div.part-actions',
+      !slot.setup && explainPart(slot.key, it, b.parts).length ? openBtn('why', 'help', 'Почему эта') : null,
+      openBtn('reviews', 'chat', it.source === 'onliner' && it.reviews ? `Отзывы (${it.reviews})` : 'Отзывы и обзоры'),
       it.source === 'onliner' ? openBtn('shops', 'store', 'Магазины') : null,
       it.source === 'onliner' ? openBtn('history', 'chart', 'История цены') : null,
       alts.length || (slot.key === 'gpu' && b.alternatives && b.alternatives.gpuSame && b.alternatives.gpuSame.length) ? openBtn('alts', 'swap', `Альтернативы (${alts.length + ((slot.key === 'gpu' && b.alternatives && b.alternatives.gpuSame) ? b.alternatives.gpuSame.length : 0)})`) : null,
@@ -872,6 +876,14 @@ function renderPart(slot, v) {
     if (kind === 'alts') panel.append(renderAlts(slot, v));
     if (kind === 'used') loadUsed(panel, slot, it);
     if (kind === 'history') historyBlock(it).then((node) => panel.append(node));
+    if (kind === 'why') {
+      panel.append(el('div.panel-title', 'Почему выбрана эта деталь — простыми словами'),
+        el('ul.why-list', explainPart(slot.key, it, b.parts).map((t) => el('li', { class: t.startsWith('⚠') ? 'warn' : '' }, t.replace(/^⚠\s*/, '')))));
+    }
+    if (kind === 'reviews') {
+      panel.append(el('div.row', el('div.spinner', { style: { width: '20px', height: '20px', borderWidth: '2px' } }), el('span.muted', 'Загружаем отзывы покупателей…')));
+      reviewsPanel(it).then((node) => panel.replaceChildren(node));
+    }
   }
   return row;
 }
@@ -944,7 +956,7 @@ function altRow(slot, a, cur, onPick) {
     thumb(it.image, slot.icon),
     el('div',
       el('div.alt-name', el('a', { href: it.url, target: '_blank', rel: 'noopener' }, it.name)),
-      el('div.alt-note', note, it.noname ? ' · малоизвестный бренд' : '')),
+      el('div.alt-note', note, it.noname ? ' · малоизвестный бренд' : '', it.reviews ? ' ' : '', reviewChip(it))),
     el('div.alt-price', el('b', money.fmt(it.price)),
       cur ? el('span.diff', { class: diff > 0 ? 'up' : 'down' }, `${diff > 0 ? '+' : '−'}${money.fmt(Math.abs(diff))}`) : null),
     el('button.btn.btn-sm', { onclick: onPick }, cur ? 'Выбрать' : 'Добавить'));

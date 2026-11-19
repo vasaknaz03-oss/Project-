@@ -28,6 +28,7 @@ const kufarFilters = require('./providers/kufarFilters');
 const kufarCompat = require('./kufarCompat');
 const wb = require('./providers/wildberries');
 const market = require('./market');
+const reviews = require('./reviews');
 const query = require('./query');
 const watch = require('./watch');
 
@@ -596,7 +597,8 @@ async function route(req, res, url) {
   if (pathname === '/api/reviews') {
     const key = p.get('key');
     if (!key || !/^[\w.-]+$/.test(key)) throw new Error('Не указан товар');
-    return send(res, 200, await onliner.reviews(key, 12));
+    const cat = /^[a-z_]{2,30}$/.test(p.get('cat') || '') ? p.get('cat') : '';
+    return send(res, 200, await reviews.forProduct(key, cat));
   }
 
   // История цены товара Onliner

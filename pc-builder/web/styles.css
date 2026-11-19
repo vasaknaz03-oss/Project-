@@ -182,7 +182,7 @@ span[data-icon] { display: inline-flex; align-items: center; justify-content: ce
 .chip.accent { background: var(--accent-soft); border-color: transparent; color: var(--text); }
 .chip.ok { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
 .chip.best { background: var(--grad); color: #fff; border-color: transparent; font-weight: 600; text-shadow: 0 1px 2px rgba(0, 0, 0, .25); }
-.chip.best .ico { width: 12px; height: 12px; }
+.chip.best > [data-icon] { width: 12px; height: 12px; display: inline-flex; }
 .chip.warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
 .chip.err { background: var(--err-soft); color: var(--err); border-color: transparent; }
 .toggle-chip { cursor: pointer; padding: 7px 12px; font-size: 13px; font-weight: 600; }
@@ -699,3 +699,45 @@ a.chip:hover { border-color: var(--accent); color: var(--text); }
 .links-status { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
 .compact-list { margin: 6px 0; padding-left: 18px; }
 .custom-slot .part-side { align-items: center; }
+
+/* ---------- Отзывы покупателей и «почему эта деталь» ---------- */
+.rev-chip { cursor: pointer; font: inherit; font-size: 12px; }
+.rev-chip:hover { border-color: var(--accent); color: var(--accent); }
+.stars { color: #f5b301; letter-spacing: 1px; font-size: 13px; }
+.stars-off { color: var(--border); }
+.verdict { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); line-height: 1.5; }
+.verdict > [data-icon] { flex: none; width: 20px; height: 20px; margin-top: 1px; }
+.verdict.v-great, .verdict.v-good { border-color: color-mix(in srgb, var(--ok) 45%, transparent); background: var(--ok-soft); }
+.verdict.v-great > [data-icon], .verdict.v-good > [data-icon] { color: var(--ok); }
+.verdict.v-mixed { border-color: color-mix(in srgb, var(--warn) 45%, transparent); background: var(--warn-soft); }
+.verdict.v-bad { border-color: color-mix(in srgb, var(--err) 45%, transparent); background: var(--err-soft); }
+.verdict.v-mixed > [data-icon] { color: var(--warn); }
+.verdict.v-bad > [data-icon] { color: var(--err); }
+.rev-top { display: grid; grid-template-columns: auto minmax(160px, 220px) 1fr; gap: 18px; align-items: start; margin-top: 12px; }
+.rev-score { text-align: center; min-width: 96px; }
+.rev-big { font-size: 34px; font-weight: 800; line-height: 1; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.rev-dist { display: grid; gap: 4px; font-size: 12px; }
+.rev-row { display: grid; grid-template-columns: 26px 1fr 26px; gap: 6px; align-items: center; }
+.rev-bar { height: 7px; border-radius: 4px; background: var(--bg-2); overflow: hidden; border: 1px solid var(--border); }
+.rev-bar i { display: block; height: 100%; background: linear-gradient(90deg, #f5b301, #ffcf4d); border-radius: 4px; transition: width .5s ease; }
+.rev-tags { display: grid; gap: 8px; }
+.rev-tags .panel-title { margin-bottom: 4px; }
+.review-list { display: grid; gap: 8px; }
+.review { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--surface-2); animation: fadeUp .25s ease both; }
+.review-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; margin-bottom: 4px; }
+.review-head .dim { margin-left: auto; font-size: 12px; }
+.review-pros, .review-cons { display: flex; gap: 6px; align-items: flex-start; font-size: 13px; margin-top: 4px; }
+.review-pros > [data-icon] { color: var(--ok); flex: none; width: 15px; height: 15px; margin-top: 2px; }
+.review-cons > [data-icon] { color: var(--err); flex: none; width: 15px; height: 15px; margin-top: 2px; }
+.review-text { font-size: 13px; color: var(--text-2); margin-top: 6px; line-height: 1.5; }
+.ext-links.discuss { margin-top: 12px; }
+.why-list { margin: 6px 0 0; padding-left: 20px; display: grid; gap: 6px; line-height: 1.5; }
+.why-list li::marker { color: var(--accent); }
+.why-list li.warn { color: var(--warn); }
+.why-list li.warn::marker { content: '⚠ '; }
+.novice-tip { margin-top: 14px; display: grid; gap: 8px; padding: 14px 16px; }
+.novice-tip > .row > [data-icon] { width: 18px; height: 18px; color: var(--accent); flex: none; }
+.novice-tip .tip-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.novice-tip .tip-row b { white-space: nowrap; }
+.compare-verdict { font-size: 13px; line-height: 1.5; }
+@media (max-width: 760px) { .rev-top { grid-template-columns: 1fr; } }

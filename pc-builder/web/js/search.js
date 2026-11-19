@@ -6,6 +6,7 @@ import { offersTable, historyBlock } from './shops.js';
 import { state, CAT_TO_SLOT, CAT_ICON, specChips, shopLinks, linkFor } from './state.js';
 import { replaceFromSearch, hasActiveBuild, takeKufarToBuild } from './build.js';
 import { facetPanel, loadFacets, loadKufarFacets, countActive } from './facets.js';
+import { reviewChip, loadReviews, openReviews } from './reviews.js';
 
 const Catalog = window.Catalog;
 
@@ -324,6 +325,8 @@ function renderResults() {
           },
         }, 'Следить')));
     }
+    const tip = S.src === 'onliner' ? noviceTip(shown) : null;
+    if (tip) out.push(tip);
     out.push(el('div.grid', shown.map(card)));
   } else if (!S.loading && !S.error) {
     out.push(el('div.card.empty-state', { style: { marginTop: '16px' } }, el('h3', 'Ничего не нашлось'), el('p.muted', 'Попробуйте короче: например, «4060» вместо полного названия.')));
@@ -348,7 +351,8 @@ function card(it) {
     thumb(it.image, CAT_ICON[it.category] || CAT_ICON[S.cat] || 'cpu'),
     el('div.pcard-top',
       el('span.badge', { class: it.source }, isOnliner ? 'Onliner' : it.source === 'wb' ? 'Wildberries' : 'Kufar'),
-      isOnliner ? el('span.chip', it.categoryName) : it.source === 'wb' ? (it.reviews ? el('span.chip', `★ ${it.rating} · ${it.reviews}`) : null) : el('span.chip', it.condition || 'объявление'),
+      isOnliner ? el('span.chip', it.categoryName) : null,
+      isOnliner ? reviewChip(it) : it.source === 'wb' ? (it.reviews ? el('span.chip', `★ ${it.rating} · ${it.reviews}`) : null) : el('span.chip', it.condition || 'объявление'),
       it.perf && it.perf.score ? el('span.chip.accent', `индекс ${it.perf.score}`) : null,
       it.perf && it.perf.gaming ? el('span.chip.accent', `игры ${it.perf.gaming}`) : null),
     el('div.pcard-name', it.source === 'kufar' ? adLink(it, it.name, () => node.classList.add('viewed')) : el('a', { href: it.url, target: '_blank', rel: 'noopener' }, it.name)),
@@ -412,6 +416,47 @@ async function showShops(it) {
   }
 }
 
+// ------------------------------------------------------------------ подсказка новичку
+
+const perfOfItem = (i) => (i.perf ? i.perf.score || i.perf.gaming : null);
+
+/**
+ * «Что выбрать на этой странице»: лучшее соотношение цена/производительность, лучшие отзывы
+ * и самый доступный вариант без жалоб. Считается по уже загруженным товарам, без лишних запросов.
+ */
+function noviceTip(items) {
+  const avail = items.filter((i) => i.source === 'onliner' && i.price > 0);
+  if (avail.length < 4) return null;
+  const rows = [];
+  const used = new Set();
+  const add = (label, it, why) => {
+    if (!it) return;
+    rows.push(el('div.tip-row', el('b', label), el('a', { href: it.url, target: '_blank', rel: 'noopener' }, it.name),
+      el('span.dim', `— ${money.fmt(it.price)}${why ? ', ' + why : ''}`), reviewChip(it)));
+    used.add(it.id);
+  };
+  const withPerf = avail.filter((i) => perfOfItem(i));
+  if (withPerf.length >= 3) {
+    const best = withPerf.slice().sort((a, b) => perfOfItem(b) / b.price - perfOfItem(a) / a.price)
+      .find((i) => !(i.reviews >= 3 && i.rating < 4));
+    add('Больше всего мощности за деньги:', best, best && `${money.fmt(best.price / perfOfItem(best))} за 1 пункт производительности`);
+  }
+  // Оценка с поправкой на число отзывов: 5.0 по одному отзыву не лучше 4.8 по сорока
+  const trust = (i) => (i.rating * i.reviews + 4 * 5) / (i.reviews + 5);
+  const rated = avail.filter((i) => i.reviews >= 5 && i.rating >= 4.5).sort((a, b) => trust(b) - trust(a));
+  add('Покупатели довольны больше всего:', rated.find((i) => !used.has(i.id)), null);
+  // «Недорого» — но не устаревшее: по цене за производительность не хуже 75% от лучшего на странице
+  const bestValue = withPerf.length ? Math.max(...withPerf.map((i) => perfOfItem(i) / i.price)) : 0;
+  const decent = (i) => !bestValue || !perfOfItem(i) || perfOfItem(i) / i.price >= bestValue * 0.75;
+  const cheapGood = avail.filter((i) => i.reviews >= 3 && i.rating >= 4.3 && !used.has(i.id) && decent(i)).sort((a, b) => a.price - b.price)[0];
+  add('Недорого и с хорошими отзывами:', cheapGood, null);
+  if (!rows.length) return null;
+  return el('div.card.novice-tip',
+    el('div.row', icon('sparkles'), el('b', 'Подсказка: на что обратить внимание на этой странице')),
+    rows,
+    el('div.dim.small', 'Нажмите на звёзды у товара — откроются отзывы покупателей с выводом: что хвалят и на что жалуются.'));
+}
+
 // ------------------------------------------------------------------ сравнение
 
 function toggleCompare(it) {
@@ -442,11 +487,43 @@ export function renderTray() {
   for (const n2 of tray.querySelectorAll('[data-icon]')) n2.style.width = n2.style.height = '18px';
 }
 
+/** Простой вывод по сравнению: какой товар в чём лучше. */
+function compareVerdict(items, revs) {
+  const out = [];
+  const name = (i) => i.name.length > 48 ? i.name.slice(0, 46) + '…' : i.name;
+  const priced = items.filter((i) => i.price);
+  if (priced.length >= 2) {
+    const cheap = priced.reduce((a, b) => (a.price <= b.price ? a : b));
+    out.push(`Дешевле всех — ${name(cheap)}.`);
+  }
+  const pf = priced.filter((i) => perfOfItem(i));
+  if (pf.length >= 2) {
+    const fast = pf.reduce((a, b) => (perfOfItem(a) >= perfOfItem(b) ? a : b));
+    const value = pf.reduce((a, b) => (perfOfItem(a) / a.price >= perfOfItem(b) / b.price ? a : b));
+    const slow = pf.reduce((a, b) => (perfOfItem(a) <= perfOfItem(b) ? a : b));
+    const gain = Math.round((perfOfItem(fast) / perfOfItem(slow) - 1) * 100);
+    const extra = Math.round((fast.price / slow.price - 1) * 100);
+    out.push(`Самый быстрый — ${name(fast)}${gain > 0 ? `: на ${gain}% быстрее, чем ${name(slow)}, при цене ${extra >= 0 ? `+${extra}%` : `${extra}%`}` : ''}.`);
+    if (value !== fast) out.push(`Выгоднее всего по цене за производительность — ${name(value)}.`);
+  }
+  const rv = items.map((i, k) => ({ i, r: revs[k] })).filter((x) => x.r && x.r.total >= 3);
+  if (rv.length >= 2) {
+    const best = rv.reduce((a, b) => (a.r.rating >= b.r.rating ? a : b));
+    out.push(`Лучшие отзывы — у ${name(best.i)} (${best.r.rating.toFixed(1)} из 5).`);
+    for (const x of rv) {
+      const c = (x.r.summary.cons || []).filter((k) => k.count >= 2);
+      if (c.length) out.push(`У ${name(x.i)} покупатели повторно жалуются: ${c.slice(0, 2).map((k) => k.text).join(', ')}.`);
+    }
+  }
+  if (!out.length) out.push('Добавьте товары одного раздела — тогда будет понятнее, что в чём лучше.');
+  return out;
+}
+
 function showCompare() {
   const items = state.compare;
   const prices = items.map((i) => i.price || Infinity);
   const minPrice = Math.min(...prices);
-  const perfOf = (i) => (i.perf ? i.perf.score || i.perf.gaming : null);
+  const perfOf = perfOfItem;
   const perfs = items.map(perfOf).filter((v) => v != null);
   const maxPerf = perfs.length ? Math.max(...perfs) : null;
   const row = (label, fn) => el('tr', el('td', el('b', label)), items.map((i) => el('td', fn(i))));
@@ -465,6 +542,26 @@ function showCompare() {
         const p = perfOf(i);
         return p && i.price ? money.fmt(i.price / p) : '—';
       }),
+      row('Оценка покупателей', (i) => el('div.small', { 'data-rev': 'score', 'data-id': i.id }, i.source === 'onliner' ? (i.reviews ? '…' : 'отзывов нет') : '—')),
+      row('Хвалят', (i) => el('div.small', { 'data-rev': 'pros', 'data-id': i.id }, i.source === 'onliner' && i.reviews ? '…' : '—')),
+      row('Жалуются', (i) => el('div.small', { 'data-rev': 'cons', 'data-id': i.id }, i.source === 'onliner' && i.reviews ? '…' : '—')),
       row('Характеристики', (i) => el('div.small.muted', i.description || i.location || '—'))));
-  modal('Сравнение товаров', el('div', { style: { overflowX: 'auto' } }, table));
+  const verdictBox = el('div.verdict.compare-verdict', { class: 'v-good' }, icon('sparkles'), el('div', el('b', 'Коротко: '), compareVerdict(items, []).join(' ')));
+  modal('Сравнение товаров', el('div', verdictBox, el('div', { style: { overflowX: 'auto', marginTop: '12px' } }, table)));
+  // Отзывы подгружаем отдельно — таблица видна сразу
+  Promise.all(items.map((i) => (i.source === 'onliner' && i.reviews ? loadReviews(i).catch(() => null) : Promise.resolve(null)))).then((revs) => {
+    items.forEach((i, k) => {
+      const r = revs[k];
+      const cell = (kind) => table.querySelector(`[data-rev="${kind}"][data-id="${CSS.escape(String(i.id))}"]`);
+      if (!r) return;
+      const sc = cell('score');
+      if (sc) sc.replaceChildren(el('button.chip.rev-chip', { onclick: () => openReviews(i) }, `★ ${(r.rating || 0).toFixed(1)} · ${r.total} ${plural(r.total, 'отзыв', 'отзыва', 'отзывов')}`),
+        r.summary.positive != null ? el('div.dim', `${r.summary.positive}% рекомендуют`) : null);
+      const pr = cell('pros');
+      if (pr) pr.replaceChildren(...(r.summary.pros.length ? r.summary.pros.slice(0, 4).map((p) => el('div', '+ ' + p.text)) : [el('span.dim', '—')]));
+      const cn = cell('cons');
+      if (cn) cn.replaceChildren(...(r.summary.cons.length ? r.summary.cons.slice(0, 4).map((p) => el('div', { style: { color: 'var(--warn)' } }, '− ' + p.text + (p.count > 1 ? ` (${p.count})` : ''))) : [el('span.dim', 'нет')]));
+    });
+    verdictBox.lastChild.replaceChildren(el('b', 'Коротко: '), compareVerdict(items, revs).join(' '));
+  });
 }

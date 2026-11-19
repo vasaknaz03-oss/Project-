@@ -389,6 +389,38 @@ test('подбирает совместимую сборку в рамках б�
   });
 });
 
+test('отзывы: плюсы, минусы, отрицания и пересказ чужих слов', () => {
+  const reviews = require('../server/reviews');
+  const t1 = reviews.topicsOf({ rating: 5, pros: 'Тихая, холодная', cons: 'Писка дросселей нет', text: '' }, 'videocard');
+  assert.strictEqual(t1.get('quiet'), 1);
+  assert.strictEqual(t1.get('temp'), 1);
+  assert.strictEqual(t1.get('coil'), 1, '«писка нет» — это плюс');
+  const t2 = reviews.topicsOf({ rating: 3, pros: 'Производительность', cons: 'Треск дросселей под нагрузкой', text: '' }, 'videocard');
+  assert.strictEqual(t2.get('coil'), -1);
+  // В пятизвёздочном отзыве «друзья пугали писком дросселей» — не жалоба
+  const t3 = reviews.topicsOf({ rating: 5, pros: '', cons: 'Не обнаружил', text: 'Друзья отговаривали: писк дросселей, вылетает. Всё отлично.' }, 'videocard');
+  assert.ok(!t3.has('coil') || t3.get('coil') > 0);
+  // Писк дросселей у SSD не ищем
+  assert.ok(!reviews.topicsOf({ rating: 2, cons: 'писк', pros: '' }, 'ssd').has('coil'));
+  const s = reviews.summarize([{ rating: 5, pros: 'тихая', cons: '' }, { rating: 4, pros: 'тихая, мощная', cons: 'дорогая' }], 4.5, 2, 'videocard');
+  assert.strictEqual(s.pros[0].id, 'quiet');
+  assert.ok(/Отзывов мало/.test(s.verdict.text));
+});
+
+test('Kufar «сначала выгодные»: устаревшее и «куплю» — вниз, комплект 2x8 — не «несколько вариантов»', () => {
+  const market = require('../server/market');
+  const gpu = market.rankByValue([
+    { name: 'Куплю RTX 3070', price: 100 }, { name: 'RX 580 8GB', price: 140 }, { name: 'Palit RTX 3070 8GB', price: 1100 }, { name: 'Видеокарта', price: 50 },
+  ], 'videocard').map((x) => x.name);
+  assert.strictEqual(gpu[0], 'Palit RTX 3070 8GB');
+  assert.strictEqual(gpu[gpu.length - 1], 'Куплю RTX 3070');
+  const ram = market.rankByValue([
+    { name: 'DDR3 8GB 1600', price: 20 }, { name: 'Kingston Fury 2x8GB DDR4 3200', price: 90 }, { name: 'DDR4 8/16/32 GB', price: 60 },
+  ], 'dram').map((x) => x.name);
+  assert.strictEqual(ram[0], 'Kingston Fury 2x8GB DDR4 3200');
+  assert.strictEqual(ram[ram.length - 1], 'DDR4 8/16/32 GB');
+});
+
 async function live() {
   if (!process.argv.includes('--live')) return;
   console.log('Живой подбор (Onliner)');
