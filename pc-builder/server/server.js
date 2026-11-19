@@ -28,6 +28,7 @@ const kufarFilters = require('./providers/kufarFilters');
 const kufarCompat = require('./kufarCompat');
 const wb = require('./providers/wildberries');
 const market = require('./market');
+const query = require('./query');
 const watch = require('./watch');
 
 // Возможности оболочки Electron (автозапуск, работа в фоне); в режиме браузера их нет
@@ -411,8 +412,33 @@ async function route(req, res, url) {
   }
 
   if (pathname === '/api/search') {
-    const q = (p.get('q') || '').trim().slice(0, 200);
+    const q0 = (p.get('q') || '').trim().slice(0, 200);
     const src = p.get('src') || 'onliner';
+    // Умный поиск: понимаем раздел и характеристики из запроса («ssd 512 gb» → SSD, объём 512 ГБ)
+    if (q0 && src !== 'wb' && p.get('smart') !== '0') {
+      const smart = await query.parse(q0, p.get('cat') || null).catch(() => null);
+      const sec = smart && sectionOf(smart.section);
+      if (sec && (src === 'kufar' ? sec.kufar || sec.kufarQuery : sec.onliner)) {
+        const p2 = new URLSearchParams(p);
+        p2.set('cat', smart.section);
+        p2.set('smart', '0');
+        let r;
+        if (src === 'onliner') {
+          p2.set('f', JSON.stringify({ ...smart.filters, ...parseFilters(p) }));
+          r = smart.rest ? await searchOnlinerText(sec, smart.rest, p2) : await searchOnliner('', p2);
+        } else {
+          const kq = kufarQuery(sec, query.kufarText(q0), p2);
+          const kr = await kufar.search({
+            ...kq, priceMin: num(p.get('min')), priceMax: num(p.get('max')), sort: p.get('sort') === 'rating' ? '' : p.get('sort'),
+            condition: p.get('cond') || '', size: 50, cursor: (p.get('cursor') || '').slice(0, 400) || undefined,
+          });
+          await market.annotate(kr.items, sec.id);
+          r = { items: kr.items, total: kr.total, pages: 1, next: kr.next };
+        }
+        return send(res, 200, { ...r, smart: { section: smart.section, chips: smart.chips, filters: src === 'onliner' ? smart.filters : {}, rest: smart.rest } });
+      }
+    }
+    const q = q0;
     if (src === 'wb') {
       const section = sectionOf(p.get('cat'));
       const query = q || (section ? section.name : '');

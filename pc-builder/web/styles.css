@@ -681,3 +681,8 @@ a.chip:hover { border-color: var(--accent); color: var(--text); }
 .oc-link:hover { border-color: var(--accent); transform: translateX(3px); text-decoration: none; }
 .oc-link b { color: var(--text); }
 .oc-link span { color: var(--text-3); font-size: 12.5px; }
+
+/* ---------- умный поиск ---------- */
+.smart-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; padding: 10px 14px; border-radius: var(--radius-sm); background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); animation: fadeUp .25s ease-out both; }
+.smart-line [data-icon] svg { width: 16px; height: 16px; color: var(--accent); }
+.smart-line .link-btn { margin-left: auto; }

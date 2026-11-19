@@ -129,10 +129,10 @@ function filtersColumn() {
 function renderBar() {
   const q = el('input.input', {
     type: 'search', placeholder: 'Например: RTX 5060, Ryzen 5 7500F, 32 ГБ DDR5', value: S.q,
-    oninput: (e) => (S.q = e.target.value),
-    onkeydown: (e) => e.key === 'Enter' && run(true),
+    oninput: (e) => { S.q = e.target.value; S.noSmart = false; },
+    onkeydown: (e) => e.key === 'Enter' && newSearch(),
   });
-  const cat = el('select.select', { onchange: (e) => { S.cat = e.target.value; S.replaceSlot = null; run(true); } },
+  const cat = el('select.select', { onchange: (e) => { S.cat = e.target.value; S.autoCat = false; S.smart = null; S.replaceSlot = null; run(true); } },
     el('option', { value: '' }, 'Все разделы'),
     Catalog.GROUPS.map((g) => el('optgroup', { label: g.name },
       Catalog.SECTIONS.filter((x) => x.group === g.id).map((x) => el('option', { value: x.id }, x.name)))));
@@ -170,7 +170,7 @@ function renderBar() {
     el('div.search-bar',
       el('div.search-input', icon('search'), q),
       cat,
-      el('button.btn.btn-primary', { onclick: () => run(true) }, 'Найти')),
+      el('button.btn.btn-primary', { onclick: () => newSearch() }, 'Найти')),
     el('div.filters',
       src,
       S.src === 'kufar' && !hasFilters() ? cond : null,
@@ -181,6 +181,25 @@ function renderBar() {
     S.replaceSlot && hasActiveBuild() ? el('div.notice.info', { style: { marginTop: '14px' } }, icon('swap'),
       el('div.grow', 'Выберите деталь и нажмите «В сборку» — она заменит текущую в подобранной сборке.'),
       el('button.btn.btn-sm.btn-ghost', { onclick: () => { S.replaceSlot = null; render(); } }, 'Отмена')) : null);
+}
+
+/** Новый поиск по кнопке «Найти» / Enter: раздел, выбранный умным поиском прошлый раз, не мешает новому запросу. */
+function newSearch() {
+  if (S.autoCat && S.smart) {
+    const key = fkey();
+    for (const k of Object.keys(S.smart.filters || {})) if (S.filters[key]) delete S.filters[key][k];
+    S.cat = '';
+    S.autoCat = false;
+    S.layoutKey = '';
+  }
+  S.smart = null;
+  run(true);
+}
+
+/** «Искать как есть»: без разбора запроса на раздел и фильтры. */
+function searchAsIs() {
+  S.noSmart = true;
+  newSearch();
 }
 
 async function run(reset) {
@@ -204,11 +223,23 @@ async function run(reset) {
   });
   if (hasFilters() && countActive(S.filters[fkey()])) params.set('f', JSON.stringify(S.filters[fkey()]));
   if (S.src === 'kufar' && !reset && S.next) params.set('cursor', S.next);
+  if (S.noSmart) params.set('smart', '0');
   // Ответ на устаревший запрос (пользователь уже поменял раздел, источник или текст) не показываем
   const seq = (S.seq = (S.seq || 0) + 1);
   try {
     const r = await api('/api/search?' + params);
     if (seq !== S.seq) return;
+    // Умный поиск понял раздел и характеристики — показываем их как обычные фильтры раздела
+    if (r.smart && reset) {
+      const wasCat = S.cat;
+      S.cat = r.smart.section;
+      S.autoCat = S.autoCat || wasCat !== r.smart.section;
+      const key = fkey();
+      S.filters[key] = { ...(r.smart.filters || {}), ...(S.filters[key] || {}) };
+      S.smart = r.smart;
+      S.layoutKey = '';
+      S.needFull = true;
+    }
     S.items = reset ? r.items : S.items.concat(r.items);
     S.total = r.total;
     S.pages = r.pages;
@@ -221,6 +252,12 @@ async function run(reset) {
     if (seq === S.seq) S.loading = false;
   }
   if (seq === S.seq) {
+    // Раздел выбран умным поиском — перерисовываем и строку поиска, и колонку фильтров
+    if (S.needFull) {
+      S.needFull = false;
+      render();
+      return;
+    }
     const box = document.getElementById('searchResults');
     if (box) box.replaceChildren(...[].concat(renderResults()));
   }
@@ -245,6 +282,14 @@ function renderResults() {
       'Wildberries не ответил на автоматический запрос (сайт защищён от роботов). ',
       el('a', { href: S.blocked, target: '_blank', rel: 'noopener' }, 'Открыть этот поиск на Wildberries ↗'))));
     return out;
+  }
+  if (S.smart && S.smart.chips) {
+    out.push(el('div.smart-line',
+      icon('sparkles'),
+      el('span', 'Понял запрос:'),
+      S.smart.chips.map((c) => el('span.chip.accent', c)),
+      S.smart.rest ? el('span.dim', `+ ищу «${S.smart.rest}» в названии`) : null,
+      el('button.link-btn', { onclick: searchAsIs, title: 'Искать по всем разделам без разбора запроса' }, 'Искать как есть')));
   }
   if (S.items.length) {
     out.push(el('div.dim.small', { style: { marginTop: '14px' } },

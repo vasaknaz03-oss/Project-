@@ -248,6 +248,29 @@ test('чипсет из объявления → сокет (AMD и Intel с п�
   assert.strictEqual(kase2.specs.fans, null);
 });
 
+console.log('Умный поиск');
+test('запрос → раздел и фильтры: ssd 512 gb, ddr5 32gb, бп 750w gold, so-dimm, hdd 2тб, кулер am5', async () => {
+  const Q = require('../server/query');
+  const ssd = await Q.parse('ssd 512 gb');
+  assert.strictEqual(ssd.section, 'ssd');
+  assert.deepStrictEqual(ssd.filters.volume_hdd, { from: '480gb', to: '512gb' });
+  assert.strictEqual(ssd.rest, '');
+  const ram = await Q.parse('оперативка ddr5 2x16гб');
+  assert.strictEqual(ram.section, 'dram');
+  assert.deepStrictEqual([ram.filters.dramkit, ram.filters.volume_dram], [['ddr5dimm'], { from: '32gb', to: '32gb' }]);
+  const psu = await Q.parse('бп 750w gold');
+  assert.deepStrictEqual([psu.section, psu.filters.power_sup, psu.filters['80plus_conform']], ['powersupply', { from: 750 }, ['golden']]);
+  const nb = await Q.parse('память для ноутбука ddr4 16гб');
+  assert.deepStrictEqual([nb.section, nb.filters.dramkit], ['nb_ram', ['ddr4sodimm']]);
+  const hdd = await Q.parse('жесткий диск 2тб');
+  assert.deepStrictEqual([hdd.section, hdd.filters.volume_hdd], ['hdd', { from: '2tb', to: '2tb' }]);
+  const fan = await Q.parse('кулер для am5');
+  assert.deepStrictEqual([fan.section, fan.filters.fan_socket], ['fan', ['am5']]);
+  const gpu = await Q.parse('rtx 4060ти');
+  assert.deepStrictEqual([gpu.section, gpu.rest], ['videocard', 'rtx 4060 ti']);
+  assert.strictEqual(await Q.parse('samsung 990 pro'), null);
+});
+
 console.log('Слежение');
 test('слежение: снижение цены, цель и новые объявления Kufar', async () => {
   const os = require('os');
