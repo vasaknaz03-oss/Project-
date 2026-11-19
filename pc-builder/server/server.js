@@ -415,6 +415,10 @@ function createServer() {
 function start(port = 0, host = '127.0.0.1') {
   return new Promise((resolve, reject) => {
     const server = createServer();
+    // Соединение с окном программы держим дольше: иначе запрос после паузы может попасть
+    // на только что закрытое соединение и оборваться («fetch failed»)
+    server.keepAliveTimeout = 60 * 1000;
+    server.headersTimeout = 65 * 1000;
     server.on('error', reject);
     server.listen(port, host, () => {
       const p = server.address().port;
