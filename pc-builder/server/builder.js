@@ -233,7 +233,8 @@ async function gather(opts, B) {
 
   if (!have.cooler) {
     // Тип охлаждения: башенный кулер по умолчанию, СЖО — если пользователь выбрал её в фильтре
-    let coolTypes = ['cpu'];
+    // Для дорогих сборок сразу смотрим и СЖО: горячим процессорам башенного кулера может не хватить
+    let coolTypes = B >= 5000 ? ['cpu', 'syslcp'] : ['cpu'];
     if (F.fan.type_fan) {
       const t = F.fan.type_fan.filter((x) => x === 'cpu' || x === 'syslcp');
       if (t.length) coolTypes = t;
@@ -241,9 +242,12 @@ async function gather(opts, B) {
     }
     // Кулеры под сокеты подбора и под сокет закреплённой детали (в том числе старый, например LGA1151)
     const fams = [...new Set(useSockets.map((s) => COOLER_FAMILY[SOCKET_NAME[s]]).concat(pinSockets.map((ps) => COOLER_FAMILY[ps])).filter(Boolean))];
-    jobs.coolers = Promise.all(fams.map((f) => fetchCat('fan', {
-      order: 'price:asc', type_fan: coolTypes, fan_socket: [f], power_cooling: { from: 110 }, price: { to: coolTypes.includes('syslcp') ? 900 : 450 },
-    }, 3, 'кулеры').then((items) => items.map((it) => ({ ...it, family: f }))))).then((a) => a.flat());
+    const maxPrice = coolTypes.includes('syslcp') ? 900 : 450;
+    // Дешёвые по цене + хорошие по рейтингу дороже 60 р. (двухбашенные и СЖО иначе не попадают в выборку)
+    jobs.coolers = Promise.all(fams.flatMap((f) => [
+      fetchCat('fan', { order: 'price:asc', type_fan: coolTypes, fan_socket: [f], power_cooling: { from: 110 }, price: { to: maxPrice } }, 3, 'кулеры'),
+      fetchCat('fan', { order: 'rating:desc', type_fan: coolTypes, fan_socket: [f], price: { from: 60, to: maxPrice } }, 2, 'кулеры'),
+    ].map((job) => job.then((items) => items.map((it) => ({ ...it, family: f })))))).then((a) => a.flat());
   }
 
   const keys = Object.keys(jobs);
@@ -468,6 +472,13 @@ function makePickers(pools, opts, B) {
       const good = list.filter((p) => GOOD_PSU.test(p.name));
       if (good.some((p) => p.specs.watts >= need.rec)) list = good;
     }
+    // Проверенная серия, если она не намного дороже (в дорогих сборках — с большим допуском)
+    const fit = list.filter((p) => p.specs.watts >= need.rec && p.specs.cert >= 2);
+    const great = fit.find((p) => GREAT_PSU.test(p.name) && ratingFactor(p) >= 1);
+    if (B > 3000 && great && fit[0] && great.price <= fit[0].price * (B >= 8000 ? 1.8 : 1.35) + 20) {
+      psuMemo.set(key, great);
+      return great;
+    }
     const bronze = list.find((p) => p.specs.watts >= need.rec && p.specs.cert >= 2);
     const gold = list.find((p) => p.specs.watts >= need.rec && p.specs.cert >= 4);
     let pick = bronze || list.find((p) => p.specs.watts >= need.rec) || undefined;
@@ -479,21 +490,33 @@ function makePickers(pools, opts, B) {
   }
 
   const coolMemo = new Map();
-  function pickCooler(cpu) {
+  function pickCooler(cpu, maxH) {
     if (opts.have && opts.have.cooler) return null;
     const need = Compat.coolerNeed(cpu);
     if (pools.coolerPinned) return pools.coolerPinned;
     if (!need) return null;
     const fam = COOLER_FAMILY[cpu.specs.socket];
-    // В дорогой сборке — кулер с запасом: тише и не даёт процессору сбрасывать частоты
-    let want = B >= 12000 ? Math.max(need, 250) : B >= 7000 ? Math.max(need, 220) : B >= 4500 ? Math.max(need, 180) : need;
+    // need — пик процессора с запасом. В дорогой сборке запас больше: тише и без сброса частот
+    let want = B >= 7000 ? Math.round(need * 1.25) : B >= 4500 ? Math.round(need * 1.15) : need;
     // Тихая сборка: кулер с большим запасом крутится медленнее
     if (opts.quiet) want = Math.max(want, Math.round(need * 1.4));
-    const key = fam + ':' + need + ':' + want;
+    const key = fam + ':' + need + ':' + want + ':' + (maxH || '');
     if (coolMemo.has(key)) return coolMemo.get(key);
-    const fitsH = (c) => c.family === fam && (!c.specs.heightMm || c.specs.heightMm >= 70);
-    const pick = pools.coolerAll.find((c) => fitsH(c) && c.specs.tdp >= want && c.price <= Math.max(150, B * 0.015))
-      || pools.coolerAll.find((c) => fitsH(c) && c.specs.tdp >= need);
+    // maxH — сколько кулера помещается в корпус по высоте
+    const fitsH = (c) => c.family === fam && (!c.specs.heightMm || (c.specs.heightMm >= 70 && (!maxH || c.specs.heightMm <= maxH)));
+    // Реальная способность кулера (а не «рассеивание до …» с коробки)
+    const cap = (c) => Compat.coolerCapacity(c);
+    const known = (c) => /двухбаш|отзыв|СЖО/.test(Compat.coolerClass(c));
+    const choose = (min) => {
+      const list = pools.coolerAll.filter((c) => fitsH(c) && cap(c) >= min).sort((a, b) => a.price - b.price);
+      if (!list.length) return null;
+      // Проверенная модель, если она не сильно дороже самой дешёвой подходящей
+      const good = list.find((c) => known(c) && c.price <= list[0].price * 1.3 + 15);
+      return good || list[0];
+    };
+    let pick = choose(want) || choose(need);
+    // Ничего не тянет — берём самый сильный из доступных (проверка совместимости предупредит)
+    if (!pick) pick = pools.coolerAll.filter(fitsH).sort((a, b) => cap(b) - cap(a))[0];
     coolMemo.set(key, pick);
     return pick;
   }
@@ -530,7 +553,40 @@ function makePickers(pools, opts, B) {
   return { pickPsu, pickCooler, pickCase, caseOptions, boardsFor };
 }
 
-function scoreParts(prof, purpose, cpu, gpu, ram, ssd, mb, haveGpu, kase, quiet) {
+// Проверенные серии блоков питания (по обзорам и тестам)
+const GREAT_PSU = /seasonic (focus|vertex|prime|core gx)|corsair (rm\d|rme|hx|sf\d|cx\d+f)|be quiet!? ?(pure power 1[23]|straight power|dark power|system power 1[01])|msi mag a\d+gl|deepcool (pq|pn|pm|px)\d|super flower leadex|xpg core ?reactor|cooler master (v\d+ gold|mwe gold)|thermaltake toughpower gf|fsp hydro (g|ti|pro)|chieftec (proton|polaris|vega)|montech (titan|century)|asus (rog|tuf gaming)|gigabyte (ud\d+gm|aorus)|zalman teramax|arctic|lian li (edge|sp)|nzxt c\d+/i;
+
+/** Оценка покупателей на Onliner: заметно плохие отзывы — штраф, отличные — небольшой плюс. */
+function ratingFactor(it, weight = 1) {
+  if (!it || !it.reviews || it.reviews < 5 || !it.rating) return 1;
+  let f = 1;
+  if (it.rating < 3.5) f = 0.94;
+  else if (it.rating < 4) f = 0.97;
+  else if (it.rating >= 4.7 && it.reviews >= 15) f = 1.01;
+  // weight — насколько деталь влияет на впечатление: видеокарта сильно, SSD и корпус слабо
+  return 1 + (f - 1) * weight;
+}
+
+/** «Пожирнее» плата: фазы питания под горячий процессор, слоты памяти, M.2, Wi-Fi. rich — вес для дорогих сборок. */
+function boardFactor(mb, cpu, rich) {
+  const ms = mb.specs || {};
+  const hot = Compat.cpuPower(cpu);
+  let q = 1;
+  if (ms.phases) {
+    if (hot >= 150 && ms.phases < 10) q *= 0.96;
+    else if (hot >= 120 && ms.phases < 8) q *= 0.97;
+    else if (ms.phases >= 12) q *= 1.01;
+  }
+  if ((ms.memSlots || 2) >= 4) q *= 1.006;
+  if ((ms.m2 || 1) >= 2) q *= 1.006;
+  if ((ms.m2 || 1) >= 3) q *= 1.003;
+  if (ms.wifi) q *= 1.003;
+  // Плата важна, но не должна перевешивать видеокарту и процессор
+  return Math.min(1.03, Math.max(0.96, 1 + (q - 1) * rich));
+}
+
+function scoreParts(prof, purpose, cpu, gpu, ram, ssd, mb, haveGpu, kase, quiet, budget) {
+  const rich = budget >= 8000 ? 1.3 : budget >= 5000 ? 1.15 : 1;
   let g = haveGpu ? 100 : gpu ? gpu.perf.score : Math.max(1, cpu.perf.igpu || 1);
   if (prof.gpuCap) g = Math.min(g, prof.gpuCap);
   // Штраф за малоизвестный бренд — после ограничения, иначе для офиса он теряется
@@ -569,6 +625,13 @@ function scoreParts(prof, purpose, cpu, gpu, ram, ssd, mb, haveGpu, kase, quiet)
   // Дорогому процессору — плата не начального уровня (питание, слоты, разгон памяти)
   if (mb && ENTRY_CHIPSETS.test(mb.specs.chipset || '')) s *= cpu.price >= 1200 ? 0.97 : cpu.price >= 700 ? 0.98 : 0.99;
   if (mb && mb.noname) s *= 0.985;
+  if (mb) s *= boardFactor(mb, cpu, rich) * ratingFactor(mb, 0.5);
+  if (ram) s *= ratingFactor(ram, 0.5);
+  if (ssd) s *= ratingFactor(ssd, 0.3);
+  if (gpu) s *= ratingFactor(gpu, 1);
+  // Мощной видеокарте — корпус с продувом, а не самый дешёвый
+  if (kase && gpu && gpu.price >= 3000 && !kase.goodCase) s *= 0.992;
+  if (kase) s *= ratingFactor(kase, 0.3);
   return s;
 }
 
@@ -583,7 +646,8 @@ function optimize(pools, opts, budget) {
   const ssdOpts = have.ssd ? [null] : pools.ssd;
   const hdd = pools.hdd;
   const hddCost = hdd ? hdd.price : 0;
-  const PENALTY = 0.06;
+  // Штраф за трату: на маленьком бюджете бережём деньги, на большом — человек хочет максимум мощности
+  const PENALTY = budget >= 8000 ? 0.025 : budget >= 5000 ? 0.045 : 0.06;
 
   let best = null;
   for (const cpu of pools.cpus) {
@@ -598,7 +662,13 @@ function optimize(pools, opts, budget) {
       for (const kase of caseList)
       for (const ram of rams) {
         if (kase && kase.pinned && !Compat.boardFitsCase(mb.specs.form, kase)) continue;
-        const plat = cpu.price + mb.price + ram.price + (cooler ? cooler.price : 0) + (kase ? kase.price : 0) + hddCost;
+        // Кулер должен поместиться в корпус по высоте — иначе берём другой, пониже
+        let cool = cooler;
+        if (cool && kase && kase.specs.coolerMaxMm && cool.specs.heightMm && cool.specs.heightMm > kase.specs.coolerMaxMm && !pools.coolerPinned) {
+          cool = P.pickCooler(cpu, kase.specs.coolerMaxMm);
+          if (!cool) continue;
+        }
+        const plat = cpu.price + mb.price + ram.price + (cool ? cool.price : 0) + (kase ? kase.price : 0) + hddCost;
         if (plat > budget) continue;
         for (const gpu of gpuOpts) {
           const gp = gpu ? gpu.price : 0;
@@ -614,10 +684,10 @@ function optimize(pools, opts, budget) {
           for (const ssd of ssdOpts) {
             const total = base + (ssd ? ssd.price : 0);
             if (total > budget) continue;
-            const s = scoreParts(prof, purpose, cpu, gpu, ram, ssd, mb, have.gpu, kase, !!opts.quiet);
+            const s = scoreParts(prof, purpose, cpu, gpu, ram, ssd, mb, have.gpu, kase, !!opts.quiet, budget);
             const obj = s * (1 - PENALTY * (total / budget));
             if (!best || obj > best.obj) {
-              best = { obj, score: s, total, parts: { cpu, motherboard: mb, ram, gpu, ssd, hdd, psu, case: kase, cooler }, need };
+              best = { obj, score: s, total, parts: { cpu, motherboard: mb, ram, gpu, ssd, hdd, psu, case: kase, cooler: cool }, need };
             }
           }
         }
@@ -1114,4 +1184,4 @@ async function upgrade(opts) {
   return { current: owned, index: nowIdx, bottleneck: bottleneck(owned), scenarios: results, best: results[0] ? results[0].id : null, value: value ? value.id : null, purpose };
 }
 
-module.exports = { build, hybrid, upgrade, PROFILES, boardSuitable };
+module.exports = { build, hybrid, upgrade, PROFILES, boardSuitable, _internal: { gather, preparePools, optimize, scoreParts } };

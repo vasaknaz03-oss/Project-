@@ -67,6 +67,9 @@ function motherboard(desc) {
   spec.wifi = /Wi-?Fi|802\.11/i.test(d);
   const pcie = d.match(/PCIe x16\s+([\d.]+)/);
   spec.pcie = pcie ? num(pcie[1]) : null;
+  // «12+2+1 фаз питания»: первое число — фазы питания ядер процессора
+  const ph = d.match(/(\d{1,2})(?:\s*\+\s*\d{1,2})*\s*фаз/);
+  spec.phases = ph ? num(ph[1]) : null;
   return spec;
 }
 

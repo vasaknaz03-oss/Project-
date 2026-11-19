@@ -12,7 +12,11 @@
     const s = cpu.specs || {};
     const tdp = s.tdp || 65;
     if (/intel/i.test(cpu.name || '')) {
-      if (tdp >= 125) return Math.round(tdp * 1.9); // PL2 у K-серии ≈ 250 Вт
+      if (tdp >= 125) {
+        // PL2 у K-серии: i9/i7 (20+ ядер) ≈ 253 Вт, i5 (14 ядер) ≈ 181 Вт
+        const c = s.cores || 0;
+        return c >= 20 ? 253 : c >= 14 ? 181 : c >= 10 ? 160 : Math.round(tdp * 1.4);
+      }
       // У «65-ваттных» Intel реальный предел (PL2) намного выше: i5-13400 ≈ 150 Вт, i7/i9 ≈ 200+ Вт
       const cores = s.cores || 6;
       if (cores >= 16) return 220;
@@ -45,15 +49,46 @@
   }
 
   /** Нужен ли отдельный кулер и какой мощности (Вт рассеивания). */
+  /**
+   * Какой кулер нужен процессору, Вт: пиковое потребление с запасом 10%.
+   * У X3D кристалл с кэшем хуже отдаёт тепло — запас ещё 10%.
+   */
   function coolerNeed(cpu) {
     if (!cpu) return 0;
     const s = cpu.specs || {};
-    const p = cpuPower(cpu);
     if (s.withCooler && (s.tdp || 65) <= 65) return 0;
-    if (p <= 90) return 120;
-    if (p <= 145) return 160;
-    if (p <= 180) return 200;
-    return 240;
+    const p = cpuPower(cpu);
+    const x3d = /x3d/i.test(cpu.name || '');
+    return Math.max(100, Math.round((p * (x3d ? 1.2 : 1.1)) / 5) * 5);
+  }
+
+  // Модели кулеров, проверенные обзорами. Производители завышают «рассеивание до … Вт»,
+  // поэтому реальную способность оцениваем по классу кулера.
+  const DUAL_TOWER = /peerless assassin|phantom spirit|frost commander|frost spirit|royal knight|royal pretor|\bak620|\bak500\b|assassin iv|frozn a720|frozn a620|se-207|dark rock (pro|elite)|nh-d15|nh-d12|\brz620|\brz700|freezer 36|\bfuma\b|mugen|hyper 622|cr-?1400|nh-u12a|ag620|\ble720/i;
+  const GOOD_TOWER = /\bak400|assassin x 120|burst assassin|se-224|se-226|frozn a410|frozn a400|pure rock 3|hyper 212|\brz400|cr-?1000 evo|freezer 34|dark rock 5\b|\bag500|ar12/i;
+
+  /** Реальная способность кулера отводить тепло, Вт (оценка). */
+  function coolerCapacity(c) {
+    if (!c) return 0;
+    const s = c.specs || {};
+    const claim = s.tdp || 0;
+    let cap;
+    if (s.aio) cap = s.radMm >= 360 ? 300 : s.radMm >= 280 ? 270 : s.radMm >= 240 ? 240 : 150;
+    else if (s.heightMm && s.heightMm < 100) cap = 95; // низкопрофильный
+    else if (DUAL_TOWER.test(c.name || '')) cap = 270;
+    else if (GOOD_TOWER.test(c.name || '')) cap = 190;
+    else cap = (c.price || 0) < 40 ? 130 : (c.price || 0) < 70 ? 160 : 185;
+    return claim ? Math.min(claim, cap) : cap;
+  }
+
+  /** Класс кулера человеческими словами. */
+  function coolerClass(c) {
+    const s = (c && c.specs) || {};
+    if (s.aio) return `СЖО${s.radMm ? ' ' + s.radMm + ' мм' : ''}`;
+    if (s.heightMm && s.heightMm < 100) return 'низкопрофильный кулер';
+    if (DUAL_TOWER.test((c && c.name) || '')) return 'двухбашенный кулер (6–7 трубок)';
+    if (GOOD_TOWER.test((c && c.name) || '')) return 'башенный кулер (4–5 трубок, хорошие отзывы)';
+    return 'башенный кулер';
   }
 
   function boardFitsCase(mbForm, caseItem) {
@@ -160,9 +195,11 @@
     if (cpu && !have.cooler) {
       const need = coolerNeed(cpu);
       if (need && !cooler) err('Процессор без кулера в комплекте: нужен отдельный кулер');
-      else if (need && cooler && cooler.specs.tdp && cooler.specs.tdp < need) warn(`Кулер рассчитан на ${cooler.specs.tdp} Вт, а желательно от ${need} Вт`);
+      else if (need && cooler && coolerCapacity(cooler) < need) {
+        warn(`Кулер слабоват: ${coolerClass(cooler)} реально отводит около ${coolerCapacity(cooler)} Вт, а процессору в пике нужно ~${need} Вт. Нужен двухбашенный кулер (6–7 тепловых трубок) или СЖО 240–360 мм`);
+      }
       else if (!need && !cooler) ok('Кулер идёт в комплекте с процессором');
-      else if (cooler) ok('Охлаждение процессора подобрано с запасом');
+      else if (cooler) ok(`Охлаждение с запасом: ${coolerClass(cooler)} (~${coolerCapacity(cooler)} Вт) при пике процессора ~${cpuPower(cpu)} Вт`);
     }
 
     if (ssd && mb && ssd.specs.form === 'M.2' && ms.m2 === 0) warn('На плате не указаны слоты M.2: проверьте, куда ставить SSD');
@@ -204,5 +241,5 @@
     return { gaming, work, tier: eff == null ? 'Зависит от вашей видеокарты' : gamingTier(eff) };
   }
 
-  return { cpuPower, gpuPower, psuNeed, coolerNeed, boardFitsCase, check, indices, gamingTier };
+  return { cpuPower, gpuPower, psuNeed, coolerNeed, coolerCapacity, coolerClass, boardFitsCase, check, indices, gamingTier };
 });
