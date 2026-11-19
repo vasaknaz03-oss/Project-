@@ -729,7 +729,14 @@ async function build(opts) {
   ]);
   warnings.push(...setupWarnings);
   const pools = preparePools(raw, opts, budget * 1.15, F);
-  if (!pools.cpus.length) throw new Error('Не удалось загрузить процессоры с Onliner. Проверьте интернет и попробуйте ещё раз.');
+  if (!pools.cpus.length) {
+    // Различаем «фильтры ничего не оставили» и «нет связи с Onliner»
+    if (filters.countActive(F.cpu) || opts.cpuBrand === 'amd' || opts.cpuBrand === 'intel' || opts.platform === 'modern') {
+      throw new Error('Под эти условия не подошёл ни один процессор в наличии: фильтры процессора противоречат настройкам '
+        + '(например, выбран производитель Intel, а в фильтре — сокет AM5) или слишком узкие. Ослабьте фильтры или поменяйте «Процессор» в тонких настройках.');
+    }
+    throw new Error('Не удалось загрузить процессоры с Onliner. Проверьте интернет и попробуйте ещё раз.');
+  }
 
   const variants = [];
   for (const v of VARIANTS) {
@@ -742,7 +749,14 @@ async function build(opts) {
       const first = optimize(pools, opts, b - Setup.reserve(setupIds, b));
       const idx = first ? Compat.indices(first.parts, opts.have && opts.have.gpu) : { gaming: 0 };
       setup = Setup.choose(setupIds, setupPools, b, opts.purpose, idx.gaming);
-      best = optimize(pools, opts, b - setup.total) || first;
+      best = optimize(pools, opts, b - setup.total);
+      // Сетап съел бюджет: берём периферию попроще, чтобы осталось на компьютер
+      for (const k of [0.6, 0.3, 0]) {
+        if (best) break;
+        const cheaper = Setup.choose(setupIds, setupPools, Math.round(b * k), opts.purpose, idx.gaming);
+        const pc = optimize(pools, opts, b - cheaper.total);
+        if (pc) { setup = cheaper; best = pc; }
+      }
     } else {
       best = optimize(pools, opts, b);
     }
@@ -773,7 +787,15 @@ async function build(opts) {
   for (const v of variants) if (v.id !== 'optimal' && v.build && sig(v) === sig(opt)) v.same = true;
 
   let minNeeded = null;
-  if (!opt.build) minNeeded = minimalCost(pools, opts);
+  let minSetup = null;
+  if (!opt.build) {
+    minNeeded = minimalCost(pools, opts);
+    // С сетапом — плюс самая доступная периферия
+    if (minNeeded && setupIds.length) {
+      minSetup = Math.round(Setup.choose(setupIds, setupPools, 0, opts.purpose, 0).total);
+      minNeeded += minSetup;
+    }
+  }
 
   return {
     budget,
@@ -781,6 +803,7 @@ async function build(opts) {
     purposeLabel: (PROFILES[opts.purpose] || PROFILES.gaming).label,
     variants,
     minNeeded,
+    minSetup,
     warnings,
     stats: {
       cpus: pools.cpus.length, gpus: pools.gpus.length, boards: pools.boardAll.length,

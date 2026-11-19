@@ -226,6 +226,21 @@ test('объявление Kufar → материнская плата с хар
   assert.deepStrictEqual([ram.specs.type, ram.specs.totalGb, ram.specs.modules], ['DDR5', 32, 2]);
 });
 
+test('чипсет из объявления → сокет (AMD и Intel с похожими названиями)', async () => {
+  const KC = require('../server/kufarCompat');
+  const cases = [['asrock H81M-HDS', 'LGA1150'], ['Gigabyte B560M DS3H', 'LGA1200'], ['MSI B450M-A PRO MAX', 'AM4'], ['ASRock B360M-HDV', 'LGA1151'],
+    ['MSI MAG B850 Tomahawk', 'AM5'], ['Asus Prime B860-Plus', 'LGA1851'], ['Asus TUF B650E-PLUS', 'AM5']];
+  for (const [name, socket] of cases) {
+    const mb = await KC.enrich('motherboard', { name, price: 200, params: {} });
+    assert.strictEqual(mb.specs.socket, socket, name);
+  }
+  assert.strictEqual(KC.findChipset('Видеокарта RTX 5060'), null);
+  const kase = await KC.enrich('case', { name: 'Корпус аквариум 3 RGB вентилятора', price: 100, params: {} });
+  assert.strictEqual(kase.specs.fans, 3);
+  const kase2 = await KC.enrich('case', { name: 'Корпус Zalman i3 Neo', price: 100, params: {} });
+  assert.strictEqual(kase2.specs.fans, null);
+});
+
 console.log('Сетап');
 test('класс монитора по мощности видеокарты', () => {
   const Setup = require('../server/setup');

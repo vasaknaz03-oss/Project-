@@ -121,7 +121,8 @@ export function specChips(cat, it) {
     case 'chassis':
       add(s.class, 'accent');
       if (s.boards && s.boards.length) add(s.boards.join(' / '));
-      add(s.fans ? `${s.fans} вент.` : 'без вентиляторов');
+      if (s.fans) add(`${s.fans} вент.`);
+      else if (s.fans === 0) add('без вентиляторов');
       if (s.gpuMaxMm) add(`GPU до ${s.gpuMaxMm} мм`);
       if (s.coolerMaxMm) add(`кулер до ${s.coolerMaxMm} мм`);
       break;

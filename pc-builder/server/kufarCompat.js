@@ -41,6 +41,21 @@ async function valuesOf(slot, param) {
   }
 }
 
+/**
+ * Значения «Тип памяти» Kufar для настольной памяти данного типа. Продавцы пишут и «DDR5», и «DDR5 DIMM»,
+ * и «DDR5 CUDIMM» — берём все, кроме SO-DIMM и серверной Registered.
+ */
+async function memIds(slot, type) {
+  const want = norm(type);
+  if (!want) return null;
+  const ids = (await valuesOf(slot, 'ccrt')).filter((v) => {
+    const n = norm(v.name);
+    return n.startsWith(want) && !/SODIMM|REGISTERED/.test(n) && (n === want || /^DDR\dL?(CU)?DIMM$/.test(n));
+  }).map((v) => v.id);
+  if (!ids.length) return null;
+  return ids.length > 1 ? 'v.or:' + ids.join(',') : ids[0];
+}
+
 function webUrl(params, query) {
   const qs = new URLSearchParams({ cat: '16010', ...params });
   if (query) qs.set('query', query);
@@ -66,13 +81,13 @@ async function compatible(slot, part, ctx = {}) {
     if (socket) crit.push('сокет ' + socket);
     if (slot === 'motherboard') {
       const mem = s.mem || ctx.mem;
-      const mid = await valueId(slot, 'ccrt', mem);
+      const mid = await memIds(slot, mem);
       if (mid) params.ccrt = mid;
       if (mem) crit.push(mem);
     }
   } else if (slot === 'ram') {
-    const id = await valueId(slot, 'ccrt', s.type);
-    if (id) params.ccrt = id;
+    const ids = await memIds(slot, s.type);
+    if (ids) params.ccrt = ids;
     if (s.type) crit.push(s.type);
     if (s.totalGb) {
       const vid = await valueId(slot, 'cdr', `${s.totalGb} ГБ`);
@@ -130,11 +145,31 @@ async function compatible(slot, part, ctx = {}) {
 
 // ---------------------------------------------------------------- объявление → деталь сборки
 
-const MEM_BY_SOCKET = { AM4: ['DDR4'], AM5: ['DDR5'], LGA1700: ['DDR4', 'DDR5'], LGA1851: ['DDR5'], LGA1200: ['DDR4'] };
-const CHIPSET_SOCKET = [
-  [/^[ABX](6\d0|8\d0)/, 'AM5'], [/^[ABX](3\d0|4\d0|5\d0)/, 'AM4'],
-  [/^[BHZQ](6\d0|7\d0)/, 'LGA1700'], [/^[BHZQ]8\d0/, 'LGA1851'], [/^[BHZQ](4\d0|5\d0)/, 'LGA1200'],
-];
+const MEM_BY_SOCKET = {
+  AM4: ['DDR4'], AM5: ['DDR5'], LGA1700: ['DDR4', 'DDR5'], LGA1851: ['DDR5'], LGA1200: ['DDR4'],
+  LGA1151: ['DDR4'], LGA1150: ['DDR3'], LGA1155: ['DDR3'],
+};
+// Чипсет → сокет. Точный список: у AMD и Intel похожие названия (B350 — AM4, B360 — Intel; B850 — AM5, B860 — Intel)
+const CHIPSETS = {
+  AM5: 'A620 B650 B650E X670 X670E B840 B850 X870 X870E',
+  AM4: 'A300 X300 A320 B350 X370 B450 X470 A520 B550 X570',
+  LGA1851: 'H810 B860 Z890 W880 Q870',
+  LGA1700: 'H610 B660 H670 Z690 Q670 W680 B760 H770 Z790',
+  LGA1200: 'H410 B460 H470 Z490 Q470 W480 H510 B560 H570 Z590 Q570 W580',
+  LGA1151: 'H110 B150 H170 Z170 Q170 B250 H270 Z270 Q270 H310 B360 B365 H370 Z370 Z390 Q370',
+  LGA1150: 'H81 B85 H87 Z87 Q87 H97 Z97',
+  LGA1155: 'H61 H67 P67 Z68 B75 H77 Z77 Q77',
+};
+const CHIPSET_SOCKET = new Map(Object.entries(CHIPSETS).flatMap(([sk, list]) => list.split(' ').map((c) => [c, sk])));
+
+/** Чипсет из текста: «MSI B450M-A», «asrock H81M-HDS», «Z790-P». */
+function findChipset(text) {
+  const t = String(text || '').toUpperCase();
+  const re = /(?:^|[^A-Z0-9])([ABHXZQPW]\d{2,3}E?)(?=$|[^0-9])/g;
+  let m;
+  while ((m = re.exec(t))) if (CHIPSET_SOCKET.has(m[1])) return m[1];
+  return null;
+}
 
 const pv = (it, pu) => (it.params && it.params[pu] ? String(it.params[pu].vl) : '');
 
@@ -170,9 +205,9 @@ async function enrich(slot, item) {
     if (key) out.perf = { key, ...perf.gpuPerf(key, out.specs.vramGb) };
     else notes.push('модель видеокарты не распознана');
   } else if (slot === 'motherboard') {
-    const chipset = (pv(item, 'ccch').match(/([ABHXZQ]\d{3}[A-Z]?)/) || name.toUpperCase().match(/\b([ABHXZQ]\d{3}[A-Z]?)\b/) || [])[1] || null;
+    const chipset = findChipset(pv(item, 'ccch')) || findChipset(name);
     let socket = normSocket(pv(item, 'ccsct')) || null;
-    if (!socket && chipset) for (const [re, sk] of CHIPSET_SOCKET) if (re.test(chipset)) { socket = sk; break; }
+    if (!socket && chipset) socket = CHIPSET_SOCKET.get(chipset);
     let mem = (pv(item, 'ccrt').match(/DDR\d/) || [])[0];
     if (!mem) mem = /ddr5|d5\b/i.test(name) ? 'DDR5' : /ddr4|d4\b/i.test(name) ? 'DDR4' : (MEM_BY_SOCKET[socket] || [])[0];
     const ffRaw = pv(item, 'ccff') || name;
@@ -195,7 +230,9 @@ async function enrich(slot, item) {
     out.specs.certName = ['нет', '80+', 'Bronze', 'Silver', 'Gold'][out.specs.cert] || '';
     if (!w) notes.push('мощность не указана — уточните у продавца');
   } else if (slot === 'case') {
-    out.specs = { boards: /mini|itx/i.test(name) ? ['mATX', 'ITX'] : ['ATX', 'mATX', 'ITX'], fans: 0 };
+    // Число вентиляторов — если продавец его написал («3 RGB вентилятора», «4 fan»), иначе неизвестно
+    const fans = Number((name.match(/(\d)\s*(?:шт\.?\s*)?(?:a?rgb\s*)?(?:вентилятор|кулер|fan)/i) || [])[1]) || null;
+    out.specs = { boards: /mini|itx/i.test(name) ? ['mATX', 'ITX'] : ['ATX', 'mATX', 'ITX'], fans };
   } else if (slot === 'cooler') {
     out.specs = { tdp: Number((name.match(/(\d{3})\s*(w|вт)/i) || [])[1]) || 150, heightMm: null };
   }
@@ -203,4 +240,4 @@ async function enrich(slot, item) {
   return out;
 }
 
-module.exports = { compatible, enrich, TYPE, SCHEMA };
+module.exports = { compatible, enrich, findChipset, TYPE, SCHEMA };

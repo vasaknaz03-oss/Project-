@@ -419,7 +419,8 @@ function renderResults() {
   if (!opt || !opt.build) {
     out.push(el('div.notice.err', icon('alert'), el('div',
       el('b', 'Бюджета не хватает на работающую сборку. '),
-      r.minNeeded ? `Самая дешёвая совместимая сборка из того, что сейчас в наличии, стоит около ${money.fmt(r.minNeeded)}${money.currency !== 'BYN' ? ` (${money.fmt(r.minNeeded, 'BYN')})` : ''}. ` : '',
+      r.minNeeded ? `Самая дешёвая совместимая сборка из того, что сейчас в наличии, стоит около ${money.fmt(r.minNeeded)}${money.currency !== 'BYN' ? ` (${money.fmt(r.minNeeded, 'BYN')})` : ''}`
+        + (r.minSetup ? ` (компьютер ${money.fmt(r.minNeeded - r.minSetup)} + самая доступная периферия ${money.fmt(r.minSetup)})` : '') + '. ' : '',
       'Увеличьте бюджет, отметьте детали, которые у вас уже есть, или посмотрите б/у на Kufar через «Поиск».')));
   }
   out.push(renderVariants());

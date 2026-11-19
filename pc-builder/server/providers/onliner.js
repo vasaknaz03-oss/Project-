@@ -94,8 +94,8 @@ async function category(schema, params = {}, maxPages = 3) {
 }
 
 /** Текстовый поиск по всему каталогу. */
-async function search(query, page = 1) {
-  const url = `${API}/search/products?${qs({ query, page })}`;
+async function search(query, page = 1, limit) {
+  const url = `${API}/search/products?${qs({ query, page, limit })}`;
   const data = await getJSON(url, { ttl: 5 * 60 * 1000 });
   return {
     items: (data.products || []).map(normalize),

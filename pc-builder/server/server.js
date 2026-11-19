@@ -99,6 +99,7 @@ async function searchOnliner(q, p) {
   const max = num(p.get('max'));
   const sort = p.get('sort') || '';
   const section = sectionOf(cat);
+  if (section && section.onliner && q) return searchOnlinerText(section, q, p);
   if (section && section.onliner) {
     const f = parseFilters(p);
     const base = { order: ONLINER_SORT[sort] || (q ? undefined : 'rating:desc'), price: { from: min, to: max }, ...(section.onlinerPreset || {}) };
@@ -120,6 +121,86 @@ async function searchOnliner(q, p) {
   if (sort === 'price_desc') items.sort((a, b) => (b.price || 0) - (a.price || 0));
   if (sort === 'rating') items.sort((a, b) => b.rating - a.rating);
   return { items, total: r.total, pages: r.pages };
+}
+
+// Каталог Onliner внутри категории текстовый запрос не принимает, поэтому поиск по словам
+// идёт через общий поиск Onliner с уточняющим словом раздела, а с фильтрами — по категории
+// с отбором по словам в названии и описании.
+const ONLINER_HINT = {
+  cpu: 'процессор', videocard: 'видеокарта', motherboard: 'материнская плата', dram: 'оперативная память', ssd: 'ssd',
+  hdd: 'жесткий диск', powersupply: 'блок питания', chassis: 'корпус', fan: 'охлаждение', soundcard: 'звуковая карта',
+  desktoppc: 'компьютер', notebook: 'ноутбук', notebatteries: 'аккумулятор ноутбука', laptopstand: 'подставка для ноутбука',
+  display: 'монитор', wallmount: 'кронштейн', keyboards: 'клавиатура', mouse: 'мышь', mousepad: 'коврик', headphones: 'наушники',
+  microphones: 'микрофон', webcams: 'веб-камера', sound: 'колонки', controllers: 'геймпад', tablets: 'графический планшет',
+  usbhub: 'usb хаб', externalhdd: 'внешний диск', office_chair: 'кресло', table: 'стол', desk_lamp: 'настольная лампа',
+  wrouter: 'роутер', wirelessadapter: 'wi-fi адаптер', ups: 'ибп', voltageregulator: 'сетевой фильтр',
+};
+const PER_PAGE = 30;
+const norm = (x) => String(x || '').toLowerCase().replace(/ё/g, 'е');
+const words = (q) => norm(q).split(/[\s,;]+/).filter(Boolean);
+function textMatches(it, toks) {
+  const n = norm(it.name + ' ' + (it.description || ''));
+  const flat = n.replace(/[\s\-_]/g, '');
+  return toks.every((t) => n.includes(t) || flat.includes(t.replace(/[\s\-_]/g, '')));
+}
+
+async function searchOnlinerText(section, q, p) {
+  const schema = section.onliner;
+  const page = num(p.get('page')) || 1;
+  const min = num(p.get('min'));
+  const max = num(p.get('max'));
+  const sort = p.get('sort') || '';
+  const f = parseFilters(p);
+  const toks = words(q);
+  let items;
+  let capped = false;
+
+  if (Object.keys(f).length || section.onlinerPreset) {
+    // Есть фильтры: ищем в категории с фильтрами, бренд из запроса превращаем в фильтр производителя
+    let rest = toks;
+    const base = { order: ONLINER_SORT[sort] || 'rating:desc', price: { from: min, to: max }, ...(section.onlinerPreset || {}) };
+    if (!f.mfr) {
+      try {
+        const meta = await filters.facets(schema);
+        const mfr = meta.groups.flatMap((g) => g.items).find((i) => i.id === 'mfr');
+        const hit = mfr && mfr.values.filter((v) => toks.includes(norm(v.name)) || (norm(v.name).includes(' ') && norm(q).includes(norm(v.name))));
+        if (hit && hit.length) {
+          base.mfr = hit.map((v) => v.id);
+          const names = hit.map((v) => norm(v.name));
+          rest = toks.filter((t) => !names.some((n) => n.split(' ').includes(t)));
+        }
+      } catch {}
+    }
+    const params = filters.merge(base, f);
+    if (!params) return { items: [], total: 0, pages: 0 };
+    const first = await onliner.categoryPage(schema, params, 1);
+    const last = Math.min(first.pages, 10);
+    capped = first.pages > 10;
+    const more = await Promise.all(Array.from({ length: Math.max(0, last - 1) }, (_, i) => onliner.categoryPage(schema, params, i + 2).catch(() => ({ items: [] }))));
+    items = first.items.concat(...more.map((x) => x.items)).filter((it) => textMatches(it, rest));
+  } else {
+    // Без фильтров: общий поиск Onliner со словом раздела, только товары этого раздела
+    const hint = ONLINER_HINT[schema] || norm(section.name);
+    const query = toks.some((t) => norm(hint).includes(t)) ? q : `${q} ${hint}`;
+    const get = (qq) => Promise.all([1, 2, 3, 4].map((pg) => onliner.search(qq, pg, 50).catch(() => ({ items: [] }))));
+    let pages = await get(query);
+    items = pages.flatMap((x) => x.items).filter((it) => it.category === schema);
+    if (items.length < 5 && query !== q) {
+      pages = await get(q);
+      items = items.concat(pages.flatMap((x) => x.items).filter((it) => it.category === schema));
+    }
+    const seen = new Set();
+    items = items.filter((it) => (seen.has(it.id) ? false : seen.add(it.id)));
+    if (min !== undefined) items = items.filter((it) => it.price && it.price >= min);
+    if (max !== undefined) items = items.filter((it) => it.price && it.price <= max);
+    if (sort === 'price_asc') items.sort((a, b) => (a.price || 1e9) - (b.price || 1e9));
+    if (sort === 'price_desc') items.sort((a, b) => (b.price || 0) - (a.price || 0));
+    if (sort === 'rating') items.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+  }
+  // Товары в наличии — первыми (порядок внутри групп сохраняется)
+  if (!sort || sort === 'rating') items = items.filter((it) => it.price).concat(items.filter((it) => !it.price));
+  const total = items.length;
+  return { items: items.slice((page - 1) * PER_PAGE, page * PER_PAGE), total, pages: Math.ceil(total / PER_PAGE), capped };
 }
 
 /** Параметры поиска Kufar для раздела: категория, тип, фильтры пользователя, запасной текстовый запрос. */
