@@ -15,6 +15,12 @@ function param(ad, key) {
   return p ? p.vl || p.v : null;
 }
 
+// Флаг из характеристик объявления («Да» / true)
+function flag(ad, key) {
+  const p = (ad.ad_parameters || []).find((x) => x.p === key);
+  return !!p && (p.v === true || p.v === 1 || p.v === '1' || p.vl === 'Да');
+}
+
 function normalize(ad) {
   const img = ad.images && ad.images[0];
   const priceByn = ad.price_byn ? parseInt(ad.price_byn, 10) / 100 : 0;
@@ -35,8 +41,13 @@ function normalize(ad) {
     company: !!ad.company_ad,
     // Характеристики из объявления (сокет, тип памяти и т. п.) — для проверки совместимости
     params: Object.fromEntries((ad.ad_parameters || []).filter((p) => p.pu && typeof p.v !== 'object').map((p) => [p.pu, { v: p.v, vl: p.vl }])),
-    exchange: !!param(ad, 'possible_exchange'),
+    exchange: flag(ad, 'possible_exchange'),
     date: ad.list_time,
+    seller: ((ad.account_parameters || []).find((p) => p.p === 'name') || {}).v || '',
+    delivery: flag(ad, 'delivery_enabled'), // «Куфар Доставка»
+    safedeal: flag(ad, 'safedeal_enabled'), // «Куфар Оплата» — безопасная сделка
+    guarantee: flag(ad, 'shop_guarantee'),
+    installment: flag(ad, 'installment_pro') || !!(ad.paid_services && ad.paid_services.halva),
   };
 }
 
@@ -124,4 +135,6 @@ async function usedFor(kind, key, query, newPrice) {
   return items;
 }
 
-module.exports = { search, count, usedFor, ratesFromAds, CAT_COMPONENTS, CAT_COMPUTERS };
+const isJunk = (name) => JUNK.test(name || '');
+
+module.exports = { search, count, usedFor, ratesFromAds, isJunk, CAT_COMPONENTS, CAT_COMPUTERS };

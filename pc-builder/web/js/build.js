@@ -2,6 +2,7 @@
 import { el, icon, api, money, toast, modal, closeModal, promptText, copyText, download, thumb, plural } from './util.js';
 import { state, SLOTS, specChips, shopLinks, linkFor, slim, saveBuilds, buildText } from './state.js';
 import { openFacetModal, loadFacets, summarize, countActive } from './facets.js';
+import { adChips, adLink, hideButton, isHidden, isViewed, hiddenToggle } from './kufarui.js';
 
 const Compat = window.Compat;
 const Catalog = window.Catalog;
@@ -782,22 +783,41 @@ async function fetchUsed(it) {
   const key = it.perf ? it.perf.key || '' : '';
   const q = usedQuery(it);
   const r = await api(`/api/used?kind=${kind}&key=${encodeURIComponent(key)}&q=${encodeURIComponent(q)}&price=${it.price || ''}`);
-  usedCache[it.id] = { items: r.items, total: r.total || r.items.length, url: r.url };
+  usedCache[it.id] = { items: r.items, total: r.total || r.items.length, url: r.url, market: r.market || null };
   return usedCache[it.id];
 }
 
-function kufarRow(slot, u, it, label = 'В сборку') {
-  return el('div.alt',
+function kufarRow(slot, u, it, label = 'В сборку', onChange) {
+  const row = el('div.alt', { class: isViewed(u) ? 'viewed' : '' },
     thumb(u.image, slot.icon),
     el('div',
-      el('div.alt-name', el('a', { href: u.url, target: '_blank', rel: 'noopener' }, u.name)),
+      el('div.alt-name', adLink(u, u.name, () => row.classList.add('viewed'))),
       el('div.alt-note', [u.perf && u.perf.name ? u.perf.name : null, u.perf && u.perf.gaming && it && it.perf && it.perf.gaming ? `игры ${perfDiff(u.perf.gaming, it.perf.gaming)}` : null,
         u.perf && u.perf.score && it && it.perf && it.perf.score ? `мощность ${perfDiff(u.perf.score, it.perf.score)}` : null,
-        u.condition, u.location, u.date ? new Date(u.date).toLocaleDateString('ru-RU') : null, u.company ? 'магазин' : 'частное лицо'].filter(Boolean).join(' · '))),
+        u.condition, u.location].filter(Boolean).join(' · ')),
+      el('div.row.wrap.ad-chips', adChips(u))),
     el('div.alt-price', el('b', money.fmt(u.price)), it && it.price ? savingTag(u.price, it.price) : null),
     el('div.row', { style: { gap: '6px' } },
-      el('a.btn.btn-sm.btn-ghost', { href: u.url, target: '_blank', rel: 'noopener', title: 'Открыть объявление' }, icon('external')),
+      hideButton(u, onChange),
+      el('a.btn.btn-sm.btn-ghost', { href: u.url, target: '_blank', rel: 'noopener', title: 'Открыть объявление', onclick: () => row.classList.add('viewed') }, icon('external')),
       el('button.btn.btn-sm', { onclick: (e) => takeFromKufar(slot, u, e.currentTarget) }, icon('plus'), label)));
+  return row;
+}
+
+/** Список объявлений Kufar со скрытием и переключателем «Показать скрытые». */
+function kufarList(slot, items, it, limit, note) {
+  const box = el('div');
+  let showHidden = false;
+  const draw = () => {
+    const visible = items.filter((u) => showHidden || !isHidden(u));
+    const hidden = items.length - items.filter((u) => !isHidden(u)).length;
+    box.replaceChildren(
+      visible.length ? el('div.alt-list', visible.slice(0, limit).map((u) => kufarRow(slot, u, it, 'В сборку', draw))) : el('div.muted.small', 'Подходящих объявлений не нашлось.'),
+      visible.length > limit && note ? el('div.dim.small', { style: { marginTop: '6px' } }, note(visible.length)) : null,
+      hiddenToggle(hidden, showHidden, () => { showHidden = !showHidden; draw(); }));
+  };
+  draw();
+  return box;
 }
 
 function perfDiff(a, b) {
@@ -851,7 +871,8 @@ async function loadUsed(panel, slot, it) {
     }
     sameBox.replaceChildren(
       el('div.panel-title', `Та же модель «${q}» б/у: ${r.total}`, el('a.link-btn', { href: r.url, target: '_blank', rel: 'noopener', style: { marginLeft: '10px' } }, 'все на Kufar ↗')),
-      el('div.alt-list', r.items.slice(0, 10).map((u) => kufarRow(slot, u, it))));
+      r.market ? el('div.market-line', icon('tag'), `Обычная цена б/у: около ${money.fmt(r.market.median)} — половина объявлений от ${money.fmt(r.market.p25)} до ${money.fmt(r.market.p75)} (по ${r.market.n} объявлениям)`) : null,
+      kufarList(slot, r.items, it, 10));
   }).catch((e) => sameBox.replaceChildren(el('div.notice.err', icon('error'), el('div', e.message))));
   // 2) Совместимые варианты (тот же сокет / тип памяти / видеокарты близкой мощности)
   const comp = slot.setup ? Promise.resolve() : api('/api/kufar/compatible', { method: 'POST', body: { slot: slot.key, part: slimForApi(it), ctx: kufarCtx(b, slot.key) } }).then((r) => {
@@ -859,9 +880,7 @@ async function loadUsed(panel, slot, it) {
     compBox.replaceChildren(
       el('div.panel-title', `Совместимые на Kufar${r.criteria ? ` (${r.criteria})` : ''}: ${r.total.toLocaleString('ru-RU')} объявлений`,
         r.url ? el('a.link-btn', { href: r.url, target: '_blank', rel: 'noopener', style: { marginLeft: '10px' } }, 'все на Kufar ↗') : null),
-      list.length ? el('div.alt-list', list.slice(0, 15).map((u) => kufarRow(slot, u, it)))
-        : el('div.muted.small', 'Подходящих объявлений не нашлось.'),
-      list.length > 15 ? el('div.dim.small', { style: { marginTop: '6px' } }, `Показаны 15 самых дешёвых из ${list.length} подходящих. Остальные — по ссылке «все на Kufar».`) : null);
+      kufarList(slot, list, it, 15, (n) => `Показаны 15 самых дешёвых из ${n} подходящих. Остальные — по ссылке «все на Kufar».`));
   }).catch((e) => compBox.replaceChildren(el('div.notice.err', icon('error'), el('div', e.message))));
   await Promise.allSettled([same, comp]);
   panel.replaceChildren(sameBox, slot.setup ? null : compBox,

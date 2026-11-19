@@ -1,5 +1,6 @@
 // Страница «Поиск комплектующих»: Onliner (новые, цены магазинов) и Kufar (объявления).
 import { el, icon, api, money, toast, modal, thumb, plural } from './util.js';
+import { adChips, adLink, hideButton, isHidden, isViewed, hiddenToggle } from './kufarui.js';
 import { state, CAT_TO_SLOT, CAT_ICON, specChips, shopLinks, linkFor } from './state.js';
 import { replaceFromSearch, hasActiveBuild, takeKufarToBuild } from './build.js';
 import { facetPanel, loadFacets, loadKufarFacets, countActive } from './facets.js';
@@ -201,17 +202,23 @@ async function run(reset) {
   });
   if (hasFilters() && countActive(S.filters[fkey()])) params.set('f', JSON.stringify(S.filters[fkey()]));
   if (S.src === 'kufar' && !reset && S.next) params.set('cursor', S.next);
+  // Ответ на устаревший запрос (пользователь уже поменял раздел, источник или текст) не показываем
+  const seq = (S.seq = (S.seq || 0) + 1);
   try {
     const r = await api('/api/search?' + params);
+    if (seq !== S.seq) return;
     S.items = reset ? r.items : S.items.concat(r.items);
     S.total = r.total;
     S.pages = r.pages;
     S.next = r.next || null;
     S.blocked = r.blocked ? r.url : null;
   } catch (e) {
+    if (seq !== S.seq) return;
     S.error = e.message;
   } finally {
-    S.loading = false;
+    if (seq === S.seq) S.loading = false;
+  }
+  if (seq === S.seq) {
     const box = document.getElementById('searchResults');
     if (box) box.replaceChildren(...[].concat(renderResults()));
   }
@@ -240,7 +247,10 @@ function renderResults() {
   if (S.items.length) {
     out.push(el('div.dim.small', { style: { marginTop: '14px' } },
       S.src === 'kufar' ? `Найдено объявлений: ${S.total.toLocaleString('ru-RU')} · показано ${S.items.length}${S.next ? ' — ниже кнопка «Показать ещё»' : ''}` : S.cat ? `Товаров в разделе: ${S.total.toLocaleString('ru-RU')}` : 'Результаты каталога Onliner: компьютеры, периферия, мониторы и всё для сетапа'));
-    out.push(el('div.grid', S.items.map(card)));
+    const hiddenN = S.src === 'kufar' ? S.items.filter(isHidden).length : 0;
+    const shown = S.src === 'kufar' && !S.showHidden ? S.items.filter((it) => !isHidden(it)) : S.items;
+    if (hiddenN) out.push(el('div.dim.small', { style: { marginTop: '6px' } }, `Скрыто объявлений: ${hiddenN}. `, hiddenToggle(hiddenN, S.showHidden, () => { S.showHidden = !S.showHidden; render(); })));
+    out.push(el('div.grid', shown.map(card)));
   } else if (!S.loading && !S.error) {
     out.push(el('div.card.empty-state', { style: { marginTop: '16px' } }, el('h3', 'Ничего не нашлось'), el('p.muted', 'Попробуйте короче: например, «4060» вместо полного названия.')));
   }
@@ -260,18 +270,18 @@ function card(it) {
   const setupSlot = isOnliner && !slot && Catalog.setupById[it.category] ? it.category : null;
   const inCompare = state.compare.some((c) => c.id === it.id && c.source === it.source);
   const p = money.both(it.price);
-  return el('div.pcard',
+  const node = el('div.pcard', { class: it.source === 'kufar' && isViewed(it) ? 'viewed' : '' },
     thumb(it.image, CAT_ICON[it.category] || CAT_ICON[S.cat] || 'cpu'),
     el('div.pcard-top',
       el('span.badge', { class: it.source }, isOnliner ? 'Onliner' : it.source === 'wb' ? 'Wildberries' : 'Kufar'),
       isOnliner ? el('span.chip', it.categoryName) : it.source === 'wb' ? (it.reviews ? el('span.chip', `★ ${it.rating} · ${it.reviews}`) : null) : el('span.chip', it.condition || 'объявление'),
       it.perf && it.perf.score ? el('span.chip.accent', `индекс ${it.perf.score}`) : null,
       it.perf && it.perf.gaming ? el('span.chip.accent', `игры ${it.perf.gaming}`) : null),
-    el('div.pcard-name', el('a', { href: it.url, target: '_blank', rel: 'noopener' }, it.name)),
+    el('div.pcard-name', it.source === 'kufar' ? adLink(it, it.name, () => node.classList.add('viewed')) : el('a', { href: it.url, target: '_blank', rel: 'noopener' }, it.name)),
     isOnliner
       ? el('div.part-specs', specChips(it.category, it).slice(0, 4))
       : it.source === 'wb' ? el('div.pcard-desc', 'Маркетплейс Wildberries, доставка в Беларусь')
-      : el('div.pcard-desc', [it.location, it.date ? new Date(it.date).toLocaleDateString('ru-RU') : null, it.company ? 'магазин' : 'частное лицо', it.exchange ? 'возможен обмен' : null].filter(Boolean).join(' · ')),
+      : el('div', el('div.pcard-desc', it.location || ''), el('div.row.wrap.ad-chips', adChips(it))),
     isOnliner && it.description ? el('div.pcard-desc', it.description) : null,
     el('div.pcard-foot',
       el('div',
@@ -279,6 +289,7 @@ function card(it) {
         p.sub && it.price ? el('div.price-sub', p.sub) : null,
         isOnliner && it.offers ? el('div.price-sub', `${it.offers} ${plural(it.offers, 'магазин', 'магазина', 'магазинов')}${it.usedCount ? ` · б/у: ${it.usedCount}` : ''}`) : null),
       el('div.pcard-actions',
+        it.source === 'kufar' ? hideButton(it, render) : null,
         isOnliner && it.offers ? el('button.icon-btn', { title: 'Цены в магазинах', onclick: () => showShops(it) }, icon('store')) : null,
         !isOnliner && hasActiveBuild() && S.cat && (CAT_TO_SLOT[S.cat] || Catalog.setupById[S.cat]) ? el('button.btn.btn-sm', {
           title: CAT_TO_SLOT[S.cat] ? 'Взять объявление в сборку и закрепить' : 'Добавить объявление в сетап',
@@ -303,6 +314,7 @@ function card(it) {
             }
           },
         }, 'В сборку') : null)));
+  return node;
 }
 
 async function showShops(it) {

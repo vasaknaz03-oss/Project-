@@ -514,3 +514,13 @@ html.mac-os .select { padding-right: 32px; }
 [data-theme="light"] .badge.wb { color: #a21caf; }
 a.chip { text-decoration: none; }
 a.chip:hover { border-color: var(--accent); color: var(--text); }
+
+/* ---------- объявления Kufar: продавец, рынок, просмотренные ---------- */
+.ad-chips { gap: 4px; margin-top: 6px; }
+.ad-chips .chip { font-size: 11.5px; padding: 2px 8px; }
+.ad-chips .chip [data-icon] svg, .chip [data-icon] svg { width: 12px; height: 12px; vertical-align: -2px; margin-right: 3px; }
+.viewed { opacity: 0.62; }
+.viewed:hover { opacity: 1; }
+.alt.viewed .alt-name a::after, .pcard.viewed .pcard-name a::after { content: ' · просмотрено'; color: var(--text-3); font-size: 12px; font-weight: 400; }
+.market-line { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); margin: -2px 0 8px; }
+.market-line [data-icon] svg { width: 14px; height: 14px; }

@@ -5,6 +5,7 @@ import { initBuild, rerenderBuild } from './build.js';
 import { initSearch, rerenderSearch, openSearchFor, renderTray } from './search.js';
 import { initSaved, rerenderSaved } from './saved.js';
 import { initSettings, rerenderSettings } from './settings.js';
+import { loadMarks } from './kufarui.js';
 
 const pages = ['build', 'search', 'saved', 'settings'];
 
@@ -81,6 +82,7 @@ async function main() {
 
   await loadRates();
   loadBuilds().catch(() => {});
+  await loadMarks();
   let lastForm = null;
   try {
     lastForm = (await api('/api/store/lastForm')).value;

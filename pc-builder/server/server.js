@@ -27,6 +27,7 @@ const Catalog = require('../web/catalog');
 const kufarFilters = require('./providers/kufarFilters');
 const kufarCompat = require('./kufarCompat');
 const wb = require('./providers/wildberries');
+const market = require('./market');
 const PC_SCHEMAS = new Set(Object.keys(onliner.CATEGORIES));
 
 /** Раздел каталога по id (или категории Onliner — для подбора). */
@@ -36,7 +37,7 @@ function sectionOf(cat) {
   if (Catalog.ONLINER_SCHEMAS.has(cat)) return { id: cat, onliner: cat };
   return null;
 }
-const STORE_KEYS = new Set(['builds', 'settings', 'lastForm']);
+const STORE_KEYS = new Set(['builds', 'settings', 'lastForm', 'kufarMarks']);
 
 function send(res, status, body, type = 'application/json; charset=utf-8') {
   const data = typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body);
@@ -275,6 +276,7 @@ async function route(req, res, url) {
         ...kq, priceMin: num(p.get('min')), priceMax: num(p.get('max')), sort: p.get('sort') === 'rating' ? '' : p.get('sort'),
         condition: p.get('cond') || '', size: 50, cursor: (p.get('cursor') || '').slice(0, 400) || undefined,
       });
+      if (section) await market.annotate(r.items, section.id);
       return send(res, 200, { items: r.items, total: r.total, pages: 1, next: r.next });
     }
     return send(res, 200, await searchOnliner(q, p));
@@ -344,7 +346,9 @@ async function route(req, res, url) {
   if (pathname === '/api/kufar/compatible' && req.method === 'POST') {
     const body = await readBody(req);
     if (!kufarCompat.TYPE[body.slot]) throw new Error('Неизвестный слот');
-    return send(res, 200, await kufarCompat.compatible(body.slot, body.part || null, body.ctx || {}));
+    const r = await kufarCompat.compatible(body.slot, body.part || null, body.ctx || {});
+    await market.annotate(r.items, body.slot);
+    return send(res, 200, r);
   }
 
   // Объявление Kufar → деталь сборки (характеристики для проверки совместимости)
@@ -362,7 +366,9 @@ async function route(req, res, url) {
     const url = 'https://www.kufar.by/l/r~belarus?' + new URLSearchParams({ query: q, cnd: '1' });
     if ((kind === 'cpu' || kind === 'videocard') && key) {
       const all = await kufar.usedFor(kind, key, q, price);
-      return send(res, 200, { items: all.slice(0, 30), total: all.length, url });
+      // Цены той же модели: медиана и оценка каждого объявления относительно неё
+      const stats = market.annotateSame(all);
+      return send(res, 200, { items: all.slice(0, 30), total: all.length, url, market: stats });
     }
     // Для остальных деталей — просто поиск б/у по названию модели
     const r = await kufar.search({ query: q, condition: 'used', size: 30 });
