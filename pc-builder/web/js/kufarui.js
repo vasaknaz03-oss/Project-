@@ -50,7 +50,13 @@ export function setHidden(u, on) {
 export function adLink(u, text, onOpen) {
   return el('a', {
     href: u.url, target: '_blank', rel: 'noopener',
-    onclick: () => { markViewed(u); if (onOpen) onOpen(); },
+    onclick: () => {
+      markViewed(u);
+      if (onOpen) onOpen();
+      if (u.market && u.market.deal === 'suspicious') {
+        document.dispatchEvent(new CustomEvent('mascot', { detail: { id: 'kufar-suspicious', level: 'warn', title: 'Осторожно', text: 'Цена сильно ниже рынка — так бывает у мошенников, нерабочих или «не тех» моделей. Не переводите предоплату, проверяйте вживую или берите с «Куфар Оплатой».' } }));
+      }
+    },
   }, text || u.name);
 }
 

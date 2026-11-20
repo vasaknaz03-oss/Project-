@@ -250,10 +250,19 @@ function aiCard() {
     el('p.dim.small', 'Ключи хранятся только на этом компьютере и используются только для запросов к Anthropic и Google.'));
 }
 
-/** Общие предпочтения подбора. */
+/** Общие предпочтения подбора и интерфейса. */
 function pickCard() {
   return el('div.card',
-    el('h3', 'Подбор'),
+    el('h3', 'Интерфейс'),
+    el('label.check', el('input', {
+      type: 'checkbox', checked: state.settings.mascot !== false,
+      onchange: async (e) => { await saveSettings({ mascot: e.target.checked, mascotSeen: e.target.checked ? [] : state.settings.mascotSeen }); toast(e.target.checked ? 'Байт снова будет подсказывать' : 'Подсказки выключены'); },
+    }), 'Подсказки персонажа «Байт»'),
+    el('label.check', el('input', {
+      type: 'checkbox', checked: state.settings.animations !== false,
+      onchange: async (e) => { await saveSettings({ animations: e.target.checked }); document.documentElement.classList.toggle('no-motion', !e.target.checked); },
+    }), 'Анимации переключений'),
+    el('h3', { style: { marginTop: '14px' } }, 'Подбор'),
     el('label.check', el('input', {
       type: 'checkbox', checked: !!state.settings.trustedOnly,
       onchange: async (e) => { await saveSettings({ trustedOnly: e.target.checked }); toast(e.target.checked ? 'Подбор берёт только известные бренды' : 'Китайские и малоизвестные бренды снова участвуют в подборе'); },

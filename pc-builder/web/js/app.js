@@ -12,13 +12,23 @@ import { initUpgrade, rerenderUpgrade } from './upgrade.js';
 import { initLaptops, rerenderLaptops } from './laptops.js';
 import { initNews, rerenderNews } from './news.js';
 import { initOc, rerenderOc } from './oc.js';
+import { transition, navIndicator, initMotion } from './motion.js';
+import { initMascot } from './mascot.js';
 
 const pages = ['build', 'upgrade', 'laptops', 'search', 'watch', 'news', 'oc', 'saved', 'settings'];
 
 function go(page) {
+  if (state.page && state.page !== page) return transition(() => show(page), pages.indexOf(page));
+  show(page);
+}
+
+function show(page) {
+  const first = !state.page;
   state.page = page;
   for (const p of pages) document.getElementById('page-' + p).hidden = p !== page;
   for (const b of document.querySelectorAll('.nav-item')) b.classList.toggle('active', b.dataset.page === page);
+  navIndicator();
+  document.dispatchEvent(new CustomEvent('page-shown', { detail: { page, first } }));
   if (page === 'saved') rerenderSaved();
   if (page === 'watch') rerenderWatch();
   if (page === 'upgrade') rerenderUpgrade();
@@ -57,6 +67,7 @@ function renderRates() {
 
 async function main() {
   hydrateIcons();
+  initMotion();
   for (const b of document.querySelectorAll('.nav-item')) b.addEventListener('click', () => go(b.dataset.page));
   document.getElementById('modalClose').addEventListener('click', closeModal);
   document.getElementById('modalBack').addEventListener('click', (e) => e.target.id === 'modalBack' && closeModal());
@@ -114,6 +125,7 @@ async function main() {
   // Оболочка может открыть сразу нужную страницу (например, по клику на уведомление)
   const startPage = new URLSearchParams(location.search).get('page');
   go(startPage && pages.includes(startPage) ? startPage : 'build');
+  initMascot();
   // обновление курсов раз в 6 часов, если приложение долго открыто
   // Курс НБРБ меняется раз в день: проверяем каждые 30 минут, сменилась ли дата, и при смене — обновляем
   let ratesDay = new Date().toDateString();

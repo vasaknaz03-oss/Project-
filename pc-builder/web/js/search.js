@@ -184,8 +184,8 @@ function renderBar() {
       S.src === 'kufar' && !hasFilters() ? cond : null,
       el('div.row', el('span.label', `Цена, ${money.symbol()}`), priceInput('min', 'от'), el('span.dim', '—'), priceInput('max', 'до')),
       el('div.row', el('span.label', 'Сортировка'), sort)),
-    query ? el('div.ext-links', el('span.dim', `Искать «${query}» также на:`),
-      shopLinks().map((l) => el('a', { href: linkFor(l.url, query), target: '_blank', rel: 'noopener' }, l.name, ' ↗'))) : null,
+    query ? el('details.also-links', el('summary', `Искать «${query}» в других магазинах`),
+      el('div.ext-links', shopLinks().map((l) => el('a', { href: linkFor(l.url, query), target: '_blank', rel: 'noopener' }, l.name, ' ↗')))) : null,
     S.replaceSlot && hasActiveBuild() ? el('div.notice.info', { style: { marginTop: '14px' } }, icon('swap'),
       el('div.grow', 'Выберите деталь и нажмите «В сборку» — она заменит текущую в подобранной сборке.'),
       el('button.btn.btn-sm.btn-ghost', { onclick: () => { S.replaceSlot = null; render(); } }, 'Отмена')) : null);
@@ -335,6 +335,7 @@ function renderResults() {
     out.push(el('div.grid', shown.map(card)));
   } else if (!S.loading && !S.error) {
     out.push(el('div.card.empty-state', { style: { marginTop: '16px' } }, el('h3', 'Ничего не нашлось'), el('p.muted', 'Попробуйте короче: например, «4060» вместо полного названия.')));
+    document.dispatchEvent(new CustomEvent('mascot', { detail: { id: 'search-empty', text: 'Ничего не нашёл. Попробуйте короче — номер модели («4060», «7500F») обычно работает лучше полного названия. Или переключите источник: Onliner ↔ Kufar.' } }));
   }
   if (S.loading) {
     out.push(el('div.grid', Array.from({ length: S.items.length ? 4 : 8 }, () => el('div.pcard', el('div.skeleton', { style: { height: '140px' } }), el('div.skeleton', { style: { height: '14px' } }), el('div.skeleton', { style: { height: '14px', width: '60%' } })))));

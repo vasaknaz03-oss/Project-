@@ -242,7 +242,7 @@ a { color: var(--accent-2); }
 /* ---------- анимации появления ---------- */
 .page:not([hidden]) { animation: pageIn .35s cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes pageIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-.parts > .part, .grid > .pcard, .variants > .variant, .news-grid > .news-card, .laptop-list > .laptop-card, .up-scenarios > .up-card { animation: fadeUp .4s cubic-bezier(.2, .8, .2, 1) both; }
+.parts.enter > .part, .grid > .pcard, .variants > .variant, .news-grid > .news-card, .laptop-list > .laptop-card, .up-scenarios > .up-card { animation: fadeUp .4s cubic-bezier(.2, .8, .2, 1) both; }
 .parts > :nth-child(2), .grid > :nth-child(2), .variants > :nth-child(2), .news-grid > :nth-child(2) { animation-delay: .04s; }
 .parts > :nth-child(3), .grid > :nth-child(3), .variants > :nth-child(3), .news-grid > :nth-child(3) { animation-delay: .08s; }
 .parts > :nth-child(4), .grid > :nth-child(4), .variants > :nth-child(4), .news-grid > :nth-child(4) { animation-delay: .12s; }
@@ -273,3 +273,63 @@ a { color: var(--accent-2); }
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 @media (max-width: 760px) { .theme-pick { display: none; } }
+
+/* ---------- Анимации переключений ---------- */
+.nav { position: relative; }
+.nav-ind { position: absolute; left: 0; right: 0; top: 0; border-radius: 10px; pointer-events: none; opacity: 0; z-index: 0;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--nav-ind, var(--accent)) 22%, transparent), color-mix(in srgb, var(--nav-ind, var(--accent)) 6%, transparent));
+  box-shadow: inset 3px 0 0 var(--nav-ind, var(--accent));
+  transition: transform .38s cubic-bezier(.3, 1.3, .5, 1), height .3s ease, opacity .2s ease; }
+.nav-item { position: relative; z-index: 1; }
+.nav-item.active { background: transparent; }
+#main { view-transition-name: main; }
+::view-transition-old(main), ::view-transition-new(main) { animation-duration: .32s; animation-timing-function: cubic-bezier(.2, .8, .2, 1); }
+[data-vt="fwd"]::view-transition-old(main) { animation-name: vtOutLeft; }
+[data-vt="fwd"]::view-transition-new(main) { animation-name: vtInRight; }
+[data-vt="back"]::view-transition-old(main) { animation-name: vtOutRight; }
+[data-vt="back"]::view-transition-new(main) { animation-name: vtInLeft; }
+@keyframes vtOutLeft { to { opacity: 0; transform: translateX(-28px); } }
+@keyframes vtInRight { from { opacity: 0; transform: translateX(28px); } }
+@keyframes vtOutRight { to { opacity: 0; transform: translateX(28px); } }
+@keyframes vtInLeft { from { opacity: 0; transform: translateX(-28px); } }
+/* При переходе через View Transitions собственная анимация страницы не нужна */
+[data-vt] .page:not([hidden]) { animation: none; }
+/* Выбранная вкладка «вспыхивает» при переключении */
+.seg button.on, .oc-tab.on, .mode-tab.on, .toggle-chip.on { animation: pillIn .28s cubic-bezier(.3, 1.4, .5, 1); }
+@keyframes pillIn { from { transform: scale(.92); filter: brightness(1.25); } to { transform: none; filter: none; } }
+/* Панели деталей раскрываются плавно */
+.part-panel.opening { animation: panelIn .28s cubic-bezier(.2, .8, .2, 1) both; transform-origin: top; }
+@keyframes panelIn { from { opacity: 0; transform: translateY(-6px) scaleY(.96); } to { opacity: 1; transform: none; } }
+.more-actions.opening { animation: panelIn .22s ease both; }
+.modal { animation: modalIn .26s cubic-bezier(.2, 1.2, .4, 1) both; }
+@keyframes modalIn { from { opacity: 0; transform: translateY(12px) scale(.97); } to { opacity: 1; transform: none; } }
+.no-motion *, .no-motion *::before, .no-motion *::after { animation: none !important; transition: none !important; }
+
+/* ---------- Персонаж-подсказчик «Байт» ---------- */
+.byte { position: fixed; bottom: 22px; right: 26px; z-index: 900; display: flex; align-items: flex-end; gap: 6px; pointer-events: none;
+  transform: translateY(170px) rotate(8deg); opacity: 0; transition: transform .55s cubic-bezier(.3, 1.4, .5, 1), opacity .3s ease; }
+.byte[data-corner="bl"] { right: auto; left: 270px; flex-direction: row-reverse; }
+.byte.show { transform: none; opacity: 1; pointer-events: auto; }
+.byte-svg { width: 92px; height: 115px; flex: none; overflow: visible; filter: drop-shadow(0 10px 18px rgba(0, 0, 0, .35)); }
+.byte.show .byte-all { animation: byteBob 2.6s ease-in-out .6s infinite; transform-origin: 60px 140px; }
+.byte.show .byte-arm-r { animation: byteWave .9s ease-in-out .4s 2; transform-origin: 102px 88px; }
+.byte[data-level="error"].show .byte-all { animation: byteShake .5s ease .5s 2, byteBob 2.6s ease-in-out 1.6s infinite; }
+.byte-eyes { animation: byteBlink 4.2s infinite; transform-origin: 60px 54px; }
+.byte-crown { transform-origin: 60px 20px; }
+.byte.show .byte-crown { animation: byteCrown 1.2s ease .3s 1; }
+@keyframes byteBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes byteWave { 0%, 100% { transform: rotate(0); } 30% { transform: rotate(-35deg); } 60% { transform: rotate(10deg); } }
+@keyframes byteBlink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
+@keyframes byteShake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-4px) rotate(-3deg); } 75% { transform: translateX(4px) rotate(3deg); } }
+@keyframes byteCrown { 0% { transform: translateY(0); } 40% { transform: translateY(-6px) rotate(-6deg); } 100% { transform: none; } }
+.byte-bubble { position: relative; max-width: 330px; margin-bottom: 64px; padding: 12px 14px 10px; border-radius: 16px 16px 4px 16px;
+  background: var(--surface); border: 1px solid var(--border-2); box-shadow: var(--shadow, 0 18px 40px rgba(0, 0, 0, .35)); color: var(--text); font-size: 13.5px; line-height: 1.5; }
+.byte[data-corner="bl"] .byte-bubble { border-radius: 16px 16px 16px 4px; }
+.byte-bubble.warn { border-color: color-mix(in srgb, var(--warn) 60%, transparent); }
+.byte-bubble.error { border-color: color-mix(in srgb, var(--err) 70%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--err) 18%, transparent), 0 18px 40px rgba(0, 0, 0, .35); }
+.byte-title { display: block; margin-bottom: 2px; padding-right: 18px; }
+.byte-x { position: absolute; top: 6px; right: 6px; border: 0; background: transparent; color: var(--text-3, var(--text-2)); cursor: pointer; padding: 2px; }
+.byte-x [data-icon] { width: 14px; height: 14px; display: block; }
+.byte-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+.byte-off { font-size: 12px; margin-left: auto; }
+@media (max-width: 760px) { .byte[data-corner="bl"] { left: 10px; } .byte-bubble { max-width: 240px; } .byte-svg { width: 70px; height: 88px; } }

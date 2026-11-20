@@ -101,6 +101,7 @@ const usedCache = {}; // id -> items
 
 export function initBuild(container, savedForm) {
   root = container;
+  document.addEventListener('fill-missing', () => fillMissing());
   if (savedForm) {
     form = {
       ...DEFAULT_FORM, ...savedForm, have: { ...(savedForm.have || {}) },
@@ -512,6 +513,7 @@ async function submit() {
     toast('Введите бюджет', 'err');
     const res = document.getElementById('results');
     if (res) res.replaceChildren(el('div.notice.err', icon('alert'), el('div', el('b', 'Укажите бюджет больше нуля. '), 'Например, 2500 р. — или нажмите одну из кнопок «Быстрый выбор».')));
+    document.dispatchEvent(new CustomEvent('mascot', { detail: { id: 'budget-empty', level: 'warn', text: 'Сначала впишите бюджет — например, 2500 р. Для игр в 1080p обычно хватает 2500–3500 р., для 1440p — от 4500 р.' } }));
     return;
   }
   const btn = document.getElementById('buildBtn');
@@ -533,6 +535,7 @@ async function submit() {
     loadHybrid(body, state.result);
   } catch (e) {
     results.replaceChildren(el('div.notice.err', icon('error'), el('div', el('b', 'Не получилось подобрать. '), e.message)));
+    document.dispatchEvent(new CustomEvent('mascot', { detail: { id: 'build-fail:' + String(e.message).slice(0, 40), level: 'warn', title: 'Не получилось', text: /фильтр|противореч/i.test(e.message) ? 'Похоже, фильтры противоречат друг другу или слишком узкие. Нажмите «Сбросить все фильтры» и попробуйте снова.' : /бюджет/i.test(e.message) ? e.message : 'Проверьте интернет и попробуйте ещё раз — иногда сайты магазинов отвечают с задержкой.' } }));
   } finally {
     clearInterval(timer);
     btn.disabled = false;
@@ -663,6 +666,8 @@ function renderBuild(v) {
   const setupTotal = totalOf(b.setup);
   const idx = Compat.indices(parts, have.gpu);
   const checks = Compat.check(parts, have);
+  // Персонаж-подсказчик сам решит, есть ли о чём предупредить (повторы он отсеивает)
+  setTimeout(() => document.dispatchEvent(new CustomEvent('build-checked', { detail: { checks, parts, custom: !!b.custom } })), 400);
   const budgetByn = state.result.budget;
   const left = budgetByn - total;
   const t = money.both(total);
@@ -684,7 +689,10 @@ function renderBuild(v) {
       el('button.btn', { onclick: () => copyText(buildText(textTitle(v), parts, total, '', b.setup)) }, icon('copy'), 'Копировать список'),
       el('button.btn', { onclick: () => download(`Сборка ${new Date().toLocaleDateString('ru-RU')}.txt`, buildText(textTitle(v), parts, total, '', b.setup)) }, icon('download'), 'В файл .txt')));
 
-  const partsBox = el('div.parts', SLOTS.map((s) => renderPart(s, v)).filter(Boolean));
+  // Анимация появления деталей — только для новой сборки, а не при каждом открытии панели
+  const fresh = lastAnimated !== v;
+  lastAnimated = v;
+  const partsBox = el('div.parts', { class: fresh ? 'enter' : '' }, SLOTS.map((s) => renderPart(s, v)).filter(Boolean));
   if (b.original) {
     partsBox.prepend(el('div.notice.info', icon('info'), el('div.grow', 'Сборка изменена вручную, выбранные детали закреплены. Совместимость и итог пересчитаны.'),
       el('button.btn.btn-sm.btn-primary', { onclick: submit, title: 'Оставить закреплённые детали и подобрать остальное под бюджет' }, icon('sparkles'), 'Пересобрать остальное'),
@@ -778,6 +786,10 @@ function meter(label, value, max, sub) {
     el('div.meter-sub', sub));
 }
 
+let lastAnimated = null;
+let justOpened = null;
+const moreOpen = {};
+
 function rerenderResults() {
   const box = document.getElementById('results');
   const y = document.getElementById('main').scrollTop;
@@ -854,25 +866,32 @@ function renderPart(slot, v) {
         el('div.price', p.main),
         p.sub ? el('div.price-sub', p.sub) : null,
         el('div.price-sub', it.offers ? `${it.offers} ${plural(it.offers, 'предложение', 'предложения', 'предложений')}` : ''))),
+    // Главные действия — всегда на виду; остальные — под «Ещё», чтобы карточка не превращалась в стену кнопок
     el('div.part-actions',
       !slot.setup && explainPart(slot.key, it, b.parts).length ? openBtn('why', 'help', 'Почему эта') : null,
       openBtn('reviews', 'chat', it.source === 'onliner' && it.reviews ? `Отзывы (${it.reviews})` : 'Отзывы и обзоры'),
-      it.source === 'onliner' ? openBtn('shops', 'store', 'Магазины') : null,
+      alts.length || (slot.key === 'gpu' && b.alternatives && b.alternatives.gpuSame && b.alternatives.gpuSame.length) ? openBtn('alts', 'swap', `Заменить (${alts.length + ((slot.key === 'gpu' && b.alternatives && b.alternatives.gpuSame) ? b.alternatives.gpuSame.length : 0)})`) : null,
+      openBtn('used', 'recycle', 'Б/у'),
+      isPinned(slot.key, it) ? el('span.chip.accent', { title: 'При пересборке эта деталь останется' }, icon('pin'), 'закреплено') : null,
+      el('button.btn.btn-sm.btn-ghost.more-btn', {
+        class: moreOpen[slot.key] ? 'on' : '', 'aria-expanded': moreOpen[slot.key] ? 'true' : 'false',
+        onclick: () => { moreOpen[slot.key] = !moreOpen[slot.key]; justOpened = moreOpen[slot.key] ? 'more:' + slot.key : null; rerenderResults(); },
+      }, moreOpen[slot.key] ? 'Свернуть' : 'Ещё', icon('down'))),
+    moreOpen[slot.key] ? el('div.part-actions.more-actions', { class: justOpened === 'more:' + slot.key ? 'opening' : '' },
+      it.source === 'onliner' ? openBtn('shops', 'store', 'Цены в магазинах') : null,
       it.source === 'onliner' ? openBtn('history', 'chart', 'История цены') : null,
-      alts.length || (slot.key === 'gpu' && b.alternatives && b.alternatives.gpuSame && b.alternatives.gpuSame.length) ? openBtn('alts', 'swap', `Альтернативы (${alts.length + ((slot.key === 'gpu' && b.alternatives && b.alternatives.gpuSame) ? b.alternatives.gpuSame.length : 0)})`) : null,
-      openBtn('used', 'recycle', 'Б/у на Kufar'),
-      el('a.btn.btn-sm.btn-ghost', { href: it.url, target: '_blank', rel: 'noopener' }, icon('external'), 'Открыть'),
       watchButton(it, rerenderResults),
+      el('a.btn.btn-sm.btn-ghost', { href: it.url, target: '_blank', rel: 'noopener' }, icon('external'), 'Открыть на сайте'),
       b.custom && !slot.setup ? el('button.btn.btn-sm.btn-ghost', { title: 'Поменять цену (например, цена в другом магазине)', onclick: () => editPrice(slot.key, it) }, icon('tag'), 'Цена') : null,
       !slot.setup ? el('button.btn.btn-sm.btn-ghost', {
         class: isPinned(slot.key, it) ? 'on' : '',
         title: isPinned(slot.key, it) ? 'Открепить' : 'Закрепить: при пересборке эта деталь останется, остальное подберётся под бюджет',
         onclick: () => { pinPart(slot.key, it, !isPinned(slot.key, it)); rerenderResults(); },
-      }, icon('pin'), isPinned(slot.key, it) ? 'Закреплено' : 'Закрепить') : null,
-      el('button.btn.btn-sm.btn-ghost', { title: 'Убрать из сборки', onclick: () => replacePart(slot.key, null, slot.setup) }, icon('trash'))));
+      }, icon('pin'), isPinned(slot.key, it) ? 'Открепить' : 'Закрепить') : null,
+      el('button.btn.btn-sm.btn-ghost', { title: 'Убрать из сборки', onclick: () => replacePart(slot.key, null, slot.setup) }, icon('trash'), 'Убрать')) : null);
   const kind = panels[slot.key];
   if (kind) {
-    const panel = el('div.part-panel');
+    const panel = el('div.part-panel', { class: justOpened === slot.key + ':' + kind ? 'opening' : '' });
     row.append(panel);
     if (kind === 'shops') loadShops(panel, it);
     if (kind === 'alts') panel.append(renderAlts(slot, v));
@@ -892,7 +911,9 @@ function renderPart(slot, v) {
 
 function togglePanel(slot, kind) {
   panels[slot] = panels[slot] === kind ? null : kind;
+  justOpened = panels[slot] ? slot + ':' + kind : null;
   rerenderResults();
+  justOpened = null;
 }
 
 function replacePart(slotKey, item, isSetup = false) {
