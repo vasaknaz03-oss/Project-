@@ -654,6 +654,8 @@ async function route(req, res, url) {
           p2.set('f', JSON.stringify({ ...smart.filters, ...own }));
           r = smart.rest ? await searchOnlinerText(sec, smart.rest, p2) : await searchOnliner('', p2);
         } else {
+          // Фильтры Kufar старого раздела в новом разделе дают пустой список или ошибку 422
+          if (smart.section !== p.get('cat')) p2.delete('f');
           const kq = kufarQuery(sec, query.kufarText(q0), p2);
           if (p.get('sort') === 'value') {
             const r2 = await kufarValuePage(kq, p, sec.id);

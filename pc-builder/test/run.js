@@ -462,6 +462,16 @@ test('умный поиск: слово в запросе важнее откр�
   assert.strictEqual((await query.parse('so-dimm 16', 'dram')).section, 'nb_ram');
 });
 
+test('Kufar «выгодные» для блоков питания: ватты за рубль, списки моделей и кабели — вниз', () => {
+  const market = require('../server/market');
+  const r = market.rankByValue([
+    { name: 'Блок питания 1stPlayer FK 600W, 650W, 700W, 750W', price: 85 }, { name: 'Кабель питания', price: 5 },
+    { name: 'Corsair RM850x Gold', price: 300 }, { name: 'Блок питания Chieftec 600 Вт', price: 90 },
+  ], 'powersupply').map((x) => x.name);
+  assert.deepStrictEqual(r.slice(0, 2).sort(), ['Corsair RM850x Gold', 'Блок питания Chieftec 600 Вт'].sort());
+  assert.strictEqual(r[r.length - 1], 'Кабель питания');
+});
+
 async function live() {
   if (!process.argv.includes('--live')) return;
   console.log('Живой подбор (Onliner)');

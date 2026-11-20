@@ -47,6 +47,8 @@ const KINDS = {
 
 // Раздел поиска / слот сборки → вид рынка
 const KIND_OF = { cpu: 'cpu', videocard: 'gpu', gpu: 'gpu', dram: 'ram', ram: 'ram', ssd: 'ssd' };
+// Разделы, где «выгодность» считается без рыночной статистики
+const VALUE_KIND = { powersupply: 'psu', psu: 'psu' };
 
 function median(sorted) {
   if (!sorted.length) return 0;
@@ -143,7 +145,7 @@ function annotateSame(items) {
   return s;
 }
 
-const KNOWN_BRAND = /asus|msi|gigabyte|aorus|palit|gainward|zotac|sapphire|powercolor|asrock|xfx|inno3d|pny|evga|kingston|corsair|g\.?skill|crucial|samsung|adata|xpg|patriot|team|western digital|\bwd\b|seagate|be quiet|seasonic|deepcool|thermalright|noctua|arctic|lian li|nzxt|fractal|cooler master|chieftec|amd|intel|ryzen|core i\d|geforce|radeon/i;
+const KNOWN_BRAND = /asus|msi|gigabyte|aorus|palit|gainward|zotac|sapphire|powercolor|asrock|xfx|inno3d|pny|evga|kingston|corsair|g\.?skill|crucial|samsung|adata|xpg|patriot|team|western digital|\bwd\b|seagate|be quiet|seasonic|deepcool|thermalright|noctua|arctic|lian li|nzxt|fractal|cooler master|chieftec|amd|intel|ryzen|core i\d|geforce|radeon|zalman|aerocool|1stplayer|thermaltake|phanteks|montech|fsp|cougar|silverstone|super ?flower|antec|enermax|xilence|hyperx|logitech|razer|steelseries|aoc|philips|benq|iiyama|\blg\b|dell|lenovo|acer|xiaomi|id-cooling|jonsbo|sharkoon|ardor/i;
 
 /**
  * Насколько объявление выгодное: { tier, v }. tier 2 — модель понятна, 1 — модель не распознана,
@@ -153,7 +155,32 @@ const KNOWN_BRAND = /asus|msi|gigabyte|aorus|palit|gainward|zotac|sapphire|power
  */
 function valueScore(it, kind) {
   if (!it.price) return { tier: 0, v: 0 };
-  kind = KIND_OF[kind] || kind;
+  kind = KIND_OF[kind] || VALUE_KIND[kind] || kind;
+  const name = String(it.name || '');
+  // Объявление-список нескольких моделей («600W, 650W, 750W, Ginzzu 600W») — цена непонятна
+  const wattsList = name.match(/\d{3,4}\s*(?:w|вт)(?![a-zа-яё])/gi) || [];
+  const listing = new Set(wattsList.map((x) => x.replace(/\D/g, ''))).size >= 2 || (name.match(/,/g) || []).length >= 3;
+  if (kind === 'psu') {
+    // Мощность: «750W», «600 Вт» или номер модели («RM850x», «CX650M», «Pure Power 12 M 750»)
+    const model = name.match(/(?:^|[^\d])(\d{3,4})(?:[a-zа-я]{0,3})(?![\d])/i);
+    const guess = model && +model[1] >= 300 && +model[1] <= 2000 && +model[1] % 50 === 0 ? +model[1] : 0;
+    const w = wattsList.length ? Number(wattsList[0].replace(/\D/g, '')) : guess;
+    const cert = /titanium|platinum|платин/i.test(name) ? 1.25 : /gold|голд|золот/i.test(name) ? 1.15 : /silver|bronze|бронз/i.test(name) ? 1.05 : 1;
+    const junkPsu = /куплю|нерабоч|не\s*рабоч|запчаст|под\s*ремонт|неисправ|бронь|кабел|переходник|шнур|разветвит/i.test(name);
+    const brand = KNOWN_BRAND.test(name) ? 1.15 : 1;
+    if (junkPsu) return { tier: 0, v: 0 };
+    if (listing || !w || w < 300) return { tier: 1, v: brand / it.price };
+    return { tier: KNOWN_BRAND.test(name) || cert > 1 ? 2 : 1, v: (Math.pow(w, 0.85) * cert * brand * (it.safedeal ? 1.04 : 1)) / it.price };
+  }
+  // Разделы без мерила (корпуса, кулеры, платы, мониторы…): сначала понятные бренды, списки и «куплю» — вниз
+  if (!KIND_OF[kind] && kind !== 'psu') {
+    const bad = /куплю|нерабоч|не\s*рабоч|запчаст|под\s*ремонт|неисправ|бронь|брониров/i.test(name);
+    if (bad) return { tier: 0, v: 0 };
+    const m0 = it.market;
+    let f = m0 && typeof m0.pct === 'number' ? Math.max(0.75, Math.min(1.3, 1 - m0.pct / 100)) : 1;
+    if (it.safedeal) f *= 1.04;
+    return { tier: listing ? 1 : KNOWN_BRAND.test(name) ? 2 : 1, v: f / Math.sqrt(it.price) };
+  }
   if (!it.perf && kind === 'gpu') {
     const key = kufar.adGpuKey(it);
     const p = key && perf.gpuPerf(key, parseFloat(pv(it, 'cdr')) || 0);
