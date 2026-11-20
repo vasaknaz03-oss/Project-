@@ -13,9 +13,16 @@ const MODEL = 'claude-opus-5-5';
 const BETAS = ['server-side-fallback-2026-07-01'];
 const MAX_CONTINUATIONS = 4;
 
+// Откуда брать ключ: в программе — из «Настроек», на сервере ПодборПК — из переменной окружения
+let keyProvider = () => secrets.get('anthropicKey');
+function setKeyProvider(fn) {
+  keyProvider = fn;
+  cached = null;
+}
+
 let cached = null;
 function client() {
-  const key = secrets.get('anthropicKey');
+  const key = keyProvider();
   if (!key) {
     const e = new Error('Для этого нужен ключ Anthropic: «Настройки» → «ИИ-помощник и YouTube».');
     e.code = 'NO_KEY';
@@ -26,7 +33,7 @@ function client() {
 }
 
 function available() {
-  return !!secrets.get('anthropicKey');
+  return !!keyProvider();
 }
 
 /** Понятная ошибка вместо технической. */
@@ -88,6 +95,7 @@ async function research(query, { mode = 'part', depth = 'quick' } = {}) {
   ];
   let final = null;
   const content = [];
+  const usage = { input: 0, output: 0, webSearches: 0 };
   try {
     const c = client();
     for (let i = 0; i <= MAX_CONTINUATIONS; i++) {
@@ -104,6 +112,12 @@ async function research(query, { mode = 'part', depth = 'quick' } = {}) {
       });
       final = await stream.finalMessage();
       content.push(...final.content);
+      // Каждый запрос (в том числе продолжение после паузы) оплачивается отдельно — суммируем
+      if (final.usage) {
+        usage.input += final.usage.input_tokens || 0;
+        usage.output += final.usage.output_tokens || 0;
+        usage.webSearches += (final.usage.server_tool_use && final.usage.server_tool_use.web_search_requests) || 0;
+      }
       // Серверный поиск может прерваться на «паузу» — продолжаем тот же ход без новых сообщений
       if (final.stop_reason !== 'pause_turn') break;
       messages.push({ role: 'assistant', content: final.content });
@@ -112,7 +126,9 @@ async function research(query, { mode = 'part', depth = 'quick' } = {}) {
     throw humanError(e);
   }
   if (final && final.stop_reason === 'refusal') throw new Error('Модель отказалась отвечать на этот запрос. Переформулируйте его.');
-  return assemble(content, final);
+  const out = assemble(content, final);
+  out.usage = usage;
+  return out;
 }
 
 /** Текст с пометками [n] и список источников из цитат веб-поиска. */
@@ -146,7 +162,6 @@ function assemble(content, final) {
   return {
     text: text.trim(), sources, more, searches,
     model: final ? final.model : MODEL,
-    usage: final ? { input: final.usage.input_tokens, output: final.usage.output_tokens } : null,
   };
 }
 
@@ -181,10 +196,13 @@ async function reviewSummary(name, items) {
     });
     if (msg.stop_reason === 'refusal') throw new Error('Модель отказалась разбирать эти отзывы.');
     const t = msg.content.find((b) => b.type === 'text');
-    return JSON.parse(t ? t.text : '{}');
+    const out = JSON.parse(t ? t.text : '{}');
+    // Для учёта расходов на сервере (в ответ пользователю не уходит)
+    Object.defineProperty(out, 'usage', { value: { input: msg.usage.input_tokens, output: msg.usage.output_tokens }, enumerable: false });
+    return out;
   } catch (e) {
     throw humanError(e);
   }
 }
 
-module.exports = { research, reviewSummary, available, MODEL, assemble, _setClientForTests: (c) => (cached = { key: secrets.get('anthropicKey'), c }) };
+module.exports = { research, reviewSummary, available, setKeyProvider, MODEL, assemble, _setClientForTests: (c) => (cached = { key: keyProvider(), c }) };

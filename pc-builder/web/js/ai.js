@@ -122,7 +122,10 @@ export function researchBlock(query, { mode = 'part', title = 'Что пишут
           el('a', { href: 'https://www.google.com/search?q=' + encodeURIComponent(query + ' site:forums.overclockers.ru'), target: '_blank', rel: 'noopener' }, 'Overclockers.ru ↗')));
       return;
     }
-    out.replaceChildren(el('p.dim.small', 'ИИ найдёт обсуждения и обзоры, прочитает их и коротко расскажет главное — со ссылками. «Быстро» — несколько источников (дешевле), «Подробно» — больше источников и глубже.'),
+    const lim = st.via && st.via.ai === 'server' && st.limits ? st.limits : null;
+    const left = (k) => (lim && lim.limits[k] != null ? Math.max(0, lim.limits[k] - (lim.used[k] || 0)) : null);
+    out.replaceChildren(el('p.dim.small', 'ИИ найдёт обсуждения и обзоры, прочитает их и коротко расскажет главное — со ссылками. «Быстро» — несколько источников, «Подробно» — больше источников и глубже.',
+      lim ? ` Через сервер ПодборПК сегодня осталось: быстро — ${left('research_quick')}, подробно — ${left('research_deep')}. Вопросы, которые уже кто-то задавал, лимит не тратят.` : ''),
       el('div.row', { style: { gap: '8px' } },
         el('button.btn.btn-primary.btn-sm', { onclick: () => run('quick') }, icon('sparkles'), 'Быстро'),
         el('button.btn.btn-sm', { onclick: () => run('deep') }, 'Подробно')));

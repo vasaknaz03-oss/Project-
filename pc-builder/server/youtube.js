@@ -6,8 +6,13 @@ const secrets = require('./secrets');
 
 const API = process.env.YOUTUBE_API || 'https://www.googleapis.com/youtube/v3';
 
+let keyProvider = () => secrets.get('youtubeKey');
+function setKeyProvider(fn) {
+  keyProvider = fn;
+}
+
 function key() {
-  const k = secrets.get('youtubeKey');
+  const k = keyProvider();
   if (!k) {
     const e = new Error('Для видео нужен бесплатный ключ YouTube Data API: «Настройки» → «ИИ-помощник и YouTube».');
     e.code = 'NO_KEY';
@@ -17,7 +22,7 @@ function key() {
 }
 
 function available() {
-  return !!secrets.get('youtubeKey');
+  return !!keyProvider();
 }
 
 const decode = (s) => String(s || '').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
@@ -63,4 +68,4 @@ async function search(q, { comments = true, lang = 'ru' } = {}) {
   return { videos };
 }
 
-module.exports = { search, available };
+module.exports = { search, available, setKeyProvider };

@@ -1,0 +1,13 @@
+{
+  "name": "podbor-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Сервер ПодборПК: скрывает ключи API, общий кэш для всех пользователей, лимиты и общий Telegram-бот",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/index.js",
+    "test": "node --disable-warning=ExperimentalWarning test/run.js"
+  },
+  "engines": { "node": ">=22.13" },
+  "license": "UNLICENSED"
+}

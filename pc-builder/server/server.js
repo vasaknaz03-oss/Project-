@@ -12,7 +12,8 @@ const currency = require('./currency');
 const builder = require('./builder');
 const filters = require('./filters');
 const store = require('./store');
-const { clearCache } = require('./http');
+const { clearCache, setRemoteFetch } = require('./http');
+const remote = require('./remote');
 
 const WEB_DIR = path.join(__dirname, '..', 'web');
 const VERSION = require('../package.json').version;
@@ -389,6 +390,17 @@ function kufarQuery(section, q, p) {
 
 /** «Сначала выгодные» на Kufar: по всем объявлениям поиска, а не по одной странице. */
 async function kufarValuePage(kq, p, sectionId) {
+  // Сервер ПодборПК просматривает Kufar один раз для всех — меньше нагрузки на Kufar и быстрее
+  if (await remote.has('kufar')) {
+    try {
+      return await remote.call('/v1/kufar/value', {
+        method: 'POST', timeout: 30000,
+        body: { kq, sectionId, page: num(p.get('page')) || 1, min: num(p.get('min')), max: num(p.get('max')), cond: p.get('cond') || '' },
+      });
+    } catch {
+      // сервер недоступен — смотрим сами
+    }
+  }
   const ix = kufarIndex.ensure({
     ...kq, priceMin: num(p.get('min')), priceMax: num(p.get('max')), condition: p.get('cond') || '',
   });
@@ -444,7 +456,18 @@ async function route(req, res, url) {
   }
 
   // ---------------- ИИ-помощник и YouTube
-  if (pathname === '/api/ai/status') return send(res, 200, { ai: ai.available(), youtube: youtube.available(), model: ai.MODEL });
+  if (pathname === '/api/ai/status') {
+    // Свой ключ — главнее; иначе — сервер ПодборПК (ключи и лимиты там)
+    const st = remote.enabled() ? await remote.status() : null;
+    const f = (st && st.ok && st.features) || {};
+    let me = null;
+    if (f.ai || f.youtube) me = await remote.call('/v1/me').catch(() => null);
+    return send(res, 200, {
+      ai: ai.available() || !!f.ai, youtube: youtube.available() || !!f.youtube, model: ai.MODEL,
+      via: { ai: ai.available() ? 'own' : f.ai ? 'server' : null, youtube: youtube.available() ? 'own' : f.youtube ? 'server' : null },
+      limits: me ? { limits: me.limits, used: me.usedToday } : null,
+    });
+  }
   if (pathname === '/api/ai/research' && req.method === 'POST') {
     const body = await readBody(req);
     const mode = ['part', 'oc', 'build', 'free'].includes(body.mode) ? body.mode : 'free';
@@ -455,7 +478,10 @@ async function route(req, res, url) {
     const hist = store.get('aiHistory') || [];
     const hit = !body.fresh && hist.find((h) => h.key === ckey && Date.now() - h.t < 24 * 60 * 60 * 1000);
     if (hit) return send(res, 200, { ...hit.result, cached: true, t: hit.t });
-    const result = await ai.research(query, { mode, depth });
+    const result = ai.available() || !(await remote.has('ai'))
+      ? await ai.research(query, { mode, depth })
+      : await remote.call('/v1/ai/research', { method: 'POST', body: { query, mode, depth }, timeout: 6 * 60 * 1000 });
+    delete result.usage;
     const t = Date.now();
     store.set('aiHistory', [{ key: ckey, mode, depth, query, t, result }, ...hist.filter((h) => h.key !== ckey)].slice(0, 30));
     return send(res, 200, { ...result, t });
@@ -468,6 +494,10 @@ async function route(req, res, url) {
     const key = String(body.key || '');
     if (!/^[\w.-]+$/.test(key)) throw new Error('Не указан товар');
     const cat = /^[a-z_]{2,30}$/.test(body.cat || '') ? body.cat : '';
+    // Без своего ключа — через сервер (он сам возьмёт отзывы и закэширует разбор для всех)
+    if (!ai.available() && (await remote.has('ai'))) {
+      return send(res, 200, await remote.call('/v1/ai/reviews', { method: 'POST', body: { key, cat, name: String(body.name || '').slice(0, 200) }, timeout: 3 * 60 * 1000 }));
+    }
     const r = await reviews.forProduct(key, cat);
     if (!r.items.length) throw new Error('У этого товара пока нет отзывов');
     const cacheKey = 'aiReviews:' + key;
@@ -481,7 +511,22 @@ async function route(req, res, url) {
     return send(res, 200, await require('./news').searchArticles(p.get('q')));
   }
   if (pathname === '/api/youtube') {
+    if (!youtube.available() && (await remote.has('youtube'))) return send(res, 200, await remote.call('/v1/youtube?q=' + encodeURIComponent(String(p.get('q') || '').slice(0, 200))));
     return send(res, 200, await youtube.search(p.get('q'), { comments: p.get('comments') !== '0' }));
+  }
+
+  // ---------------- сервер ПодборПК
+  if (pathname === '/api/server/status') {
+    const st = await remote.status(p.get('force') === '1');
+    let me = null;
+    if (st && st.ok) me = await remote.call('/v1/me').catch((e) => ({ error: e.message }));
+    return send(res, 200, { enabled: remote.enabled(), url: remote.baseUrl(), health: st, me });
+  }
+  if (pathname === '/api/telegram/shared/link' && req.method === 'POST') return send(res, 200, await remote.call('/v1/telegram/link', { method: 'POST', body: {} }));
+  if (pathname === '/api/telegram/shared/status') return send(res, 200, await remote.call('/v1/telegram/status'));
+  if (pathname === '/api/telegram/shared/unlink' && req.method === 'POST') return send(res, 200, await remote.call('/v1/telegram/unlink', { method: 'POST', body: {} }));
+  if (pathname === '/api/telegram/shared/test' && req.method === 'POST') {
+    return send(res, 200, await remote.call('/v1/notify', { method: 'POST', body: { title: 'Проверка', body: 'Уведомления ПодборПК приходят на этот телефон.' } }));
   }
 
   // ---------------- слежение за ценами и поисками Kufar
@@ -844,6 +889,8 @@ function createServer() {
 
 /** Запуск на порту (0 — любой свободный). Возвращает { server, port, url }. */
 let telegramHooked = false;
+// Открытые API Onliner/Kufar — через общий кэш сервера ПодборПК (если он есть)
+setRemoteFetch((url) => remote.fetchVia(url));
 
 function start(port = 0, host = '127.0.0.1') {
   return new Promise((resolve, reject) => {
@@ -862,7 +909,10 @@ function start(port = 0, host = '127.0.0.1') {
         telegramHooked = true;
         watch.onEvent((e) => {
           const st = store.get('settings') || {};
-          if (st.telegramNotify !== false) telegram.notifyEvent(e);
+          if (st.telegramNotify === false) return;
+          // Свой бот — если подключён; иначе общий бот сервера ПодборПК (если пользователь его подключил)
+          if (telegram.connected()) telegram.notifyEvent(e);
+          else if (remote.enabled() && st.serverTelegram) remote.call('/v1/notify', { method: 'POST', body: { title: e.title, body: e.body, url: e.url } }).catch(() => {});
         });
       }
       resolve({ server, port: p, url: `http://${host}:${p}/` });

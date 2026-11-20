@@ -3,6 +3,7 @@
   "productName": "ПодборПК",
   "version": "1.5.0",
   "description": "Подбор комплектующих для ПК под бюджет по ценам Onliner и объявлениям Kufar",
+  "podborServer": "",
   "main": "main.js",
   "private": true,
   "license": "MIT",

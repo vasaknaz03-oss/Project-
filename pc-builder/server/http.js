@@ -61,12 +61,34 @@ async function fetchOnce(url, timeout, headers, useAlt) {
 /**
  * GET JSON с кэшем. ttl — сколько миллисекунд держать ответ.
  */
+// Сервер ПодборПК: открытые API Onliner и Kufar берутся через его общий кэш (один запрос на всех пользователей).
+// Если сервер недоступен — запрос идёт напрямую, как раньше.
+const REMOTE_RE = /^https:\/\/(catalog\.onliner\.by\/sdapi\/catalog\.api\/|catalog\.api\.onliner\.by\/|shop\.api\.onliner\.by\/|api\.kufar\.by\/search-api\/v2\/)/;
+let remoteFetch = null;
+function setRemoteFetch(fn) {
+  remoteFetch = fn;
+}
+
 async function getJSON(url, { ttl = 15 * 60 * 1000, timeout = 15000, headers = {}, retries = 2 } = {}) {
   const hit = cache.get(url);
   if (hit && Date.now() - hit.t < ttl) return hit.data;
 
   await acquire();
   try {
+    if (remoteFetch && REMOTE_RE.test(url)) {
+      try {
+        const data = await remoteFetch(url);
+        if (data !== undefined) {
+          if (ttl > 0) {
+            cache.set(url, { t: Date.now(), data });
+            if (cache.size > 3000) cache.delete(cache.keys().next().value);
+          }
+          return data;
+        }
+      } catch {
+        // сервер не ответил или лимит — идём напрямую
+      }
+    }
     let lastErr;
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
@@ -172,4 +194,4 @@ function qs(params) {
   return parts.join('&');
 }
 
-module.exports = { request, getJSON, getText, clearCache, qs, HttpError, setAltFetch };
+module.exports = { request, setRemoteFetch, getJSON, getText, clearCache, qs, HttpError, setAltFetch };

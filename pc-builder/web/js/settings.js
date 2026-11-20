@@ -21,8 +21,61 @@ function render() {
     el('div.page-head', el('div', el('h1', 'Настройки'), el('p', 'Валюта, курсы, ссылки на магазины и данные приложения.'))),
     el('div.card', { style: { marginBottom: '16px' } }, el('h3', 'Оформление'), el('p.dim.small', 'Цветовая тема программы. Сменить можно и кружками внизу боковой панели.'),
       themeCards(state.settings.theme || 'iron', (id) => document.dispatchEvent(new CustomEvent('theme-pick', { detail: id })))),
-    el('div.set-grid', telegramCard(), aiCard(), currencyCard(), pickCard(), ratesCard(), powerCard(), linksCard(), aboutCard()));
+    el('div.set-grid', serverCard(), telegramCard(), aiCard(), currencyCard(), pickCard(), ratesCard(), powerCard(), linksCard(), aboutCard()));
   loadSecrets();
+}
+
+// ------------------------------------------------------------------ сервер ПодборПК
+
+let srv = null;
+
+async function loadServer(force = false) {
+  try {
+    srv = await api('/api/server/status' + (force ? '?force=1' : ''));
+  } catch {
+    srv = null;
+  }
+  document.dispatchEvent(new CustomEvent('secrets-changed'));
+  for (const id of ['srvCard', 'tgCard', 'aiCard']) {
+    const n = document.getElementById(id);
+    if (n) n.replaceWith(id === 'srvCard' ? serverCard() : id === 'tgCard' ? telegramCard() : aiCard());
+  }
+}
+
+const KIND_NAMES = { research_quick: 'ИИ-поиск', research_deep: 'ИИ подробно', reviews: 'ИИ-разбор отзывов', youtube: 'видео', notify: 'уведомления' };
+
+function serverCard() {
+  const head = [el('h3', icon('store'), ' Сервер ПодборПК'),
+    el('p', 'Через сервер программа получает ИИ-помощника, видео YouTube и уведомления в Telegram без собственных ключей, а данные Onliner и Kufar — из общего кэша (быстрее и без лишней нагрузки на сайты).')];
+  if (!srv) {
+    setTimeout(() => loadServer(), 0);
+    return el('div.card.full#srvCard', head, el('div.muted', 'Проверяем связь…'));
+  }
+  const st = state.settings;
+  const h = srv.health;
+  const ok = h && h.ok;
+  const f = (h && h.features) || {};
+  const me = srv.me && !srv.me.error ? srv.me : null;
+  const url = el('input.input', { value: st.serverUrl || '', placeholder: srv.url && !st.serverUrl ? `по умолчанию: ${srv.url}` : 'https://адрес-сервера' });
+  return el('div.card.full#srvCard', head,
+    !srv.enabled ? el('div.notice', icon('info'), el('div', st.serverMode === 'off' ? 'Сервер выключен — программа работает сама, со своими ключами (если заданы).' : 'Адрес сервера не задан — программа работает сама, со своими ключами (если заданы).'))
+      : ok ? el('div.notice.ok', icon('check'), el('div', el('b', 'Подключено: '), srv.url, ` · версия ${h.version}. Доступно: `,
+        [f.ai ? 'ИИ-помощник' : null, f.youtube ? 'YouTube' : null, f.telegram ? 'Telegram' : null, f.fetch ? 'общий кэш Onliner и Kufar' : null].filter(Boolean).join(', ') + '.'))
+        : el('div.notice.err', icon('error'), el('div', `Сервер ${srv.url} не отвечает: ${(h && h.error) || 'нет связи'}. Программа пока работает сама.`)),
+    me ? el('div.dim.small', { style: { margin: '6px 0' } }, `Тариф: ${me.plan === 'pro' ? 'расширенный' : 'бесплатный'}. Сегодня: `,
+      Object.entries(KIND_NAMES).filter(([k]) => me.limits[k] != null).map(([k, n]) => `${n} ${me.usedToday[k] || 0}/${me.limits[k]}`).join(' · '), '. Повторные вопросы, которые уже кто-то задавал, лимит не тратят.') : null,
+    el('label.check', el('input', {
+      type: 'checkbox', checked: st.serverMode !== 'off',
+      onchange: async (e) => { await saveSettings({ serverMode: e.target.checked ? 'auto' : 'off' }); loadServer(true); },
+    }), 'Использовать сервер ПодборПК'),
+    el('label.check', el('input', {
+      type: 'checkbox', checked: st.serverFetch !== false,
+      onchange: async (e) => { await saveSettings({ serverFetch: e.target.checked }); toast('Сохранено'); },
+    }), 'Брать данные Onliner и Kufar через общий кэш сервера'),
+    el('details.adv', el('summary', 'Другой адрес сервера (для своего сервера)'),
+      el('div.row', { style: { gap: '8px', marginTop: '8px' } }, url,
+        el('button.btn.btn-sm', { onclick: async () => { await saveSettings({ serverUrl: url.value.trim() }); toast('Адрес сохранён'); loadServer(true); } }, 'Сохранить'),
+        el('button.btn.btn-sm.btn-ghost', { onclick: () => loadServer(true) }, icon('refresh'), 'Проверить'))));
 }
 
 // ------------------------------------------------------------------ внешние сервисы
@@ -43,9 +96,60 @@ async function loadSecrets() {
   if (a) a.replaceWith(aiCard());
 }
 
-/** Уведомления на телефон: свой бот в Telegram (бесплатно, без регистрации где-либо ещё). */
+/** Уведомления через общий бот ПодборПК (сервер): одна кнопка и «Старт» в Telegram. */
+function sharedTelegram(head) {
+  const linked = !!state.settings.serverTelegram;
+  const status = el('div');
+  if (linked) {
+    return el('div.card.full#tgCard', head,
+      el('div.notice.ok', icon('check'), el('div', 'Подключено к боту ', el('b', '@' + srv.health.bot), '. Уведомления приходят в Telegram.')),
+      el('label.check', el('input', {
+        type: 'checkbox', checked: state.settings.telegramNotify !== false,
+        onchange: async (e) => { await saveSettings({ telegramNotify: e.target.checked }); toast(e.target.checked ? 'Уведомления в Telegram включены' : 'Уведомления в Telegram выключены'); },
+      }), 'Присылать уведомления слежения в Telegram'),
+      el('div.row', { style: { marginTop: '10px' } },
+        el('button.btn.btn-sm', { onclick: async () => { try { await api('/api/telegram/shared/test', { method: 'POST' }); toast('Отправлено — проверьте Telegram'); } catch (e) { toast(e.message, 'err'); } } }, icon('bell'), 'Прислать проверку'),
+        el('button.btn.btn-sm.btn-ghost', { onclick: async () => { await api('/api/telegram/shared/unlink', { method: 'POST' }).catch(() => {}); await saveSettings({ serverTelegram: false }); loadServer(); toast('Telegram отключён'); } }, icon('trash'), 'Отключить')));
+  }
+  return el('div.card.full#tgCard', head,
+    el('p', 'Нажмите кнопку — откроется Telegram с ботом ПодборПК. Нажмите в нём «Старт», и всё готово.'),
+    el('button.btn.btn-primary', {
+      onclick: async (e) => {
+        const btn = e.currentTarget;
+        btn.disabled = true;
+        try {
+          const r = await api('/api/telegram/shared/link', { method: 'POST' });
+          window.open(r.url, '_blank');
+          status.replaceChildren(el('div.notice', icon('info'), el('div', 'Если Telegram не открылся — ', el('a', { href: r.url, target: '_blank', rel: 'noopener' }, 'откройте ссылку'), ' и нажмите «Старт». Программа ждёт…')));
+          const t0 = Date.now();
+          clearInterval(linkTimer);
+          linkTimer = setInterval(async () => {
+            if (Date.now() - t0 > 5 * 60 * 1000) { clearInterval(linkTimer); btn.disabled = false; return; }
+            const s2 = await api('/api/telegram/shared/status').catch(() => null);
+            if (s2 && s2.linked) {
+              clearInterval(linkTimer);
+              await saveSettings({ serverTelegram: true });
+              toast('Telegram подключён');
+              loadServer();
+            }
+          }, 2500);
+        } catch (err) {
+          btn.disabled = false;
+          status.replaceChildren(el('div.notice.err', icon('error'), el('div', err.message)));
+        }
+      },
+    }, icon('bell'), 'Подключить Telegram'),
+    status);
+}
+
+/** Уведомления на телефон: общий бот сервера или свой бот в Telegram. */
 function telegramCard() {
   const tg = sec && sec.telegram;
+  const shared = srv && srv.health && srv.health.ok && srv.health.features && srv.health.features.telegram && srv.health.bot;
+  if (shared && !(tg && tg.connected)) {
+    return sharedTelegram([el('h3', icon('bell'), ' Уведомления на телефон (Telegram)'),
+      el('p', 'Сообщения о снижении цен и новых выгодных объявлениях Kufar будут приходить в Telegram — даже когда вы не за компьютером (программа при этом должна быть запущена, можно в фоне).')]);
+  }
   const head = [el('h3', icon('bell'), ' Уведомления на телефон (Telegram)'),
     el('p', 'Сообщения о снижении цен и новых выгодных объявлениях Kufar будут приходить в Telegram — даже когда вы не за компьютером (программа при этом должна быть запущена, можно в фоне).')];
   if (!sec) return el('div.card.full#tgCard', head, el('div.muted', 'Загрузка…'));
@@ -115,6 +219,11 @@ function aiCard() {
   const head = [el('h3', icon('sparkles'), ' ИИ-помощник и YouTube'),
     el('p', 'С ключом Anthropic программа сама ищет в интернете — на форумах (Overclockers.ru, Reddit, iXBT…), в статьях и обзорах, в рассказах людей о своих сборках и разгоне — и пишет понятную выжимку со ссылками на источники. Отзывы покупателей она тоже разбирает по смыслу, а не по ключевым словам. С ключом YouTube в программе видны обзоры и комментарии зрителей.')];
   if (!sec) return el('div.card.full#aiCard', head, el('div.muted', 'Загрузка…'));
+  const sf = srv && srv.health && srv.health.ok ? srv.health.features || {} : {};
+  if (sf.ai || sf.youtube) {
+    head.push(el('div.notice.ok', icon('check'), el('div', 'Работает через сервер ПодборПК — ключи не нужны', sf.ai && sf.youtube ? '' : sf.ai ? ' (ИИ)' : ' (YouTube)',
+      '. Свой ключ можно вставить ниже, если хотите без дневных лимитов сервера (оплата — в вашем аккаунте).')));
+  }
   const keyRow = (label, field, info, placeholder, help) => {
     const inp = el('input.input', { type: 'password', placeholder: info.set ? `ключ задан (${info.tail}) — вставьте новый, чтобы заменить` : placeholder, autocomplete: 'off' });
     return el('div.field',

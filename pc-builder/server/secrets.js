@@ -4,7 +4,7 @@
 
 const store = require('./store');
 
-const KEYS = ['telegramToken', 'telegramChatId', 'telegramBot', 'anthropicKey', 'youtubeKey'];
+const KEYS = ['telegramToken', 'telegramChatId', 'telegramBot', 'anthropicKey', 'youtubeKey', 'serverToken', 'serverDevice', 'serverUrl'];
 
 function all() {
   return store.get('secrets') || {};

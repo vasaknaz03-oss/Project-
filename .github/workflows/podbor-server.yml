@@ -1,0 +1,35 @@
+name: Сервер ПодборПК — проверка и Docker-образ
+
+on:
+  push:
+    paths:
+      - 'podbor-server/**'
+      - 'pc-builder/server/**'
+      - '.github/workflows/podbor-server.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: pc-builder/package-lock.json
+      - name: Install app modules (без Electron)
+        run: cd pc-builder && npm ci --omit=dev --ignore-scripts
+      - name: Server tests
+        run: cd podbor-server && npm test
+      - name: Build Docker image
+        run: docker build -f podbor-server/Dockerfile -t podbor-server:ci .
+      - name: Smoke test container
+        run: |
+          docker run -d --name podbor -p 8080:8080 podbor-server:ci
+          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:8080/v1/health && break; sleep 1; done
+          curl -fsS http://127.0.0.1:8080/v1/health | grep '"ok":true'
+          docker logs podbor

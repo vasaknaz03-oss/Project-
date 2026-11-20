@@ -31,10 +31,19 @@ jobs:
       - name: Tests
         run: npm test
 
+      - name: Server address
+        shell: bash
+        # Адрес сервера ПодборПК — переменная репозитория PODBOR_SERVER (Settings → Secrets and variables → Actions → Variables)
+        run: |
+          if [ -n "${{ vars.PODBOR_SERVER }}" ]; then npm pkg set podborServer="${{ vars.PODBOR_SERVER }}"; fi
+
       - name: Build portable .exe and installer
         run: npx electron-builder --win portable nsis --publish never
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: false
+          # Подпись кода включится сама, когда в секретах появятся сертификат (.pfx в base64) и пароль
+          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.WIN_CSC_LINK != '' }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -63,10 +72,23 @@ jobs:
       - name: Tests
         run: npm test
 
+      - name: Server address and signing setup
+        run: |
+          if [ -n "${{ vars.PODBOR_SERVER }}" ]; then npm pkg set podborServer="${{ vars.PODBOR_SERVER }}"; fi
+          # С сертификатом Developer ID — настоящая подпись и нотаризация Apple вместо подписи «без разработчика»
+          if [ -n "$MAC_CSC" ]; then npm pkg delete build.mac.identity; npm pkg set build.mac.hardenedRuntime=true build.mac.notarize=true --json; fi
+        env:
+          MAC_CSC: ${{ secrets.MAC_CSC_LINK }}
+
       - name: Build .dmg (Apple Silicon and Intel)
         run: npx electron-builder --mac dmg --arm64 --x64 --publish never
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: false
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.MAC_CSC_LINK != '' }}
 
       - name: Check signature and architectures
         run: |
