@@ -38,6 +38,10 @@ module.exports = {
   llm: env.AI_BASE_URL && env.AI_MODEL
     ? { url: env.AI_BASE_URL, model: env.AI_MODEL, key: env.AI_API_KEY || '', kind: ['ollama', 'openai'].includes(env.AI_KIND) ? env.AI_KIND : '' }
     : null,
+  // Цены платного сервиса с открытыми моделями ($ за 1 млн токенов). 0 — своя модель (Ollama), бюджет не считается.
+  // Если заданы — расходы считаются и дневной бюджет AI_DAILY_BUDGET_USD соблюдается так же, как для Anthropic.
+  llmPriceInputPerM: num(env.AI_PRICE_INPUT_PER_M, 0),
+  llmPriceOutputPerM: num(env.AI_PRICE_OUTPUT_PER_M, 0),
   youtubeKey: env.YOUTUBE_API_KEY || '',
   telegramToken: env.TELEGRAM_BOT_TOKEN || '',
   telegramApi: env.TELEGRAM_API || 'https://api.telegram.org',

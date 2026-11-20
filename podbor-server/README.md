@@ -25,6 +25,7 @@
        `docker compose exec ollama ollama pull qwen3:4b`; в `.env`: `AI_BASE_URL=http://ollama:11434`, `AI_MODEL=qwen3:4b`,
        `AI_KIND=ollama`. Нужен сервер с 8+ ГБ памяти; без видеокарты ответ идёт минуты, поэтому лимиты ИИ держите небольшими.
        Подойдёт и любой OpenAI-совместимый сервис: `AI_BASE_URL`, `AI_MODEL`, `AI_API_KEY`, `AI_KIND=openai`;
+       для платного укажите его цены `AI_PRICE_INPUT_PER_M` и `AI_PRICE_OUTPUT_PER_M` — тогда сервер считает расходы и не выйдет за `AI_DAILY_BUDGET_USD`;
      - **Anthropic** — [console.anthropic.com](https://console.anthropic.com/settings/keys) → API Keys (доступен не во всех странах).
        Оплата по факту использования; в `.env` задайте дневной бюджет `AI_DAILY_BUDGET_USD`. Если ключ задан, он главнее своей модели.
    - **YouTube Data API v3** — [Google Cloud Console](https://console.cloud.google.com/apis/library/youtube.googleapis.com) →

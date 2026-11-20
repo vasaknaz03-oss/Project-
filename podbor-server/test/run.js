@@ -153,8 +153,14 @@ async function test(name, fn) {
       assert.strictEqual(r.status, 200, JSON.stringify(r.data) + " ");
       assert.strictEqual(r.data.engine, 'local');
       assert.ok(/тихая \[1\]/.test(r.data.text));
+      // Платный сервис с открытыми моделями: цены заданы — расходы считаются, бюджет соблюдается
+      Object.assign(cfg, { llm: { url: mockUrl, model: 'qwen3:4b', kind: 'ollama' }, llmPriceInputPerM: 1, llmPriceOutputPerM: 1, aiDailyBudgetUsd: 1 });
+      const r2 = await call('POST', '/v1/ai/research', { query: 'RTX 9070 тихая', mode: 'part' }, d.data.token);
+      assert.strictEqual(r2.status, 200, JSON.stringify(r2.data) + ' ');
+      const r3 = await call('POST', '/v1/ai/research', { query: 'RTX 9070 шум', mode: 'part' }, d.data.token);
+      assert.strictEqual(r3.status, 429, 'после $1.8 при бюджете $1 — отказ');
     } finally {
-      Object.assign(cfg, { anthropicKey: saved.key, llm: saved.llm, aiDailyBudgetUsd: saved.budget });
+      Object.assign(cfg, { anthropicKey: saved.key, llm: saved.llm, aiDailyBudgetUsd: saved.budget, llmPriceInputPerM: 0, llmPriceOutputPerM: 0 });
       news.searchArticles = orig.s;
       onliner.search = orig.o;
     }

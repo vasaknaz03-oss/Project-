@@ -97,14 +97,15 @@ function checkLimit(d, kind) {
 }
 
 function aiCost(u, engine) {
-  if (!u || engine === 'local') return 0;
+  if (!u) return 0;
+  if (engine === 'local') return (u.input || 0) / 1e6 * cfg.llmPriceInputPerM + (u.output || 0) / 1e6 * cfg.llmPriceOutputPerM;
   return (u.input || 0) / 1e6 * cfg.priceInputPerM + (u.output || 0) / 1e6 * cfg.priceOutputPerM + (u.webSearches || 0) / 1000 * cfg.priceWebSearchPer1k;
 }
 
 function checkBudget() {
   if (!ai.available()) throw new HttpErr(503, 'ИИ на сервере не настроен');
-  // Своя модель бесплатна — бюджет считаем только для Anthropic
-  if (ai.engine() !== 'anthropic') return;
+  // Своя модель бесплатна — бюджет считаем для Anthropic и для платного сервиса (если заданы его цены)
+  if (ai.engine() !== 'anthropic' && !(cfg.llmPriceInputPerM || cfg.llmPriceOutputPerM)) return;
   const s = db.spend.today();
   if (s.usd >= cfg.aiDailyBudgetUsd) throw new HttpErr(429, 'Дневной бюджет ИИ на сервере исчерпан — попробуйте завтра.');
 }
