@@ -133,7 +133,17 @@ function renderBar() {
     oninput: (e) => { S.q = e.target.value; S.noSmart = false; },
     onkeydown: (e) => e.key === 'Enter' && newSearch(),
   });
-  const cat = el('select.select', { onchange: (e) => { S.cat = e.target.value; S.autoCat = false; S.smart = null; S.replaceSlot = null; run(true); } },
+  const cat = el('select.select', {
+    onchange: (e) => {
+      // Раздел выбрали сами — он главнее слов в строке поиска. Запрос, по которому умный поиск понял прошлый
+      // раздел («rtx 5070» → видеокарты), в новом разделе не ищем: иначе он вернул бы прежний раздел
+      if (S.smart && S.q.trim()) {
+        S.q = '';
+        q.value = '';
+      }
+      S.cat = e.target.value; S.autoCat = false; S.smart = null; S.replaceSlot = null; run(true);
+    },
+  },
     el('option', { value: '' }, 'Все разделы'),
     Catalog.GROUPS.map((g) => el('optgroup', { label: g.name },
       Catalog.SECTIONS.filter((x) => x.group === g.id).map((x) => el('option', { value: x.id }, x.name)))));

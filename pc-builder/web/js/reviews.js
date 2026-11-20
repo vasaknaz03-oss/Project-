@@ -83,12 +83,15 @@ export async function reviewsPanel(it, { limit = 4 } = {}) {
   ];
   const body = el('div.rev-tab-body');
   const bar = el('div.seg.rev-tabs');
+  let current = null;
   const show = async (id) => {
+    current = id;
     for (const b of bar.children) b.classList.toggle('on', b.dataset.id === id);
     const t = tabs.find((x) => x[0] === id);
     body.replaceChildren(el('div.row', el('div.spinner.inline'), el('span.muted', 'Загружаем…')));
     const node = await t[2]();
-    body.replaceChildren(node);
+    // Пока грузилась эта вкладка, могли переключиться на другую — тогда её содержимое не показываем
+    if (current === id) body.replaceChildren(node);
   };
   for (const [id, label] of tabs) bar.append(el('button', { type: 'button', 'data-id': id, onclick: () => show(id) }, label));
   // Нет отзывов покупателей — сразу открываем форумы и обзоры
