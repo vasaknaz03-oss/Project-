@@ -51,7 +51,8 @@ function renderRates() {
     const scale = c === 'RUB' ? 100 : 1;
     return [el('span.k', `${scale} ${c}`), el('span.v', `${(r.rates[c] * scale).toFixed(4)} р.`)];
   }));
-  document.getElementById('ratesSrc').textContent = r.source;
+  const day = r.date ? new Date(r.date).toLocaleDateString('ru-RU') : '';
+  document.getElementById('ratesSrc').textContent = r.source.replace(' (официальный курс)', '') + (day ? `, на ${day}` : '');
 }
 
 async function main() {
@@ -114,7 +115,15 @@ async function main() {
   const startPage = new URLSearchParams(location.search).get('page');
   go(startPage && pages.includes(startPage) ? startPage : 'build');
   // обновление курсов раз в 6 часов, если приложение долго открыто
-  setInterval(() => loadRates(false), 6 * 60 * 60 * 1000);
+  // Курс НБРБ меняется раз в день: проверяем каждые 30 минут, сменилась ли дата, и при смене — обновляем
+  let ratesDay = new Date().toDateString();
+  setInterval(() => {
+    const today = new Date().toDateString();
+    if (today !== ratesDay) {
+      ratesDay = today;
+      loadRates(true);
+    } else loadRates(false);
+  }, 30 * 60 * 1000);
   window.__ready = true;
 }
 

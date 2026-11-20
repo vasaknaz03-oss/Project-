@@ -21,7 +21,7 @@ let current = null;
 const TTL = 6 * 60 * 60 * 1000;
 
 async function fromNbrb() {
-  const data = await getJSON(NBRB, { ttl: TTL, timeout: 8000, retries: 1 });
+  const data = await getJSON(NBRB, { ttl: 30 * 60 * 1000, timeout: 12000, retries: 2 });
   const rates = {};
   for (const r of data) {
     if (WANTED.includes(r.Cur_Abbreviation)) rates[r.Cur_Abbreviation] = r.Cur_OfficialRate / r.Cur_Scale;
@@ -38,8 +38,12 @@ async function fromKufar() {
   return { rates, source: 'Kufar (курс площадки)', date: new Date().toISOString() };
 }
 
+const sameDay = (t) => new Date(t).toDateString() === new Date().toDateString();
+
 async function getRates(force = false) {
-  if (!force && current && Date.now() - current.fetchedAt < TTL) return withManual(current);
+  // Свежий курс НБРБ — до конца дня; запасные источники перепроверяем каждые полчаса
+  const fresh = current && sameDay(current.fetchedAt) && Date.now() - current.fetchedAt < (/НБРБ/.test(current.source) && !/сохран/.test(current.source) ? TTL : 30 * 60 * 1000);
+  if (!force && fresh) return withManual(current);
   const errors = [];
   for (const fn of [fromNbrb, fromKufar]) {
     try {

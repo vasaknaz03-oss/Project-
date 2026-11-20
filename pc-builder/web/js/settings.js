@@ -21,7 +21,123 @@ function render() {
     el('div.page-head', el('div', el('h1', 'Настройки'), el('p', 'Валюта, курсы, ссылки на магазины и данные приложения.'))),
     el('div.card', { style: { marginBottom: '16px' } }, el('h3', 'Оформление'), el('p.dim.small', 'Цветовая тема программы. Сменить можно и кружками внизу боковой панели.'),
       themeCards(state.settings.theme || 'iron', (id) => document.dispatchEvent(new CustomEvent('theme-pick', { detail: id })))),
-    el('div.set-grid', currencyCard(), pickCard(), ratesCard(), powerCard(), linksCard(), aboutCard()));
+    el('div.set-grid', telegramCard(), aiCard(), currencyCard(), pickCard(), ratesCard(), powerCard(), linksCard(), aboutCard()));
+  loadSecrets();
+}
+
+// ------------------------------------------------------------------ внешние сервисы
+
+let sec = null;
+let linkTimer = null;
+
+async function loadSecrets() {
+  try {
+    sec = await api('/api/secrets');
+  } catch {
+    sec = null;
+  }
+  const t = document.getElementById('tgCard');
+  if (t) t.replaceWith(telegramCard());
+  const a = document.getElementById('aiCard');
+  if (a) a.replaceWith(aiCard());
+}
+
+/** Уведомления на телефон: свой бот в Telegram (бесплатно, без регистрации где-либо ещё). */
+function telegramCard() {
+  const tg = sec && sec.telegram;
+  const head = [el('h3', icon('bell'), ' Уведомления на телефон (Telegram)'),
+    el('p', 'Сообщения о снижении цен и новых выгодных объявлениях Kufar будут приходить в Telegram — даже когда вы не за компьютером (программа при этом должна быть запущена, можно в фоне).')];
+  if (!sec) return el('div.card.full#tgCard', head, el('div.muted', 'Загрузка…'));
+  if (tg.connected) {
+    return el('div.card.full#tgCard', head,
+      el('div.notice.ok', icon('check'), el('div', 'Подключено: бот ', el('b', '@' + tg.bot), '. Уведомления приходят в ваш чат с ним.')),
+      el('label.check', el('input', {
+        type: 'checkbox', checked: state.settings.telegramNotify !== false,
+        onchange: async (e) => { await saveSettings({ telegramNotify: e.target.checked }); toast(e.target.checked ? 'Уведомления в Telegram включены' : 'Уведомления в Telegram выключены'); },
+      }), 'Присылать уведомления слежения в Telegram'),
+      el('div.row', { style: { marginTop: '10px' } },
+        el('button.btn.btn-sm', { onclick: async () => { try { await api('/api/telegram/test', { method: 'POST' }); toast('Отправлено — проверьте Telegram'); } catch (e) { toast(e.message, 'err'); } } }, icon('bell'), 'Прислать проверку'),
+        el('button.btn.btn-sm.btn-ghost', { onclick: async () => { sec = await api('/api/telegram/disconnect', { method: 'POST' }); loadSecrets(); toast('Telegram отключён'); } }, icon('trash'), 'Отключить')));
+  }
+  const token = el('input.input', { type: 'password', placeholder: 'Токен бота: 123456789:AAH…', autocomplete: 'off' });
+  const status = el('div');
+  const waitStart = (bot, linkUrl) => {
+    clearInterval(linkTimer);
+    status.replaceChildren(el('div.notice', icon('info'), el('div',
+      el('b', 'Последний шаг: '), 'откройте своего бота ', el('a', { href: linkUrl, target: '_blank', rel: 'noopener' }, '@' + bot + ' ↗'),
+      ' и нажмите «Старт» (или отправьте ему любое сообщение). Программа ждёт…')));
+    const t0 = Date.now();
+    linkTimer = setInterval(async () => {
+      if (Date.now() - t0 > 5 * 60 * 1000) {
+        clearInterval(linkTimer);
+        status.replaceChildren(el('div.notice.err', icon('error'), el('div', 'Не дождались сообщения боту. Нажмите «Старт» у бота и затем «Подключить» ещё раз.')));
+        return;
+      }
+      try {
+        const r = await api('/api/telegram/link', { method: 'POST' });
+        if (r.linked) {
+          clearInterval(linkTimer);
+          toast('Telegram подключён — проверочное сообщение уже в чате');
+          loadSecrets();
+        }
+      } catch (e) {
+        clearInterval(linkTimer);
+        status.replaceChildren(el('div.notice.err', icon('error'), el('div', e.message)));
+      }
+    }, 2500);
+  };
+  return el('div.card.full#tgCard', head,
+    el('ol.steps',
+      el('li', 'Откройте в Telegram ', el('a', { href: 'https://t.me/BotFather', target: '_blank', rel: 'noopener' }, '@BotFather ↗'), ', отправьте ', el('code', '/newbot'), ', придумайте имя (любое) и адрес бота (должен заканчиваться на «bot»).'),
+      el('li', 'BotFather пришлёт токен — длинную строку вида ', el('code', '123456789:AAH…'), '. Скопируйте её сюда.'),
+      el('li', 'Нажмите «Подключить», затем откройте своего бота и нажмите «Старт».')),
+    el('div.row', { style: { gap: '8px' } }, token,
+      el('button.btn.btn-primary', {
+        onclick: async (e) => {
+          const btn = e.currentTarget;
+          btn.disabled = true;
+          try {
+            const r = await api('/api/telegram/connect', { method: 'POST', body: { token: token.value } });
+            waitStart(r.bot, r.link);
+          } catch (err) {
+            status.replaceChildren(el('div.notice.err', icon('error'), el('div', err.message)));
+          }
+          btn.disabled = false;
+        },
+      }, 'Подключить')),
+    el('p.dim.small', 'Токен хранится только на этом компьютере. Бот ваш личный: писать в него будет только программа.'),
+    status);
+}
+
+/** ИИ-помощник (Claude) и YouTube: читают форумы, статьи, обзоры и отзывы и делают выжимку со ссылками. */
+function aiCard() {
+  const head = [el('h3', icon('sparkles'), ' ИИ-помощник и YouTube'),
+    el('p', 'С ключом Anthropic программа сама ищет в интернете — на форумах (Overclockers.ru, Reddit, iXBT…), в статьях и обзорах, в рассказах людей о своих сборках и разгоне — и пишет понятную выжимку со ссылками на источники. Отзывы покупателей она тоже разбирает по смыслу, а не по ключевым словам. С ключом YouTube в программе видны обзоры и комментарии зрителей.')];
+  if (!sec) return el('div.card.full#aiCard', head, el('div.muted', 'Загрузка…'));
+  const keyRow = (label, field, info, placeholder, help) => {
+    const inp = el('input.input', { type: 'password', placeholder: info.set ? `ключ задан (${info.tail}) — вставьте новый, чтобы заменить` : placeholder, autocomplete: 'off' });
+    return el('div.field',
+      el('label', label, info.set ? el('span.chip.ok', { style: { marginLeft: '8px' } }, 'подключено') : null),
+      el('div.row', { style: { gap: '8px' } }, inp,
+        el('button.btn.btn-sm.btn-primary', {
+          onclick: async () => {
+            if (!inp.value.trim()) return toast('Вставьте ключ', 'err');
+            sec = await api('/api/secrets', { method: 'POST', body: { [field]: inp.value.trim() } });
+            toast('Ключ сохранён');
+            loadSecrets();
+          },
+        }, 'Сохранить'),
+        info.set ? el('button.btn.btn-sm.btn-ghost', { onclick: async () => { sec = await api('/api/secrets', { method: 'POST', body: { [field]: '' } }); toast('Ключ удалён'); loadSecrets(); } }, 'Удалить') : null),
+      el('div.dim.small', help));
+  };
+  return el('div.card.full#aiCard', head,
+    keyRow('Ключ Anthropic (Claude)', 'anthropicKey', sec.anthropic, 'sk-ant-…',
+      el('span', 'Где взять: ', el('a', { href: 'https://console.anthropic.com/settings/keys', target: '_blank', rel: 'noopener' }, 'console.anthropic.com → API Keys ↗'),
+        '. Запросы платные: оплата по факту использования в аккаунте Anthropic (обычно центы за один разбор).')),
+    keyRow('Ключ YouTube Data API (необязательно)', 'youtubeKey', sec.youtube, 'AIza…',
+      el('span', 'Бесплатно: ', el('a', { href: 'https://console.cloud.google.com/apis/library/youtube.googleapis.com', target: '_blank', rel: 'noopener' }, 'Google Cloud → YouTube Data API v3 ↗'),
+        ' → «Включить» → «Учётные данные» → «Создать ключ API».')),
+    el('p.dim.small', 'Ключи хранятся только на этом компьютере и используются только для запросов к Anthropic и Google.'));
 }
 
 /** Общие предпочтения подбора. */

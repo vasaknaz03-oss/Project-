@@ -746,3 +746,8 @@ a.chip:hover { border-color: var(--accent); color: var(--text); }
 .index-line { display: grid; gap: 6px; }
 .index-bar { height: 6px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; max-width: 520px; }
 .index-bar i { display: block; height: 100%; background: var(--grad); transition: width .6s ease; }
+
+/* ---------- Настройки: Telegram и ИИ ---------- */
+ol.steps { margin: 6px 0 12px; padding-left: 20px; display: grid; gap: 6px; line-height: 1.5; }
+ol.steps code, .card code { background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12.5px; }
+.card h3 > [data-icon] { width: 18px; height: 18px; display: inline-block; vertical-align: -3px; color: var(--accent); }

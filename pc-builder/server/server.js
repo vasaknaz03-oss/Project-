@@ -30,6 +30,8 @@ const wb = require('./providers/wildberries');
 const market = require('./market');
 const reviews = require('./reviews');
 const kufarIndex = require('./kufarIndex');
+const secrets = require('./secrets');
+const telegram = require('./telegram');
 const query = require('./query');
 const watch = require('./watch');
 
@@ -414,6 +416,31 @@ async function route(req, res, url) {
     return send(res, 200, { version: VERSION, dataDir: store.dataDir(), categories: onliner.CATEGORIES, desktop: !!appHooks, platform: process.platform });
   }
 
+  // ---------------- ключи внешних сервисов и Telegram
+  if (pathname === '/api/secrets' && req.method === 'GET') return send(res, 200, secrets.masked());
+  if (pathname === '/api/secrets' && req.method === 'POST') {
+    const body = await readBody(req);
+    // Telegram подключается отдельным шагом (с проверкой токена)
+    const { anthropicKey, youtubeKey } = body || {};
+    const patch = {};
+    if (anthropicKey !== undefined) patch.anthropicKey = anthropicKey;
+    if (youtubeKey !== undefined) patch.youtubeKey = youtubeKey;
+    return send(res, 200, secrets.set(patch));
+  }
+  if (pathname === '/api/telegram/connect' && req.method === 'POST') {
+    const body = await readBody(req);
+    return send(res, 200, await telegram.connect(body.token));
+  }
+  if (pathname === '/api/telegram/link' && req.method === 'POST') return send(res, 200, await telegram.link());
+  if (pathname === '/api/telegram/test' && req.method === 'POST') {
+    await telegram.send('🔔 Проверка: уведомления ПодборПК приходят на этот телефон.');
+    return send(res, 200, { ok: true });
+  }
+  if (pathname === '/api/telegram/disconnect' && req.method === 'POST') {
+    telegram.disconnect();
+    return send(res, 200, secrets.masked());
+  }
+
   // ---------------- слежение за ценами и поисками Kufar
   if (pathname === '/api/watch' && req.method === 'GET') return send(res, 200, watch.summary());
   if (pathname === '/api/watch/item' && req.method === 'POST') {
@@ -773,6 +800,8 @@ function createServer() {
 }
 
 /** Запуск на порту (0 — любой свободный). Возвращает { server, port, url }. */
+let telegramHooked = false;
+
 function start(port = 0, host = '127.0.0.1') {
   return new Promise((resolve, reject) => {
     const server = createServer();
@@ -785,6 +814,14 @@ function start(port = 0, host = '127.0.0.1') {
       const p = server.address().port;
       // Фоновая проверка цен и объявлений
       watch.start({ kufarOpts: (s) => kufarQuery(sectionOf(s.cat), s.q, new URLSearchParams({ f: JSON.stringify(s.filters || {}) })) });
+      // События слежения — ещё и на телефон, если подключён Telegram (и в программе, и в режиме браузера)
+      if (!telegramHooked) {
+        telegramHooked = true;
+        watch.onEvent((e) => {
+          const st = store.get('settings') || {};
+          if (st.telegramNotify !== false) telegram.notifyEvent(e);
+        });
+      }
       resolve({ server, port: p, url: `http://${host}:${p}/` });
     });
   });

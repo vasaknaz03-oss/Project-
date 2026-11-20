@@ -12,10 +12,20 @@ export function initNews(node) {
   lastVisit = +state.settings.newsVisit || 0;
 }
 
+// Ленты сайтов обновляются в течение дня: открываем страницу — подгружаем свежее, если прошло больше 15 минут
+const STALE_MS = 15 * 60 * 1000;
+let autoTimer = null;
+
 export function rerenderNews() {
   if (!root) return;
-  if (!N.data && !N.loading) load();
+  if ((!N.data || Date.now() - (N.loadedAt || 0) > STALE_MS) && !N.loading) load();
   else render();
+  // Пока страница открыта — обновляем сами каждые 20 минут
+  clearInterval(autoTimer);
+  autoTimer = setInterval(() => {
+    if (state.page === 'news' && !N.loading && document.visibilityState !== 'hidden') load();
+    else if (state.page !== 'news') clearInterval(autoTimer);
+  }, 20 * 60 * 1000);
   // Отмечаем визит: при следующем открытии новые новости будут помечены
   const now = Date.now();
   setTimeout(() => saveSettings({ newsVisit: now }).catch(() => {}), 3000);
@@ -28,6 +38,7 @@ async function load() {
   try {
     const qs = new URLSearchParams({ src: N.src, topic: N.topic, q: N.q });
     N.data = await api('/api/news?' + qs);
+    N.loadedAt = Date.now();
   } catch (e) {
     N.error = e.message;
   }
@@ -62,7 +73,8 @@ function render() {
   });
   root.replaceChildren(
     el('div.page-head',
-      el('div', el('h1', 'Новости'), el('p', 'Свежее о железе и играх с Onliner, 3DNews, Overclockers.ru, Хабра и Tom\'s Hardware. Нажмите на новость — откроется полная статья на сайте.')),
+      el('div', el('h1', 'Новости'), el('p', 'Свежее о железе и играх с Onliner, 3DNews, Overclockers.ru, Хабра и Tom\'s Hardware. Нажмите на новость — откроется полная статья на сайте.'),
+        N.loadedAt ? el('p.dim.small', `Обновлено в ${new Date(N.loadedAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })} · новые новости подгружаются сами каждые 20 минут, пока страница открыта${d ? ` · новых с прошлого визита: ${d.items.filter((it) => it.date && lastVisit && new Date(it.date).getTime() > lastVisit).length}` : ''}`) : null),
       el('button.btn', { onclick: load, disabled: N.loading }, icon('refresh'), 'Обновить')),
     el('div.card.news-filters',
       search,

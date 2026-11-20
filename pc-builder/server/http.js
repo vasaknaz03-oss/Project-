@@ -130,6 +130,25 @@ async function getText(url, { ttl = 12 * 60 * 60 * 1000, timeout = 20000 } = {})
   }
 }
 
+/** Произвольный запрос (POST и т. п.) без кэша: fetch Node.js, при сетевом сбое — системный прокси Electron. */
+async function request(url, opts = {}, timeout = 20000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeout);
+  try {
+    try {
+      return await fetch(url, { ...opts, signal: ctrl.signal });
+    } catch (e) {
+      if (e.name === 'AbortError' || !altFetch) throw e;
+      return await altFetch(url, opts);
+    }
+  } catch (e) {
+    if (e.name === 'AbortError') throw new HttpError(`Таймаут запроса к ${new URL(url).host}`, 0);
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function clearCache() {
   cache.clear();
 }
@@ -153,4 +172,4 @@ function qs(params) {
   return parts.join('&');
 }
 
-module.exports = { getJSON, getText, clearCache, qs, HttpError, setAltFetch };
+module.exports = { request, getJSON, getText, clearCache, qs, HttpError, setAltFetch };
