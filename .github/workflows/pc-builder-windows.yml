@@ -31,19 +31,24 @@ jobs:
       - name: Tests
         run: npm test
 
-      - name: Server address
+      - name: Server address and signing setup
         shell: bash
-        # Адрес сервера ПодборПК — переменная репозитория PODBOR_SERVER (Settings → Secrets and variables → Actions → Variables)
+        # Адрес сервера ПодборПК — переменная репозитория PODBOR_SERVER (Settings → Secrets and variables → Actions → Variables).
+        # Подпись кода — только если в секретах есть сертификат (.pfx в base64) и пароль; иначе сборка без подписи, как раньше.
         run: |
           if [ -n "${{ vars.PODBOR_SERVER }}" ]; then npm pkg set podborServer="${{ vars.PODBOR_SERVER }}"; fi
+          if [ -n "$WIN_CSC" ]; then
+            echo "CSC_LINK=$WIN_CSC" >> "$GITHUB_ENV"
+            echo "CSC_KEY_PASSWORD=$WIN_CSC_PASS" >> "$GITHUB_ENV"
+          else
+            echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"
+          fi
+        env:
+          WIN_CSC: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_PASS: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
 
       - name: Build portable .exe and installer
         run: npx electron-builder --win portable nsis --publish never
-        env:
-          # Подпись кода включится сама, когда в секретах появятся сертификат (.pfx в base64) и пароль
-          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.WIN_CSC_LINK != '' }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -75,20 +80,27 @@ jobs:
       - name: Server address and signing setup
         run: |
           if [ -n "${{ vars.PODBOR_SERVER }}" ]; then npm pkg set podborServer="${{ vars.PODBOR_SERVER }}"; fi
-          # С сертификатом Developer ID — настоящая подпись и нотаризация Apple вместо подписи «без разработчика»
-          if [ -n "$MAC_CSC" ]; then npm pkg delete build.mac.identity; npm pkg set build.mac.hardenedRuntime=true build.mac.notarize=true --json; fi
+          # С сертификатом Developer ID — настоящая подпись и нотаризация Apple; без него — подпись «без разработчика», как раньше
+          if [ -n "$MAC_CSC" ]; then
+            npm pkg delete build.mac.identity
+            npm pkg set build.mac.hardenedRuntime=true build.mac.notarize=true --json
+            echo "CSC_LINK=$MAC_CSC" >> "$GITHUB_ENV"
+            echo "CSC_KEY_PASSWORD=$MAC_CSC_PASS" >> "$GITHUB_ENV"
+            echo "APPLE_ID=$APPLE_ID" >> "$GITHUB_ENV"
+            echo "APPLE_APP_SPECIFIC_PASSWORD=$APPLE_PASS" >> "$GITHUB_ENV"
+            echo "APPLE_TEAM_ID=$APPLE_TEAM" >> "$GITHUB_ENV"
+          else
+            echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"
+          fi
         env:
           MAC_CSC: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CSC_PASS: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASS: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Build .dmg (Apple Silicon and Intel)
         run: npx electron-builder --mac dmg --arm64 --x64 --publish never
-        env:
-          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.MAC_CSC_LINK != '' }}
 
       - name: Check signature and architectures
         run: |

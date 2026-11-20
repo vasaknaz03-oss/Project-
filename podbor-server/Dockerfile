@@ -11,6 +11,8 @@ COPY pc-builder/server pc-builder/server
 COPY podbor-server/package.json podbor-server/
 COPY podbor-server/src podbor-server/src
 
+# Том с данными должен принадлежать пользователю node, иначе сервер не сможет создать базу
+RUN mkdir -p /data && chown node:node /data
 USER node
 VOLUME ["/data"]
 EXPOSE 8080
