@@ -1,5 +1,6 @@
 // Отзывы покупателей (Onliner) и ссылки на обзоры и форумы — чтобы новичок мог понять, что выбрать.
 import { el, icon, api, modal, plural } from './util.js';
+import { researchBlock, youtubeBlock, aiReviewsButton } from './ai.js';
 
 const cache = new Map();
 // «Недостатки: не обнаружил» — не показываем как минус
@@ -34,6 +35,17 @@ function shortName(it) {
   return String(it.name || '').replace(/\s[A-Z0-9-]{8,}$/, '').replace(/\(.*?\)/g, '').trim();
 }
 
+/** Полное название модели без кода производителя в конце («… DUAL-RTX5070-O12G»). */
+function modelName(it) {
+  const words = String(it.name || '').replace(/\(.*?\)/g, ' ').split(/\s+/).filter(Boolean);
+  while (words.length > 3) {
+    const w = words[words.length - 1];
+    if ((/\d/.test(w) && /-/.test(w)) || /^[A-Z0-9]{7,}$/.test(w)) words.pop();
+    else break;
+  }
+  return words.join(' ');
+}
+
 /** Где ещё почитать мнения реальных людей: обзоры, форумы, обсуждения. */
 export function discussLinks(it) {
   const q = shortName(it);
@@ -58,11 +70,37 @@ function reviewCard(r) {
     r.text ? el('div.review-text', r.text.length > 400 ? r.text.slice(0, 400) + '…' : r.text) : null);
 }
 
-/** Блок отзывов: вывод для новичка, что хвалят и ругают, распределение оценок, свежие отзывы. */
+/**
+ * Отзывы и мнения: вкладки «Покупатели» (Onliner), «Форумы и обзоры» (ИИ с веб-поиском) и «Видео» (YouTube).
+ * Возвращает элемент сразу; содержимое вкладок подгружается при открытии.
+ */
 export async function reviewsPanel(it, { limit = 4 } = {}) {
+  const q = shortName(it);
+  const tabs = [
+    ['buyers', it.source === 'onliner' && it.reviews ? `Покупатели (${it.reviews})` : 'Покупатели', () => buyersPanel(it, { limit })],
+    ['forums', 'Форумы и обзоры (ИИ)', () => researchBlock(modelName(it), { mode: 'part' })],
+    ['video', 'Видео', () => youtubeBlock(q + ' обзор')],
+  ];
+  const body = el('div.rev-tab-body');
+  const bar = el('div.seg.rev-tabs');
+  const show = async (id) => {
+    for (const b of bar.children) b.classList.toggle('on', b.dataset.id === id);
+    const t = tabs.find((x) => x[0] === id);
+    body.replaceChildren(el('div.row', el('div.spinner.inline'), el('span.muted', 'Загружаем…')));
+    const node = await t[2]();
+    body.replaceChildren(node);
+  };
+  for (const [id, label] of tabs) bar.append(el('button', { type: 'button', 'data-id': id, onclick: () => show(id) }, label));
+  // Нет отзывов покупателей — сразу открываем форумы и обзоры
+  show(it.source === 'onliner' && it.reviews ? 'buyers' : 'forums');
+  return el('div.rev-wrap', bar, body);
+}
+
+/** Отзывы покупателей Onliner: вывод для новичка, что хвалят и ругают, распределение оценок, свежие отзывы. */
+async function buyersPanel(it, { limit = 4 } = {}) {
   if (it.source !== 'onliner') {
     return el('div',
-      el('p.muted', 'Для объявлений и деталей, добавленных вручную, отзывов покупателей нет — почитайте обзоры:'),
+      el('p.muted', 'Для объявлений и деталей, добавленных вручную, отзывов покупателей Onliner нет — откройте вкладку «Форумы и обзоры» или почитайте сами:'),
       discussLinks(it));
   }
   let r;
@@ -87,6 +125,7 @@ export async function reviewsPanel(it, { limit = 4 } = {}) {
   }, `Показать ещё ${r.items.length - limit}`) : null;
   return el('div.reviews',
     el('div.verdict', { class: 'v-' + v.level }, icon(v.level === 'bad' || v.level === 'mixed' ? 'alert' : 'sparkles'), el('div', el('b', 'Вывод по отзывам. '), v.text)),
+    aiReviewsButton(it),
     el('div.rev-top',
       el('div.rev-score', el('div.rev-big', (r.rating || 0).toFixed(1)), stars(r.rating), el('div.dim.small', `${r.total} ${plural(r.total, 'отзыв', 'отзыва', 'отзывов')}${s.positive != null ? ` · ${s.positive}% рекомендуют` : ''}`)),
       el('div.rev-dist', [5, 4, 3, 2, 1].map((n) => el('div.rev-row', el('span', n + '★'), el('div.rev-bar', el('i', { style: { width: Math.round(((dist[n] || 0) / maxN) * 100) + '%' } })), el('span.dim', String(dist[n] || 0))))),
@@ -96,8 +135,7 @@ export async function reviewsPanel(it, { limit = 4 } = {}) {
     el('div.panel-title', { style: { marginTop: '12px' } }, 'Свежие отзывы'),
     list,
     el('div.row', { style: { gap: '8px', marginTop: '8px' } }, more,
-      el('a.btn.btn-sm.btn-ghost', { href: allUrl, target: '_blank', rel: 'noopener' }, icon('external'), 'Все отзывы на Onliner')),
-    discussLinks(it));
+      el('a.btn.btn-sm.btn-ghost', { href: allUrl, target: '_blank', rel: 'noopener' }, icon('external'), 'Все отзывы на Onliner')));
 }
 
 export function openReviews(it) {

@@ -751,3 +751,31 @@ a.chip:hover { border-color: var(--accent); color: var(--text); }
 ol.steps { margin: 6px 0 12px; padding-left: 20px; display: grid; gap: 6px; line-height: 1.5; }
 ol.steps code, .card code { background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; font-size: 12.5px; }
 .card h3 > [data-icon] { width: 18px; height: 18px; display: inline-block; vertical-align: -3px; color: var(--accent); }
+
+/* ---------- ИИ-помощник, вкладки отзывов, YouTube ---------- */
+.rev-tabs { margin-bottom: 12px; flex-wrap: wrap; }
+.ai-block { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; background: var(--surface-2); }
+.ai-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.ai-head > [data-icon] { width: 18px; height: 18px; color: var(--accent); }
+.ai-answer .md h4 { margin: 12px 0 6px; font-size: 15px; }
+.ai-answer .md h5 { margin: 10px 0 4px; font-size: 14px; }
+.ai-answer .md p { margin: 6px 0; line-height: 1.55; }
+.ai-answer .md ul { margin: 4px 0 8px; padding-left: 20px; display: grid; gap: 4px; line-height: 1.5; }
+.ai-answer .md li::marker { color: var(--accent); }
+a.cite { display: inline-block; min-width: 16px; padding: 0 4px; margin-left: 2px; border-radius: 6px; font-size: 11px; line-height: 16px; text-align: center; vertical-align: super; background: var(--accent-soft); color: var(--accent); text-decoration: none; }
+a.cite:hover { background: var(--accent); color: #fff; }
+.ai-sources { margin-top: 12px; font-size: 13px; }
+.ai-sources ol { margin: 4px 0 0; padding-left: 22px; display: grid; gap: 3px; }
+.ai-more { margin-top: 8px; font-size: 13px; }
+.ai-more summary, .yt-comments summary { cursor: pointer; color: var(--text-2); }
+.ai-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 10px; }
+.ai-cols ul { margin: 4px 0; padding-left: 18px; display: grid; gap: 3px; }
+.ai-rev-wrap { margin-top: 10px; }
+.yt-list { display: grid; gap: 10px; margin-bottom: 8px; }
+.yt-item { display: grid; grid-template-columns: 160px 1fr; gap: 12px; align-items: start; }
+.yt-thumb { display: block; border-radius: 8px; overflow: hidden; aspect-ratio: 16 / 9; background: var(--surface); }
+.yt-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.yt-title { font-weight: 600; text-decoration: none; color: var(--text); }
+.yt-title:hover { color: var(--accent); }
+.yt-comments ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; font-size: 13px; }
+@media (max-width: 640px) { .yt-item { grid-template-columns: 1fr; } }

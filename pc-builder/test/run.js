@@ -421,6 +421,39 @@ test('Kufar «сначала выгодные»: устаревшее и «ку�
   assert.strictEqual(ram[ram.length - 1], 'DDR4 8/16/32 GB');
 });
 
+test('ИИ-поиск: продолжение после pause_turn, цитаты → источники [n], отказ модели', async () => {
+  const store = require('../server/store');
+  const os = require('os');
+  const path = require('path');
+  store.setDir(require('fs').mkdtempSync(path.join(os.tmpdir(), 'podbor-ai-')));
+  require('../server/secrets').set({ anthropicKey: 'sk-ant-test' });
+  const ai = require('../server/ai');
+  const calls = [];
+  const replies = [
+    { stop_reason: 'pause_turn', model: 'claude-opus-5-5', usage: { input_tokens: 1, output_tokens: 1 }, content: [
+      { type: 'server_tool_use', name: 'web_search', id: 's1', input: { query: 'x' } },
+      { type: 'web_search_tool_result', tool_use_id: 's1', content: [{ type: 'web_search_result', url: 'https://forum.example/a', title: 'Тема A' }, { type: 'web_search_result', url: 'https://example.org/b', title: 'B' }] },
+    ] },
+    { stop_reason: 'end_turn', model: 'claude-opus-5-5', usage: { input_tokens: 2, output_tokens: 3 }, content: [
+      { type: 'text', text: '## Коротко\nКарта тихая', citations: [{ type: 'web_search_result_location', url: 'https://forum.example/a', title: 'Тема A', cited_text: '...' }] },
+      { type: 'text', text: '.\n- Писк дросселей бывает', citations: [{ url: 'https://forum.example/a', title: 'Тема A' }, { url: 'https://x.example/c', title: 'C' }] },
+    ] },
+  ];
+  ai._setClientForTests({ beta: { messages: { stream: (params) => { calls.push(params); const r = replies.shift(); return { finalMessage: async () => r }; } } } });
+  const r = await ai.research('RTX 5070', { mode: 'part' });
+  assert.strictEqual(calls.length, 2, 'после pause_turn — повторный запрос');
+  assert.strictEqual(calls[1].messages.length, 2, 'повтор без лишнего сообщения «продолжи»');
+  assert.strictEqual(calls[0].fallbacks, 'default');
+  assert.ok(calls[0].tools.some((t) => t.type === 'web_search_20260209'));
+  assert.ok(/Карта тихая\[1\]/.test(r.text), r.text);
+  assert.ok(/\[1\]\[2\]$/.test(r.text), r.text);
+  assert.deepStrictEqual(r.sources.map((x) => x.url), ['https://forum.example/a', 'https://x.example/c']);
+  assert.deepStrictEqual(r.more.map((x) => x.url), ['https://example.org/b']);
+  assert.strictEqual(r.searches, 1);
+  ai._setClientForTests({ beta: { messages: { stream: () => ({ finalMessage: async () => ({ stop_reason: 'refusal', content: [], usage: {} }) }) } } });
+  await assert.rejects(() => ai.research('x', { mode: 'free' }), /отказалась/);
+});
+
 async function live() {
   if (!process.argv.includes('--live')) return;
   console.log('Живой подбор (Onliner)');

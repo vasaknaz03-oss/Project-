@@ -32,6 +32,8 @@ const reviews = require('./reviews');
 const kufarIndex = require('./kufarIndex');
 const secrets = require('./secrets');
 const telegram = require('./telegram');
+const ai = require('./ai');
+const youtube = require('./youtube');
 const query = require('./query');
 const watch = require('./watch');
 
@@ -439,6 +441,44 @@ async function route(req, res, url) {
   if (pathname === '/api/telegram/disconnect' && req.method === 'POST') {
     telegram.disconnect();
     return send(res, 200, secrets.masked());
+  }
+
+  // ---------------- ИИ-помощник и YouTube
+  if (pathname === '/api/ai/status') return send(res, 200, { ai: ai.available(), youtube: youtube.available(), model: ai.MODEL });
+  if (pathname === '/api/ai/research' && req.method === 'POST') {
+    const body = await readBody(req);
+    const mode = ['part', 'oc', 'build', 'free'].includes(body.mode) ? body.mode : 'free';
+    const depth = body.depth === 'deep' ? 'deep' : 'quick';
+    const query = String(body.query || '').trim().slice(0, 500);
+    // Один и тот же вопрос в течение суток не оплачиваем повторно
+    const ckey = `${mode}|${depth}|${query.toLowerCase()}`;
+    const hist = store.get('aiHistory') || [];
+    const hit = !body.fresh && hist.find((h) => h.key === ckey && Date.now() - h.t < 24 * 60 * 60 * 1000);
+    if (hit) return send(res, 200, { ...hit.result, cached: true, t: hit.t });
+    const result = await ai.research(query, { mode, depth });
+    const t = Date.now();
+    store.set('aiHistory', [{ key: ckey, mode, depth, query, t, result }, ...hist.filter((h) => h.key !== ckey)].slice(0, 30));
+    return send(res, 200, { ...result, t });
+  }
+  if (pathname === '/api/ai/history') {
+    return send(res, 200, { items: (store.get('aiHistory') || []).map(({ mode, depth, query, t }) => ({ mode, depth, query, t })) });
+  }
+  if (pathname === '/api/ai/reviews' && req.method === 'POST') {
+    const body = await readBody(req);
+    const key = String(body.key || '');
+    if (!/^[\w.-]+$/.test(key)) throw new Error('Не указан товар');
+    const cat = /^[a-z_]{2,30}$/.test(body.cat || '') ? body.cat : '';
+    const r = await reviews.forProduct(key, cat);
+    if (!r.items.length) throw new Error('У этого товара пока нет отзывов');
+    const cacheKey = 'aiReviews:' + key;
+    const cachedSum = store.get(cacheKey);
+    if (cachedSum && cachedSum.total === r.total) return send(res, 200, { ...cachedSum.summary, cached: true });
+    const summary = await ai.reviewSummary(String(body.name || key).slice(0, 200), r.items);
+    store.set(cacheKey, { total: r.total, summary });
+    return send(res, 200, summary);
+  }
+  if (pathname === '/api/youtube') {
+    return send(res, 200, await youtube.search(p.get('q'), { comments: p.get('comments') !== '0' }));
   }
 
   // ---------------- слежение за ценами и поисками Kufar

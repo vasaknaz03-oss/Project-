@@ -36,6 +36,7 @@ async function loadSecrets() {
   } catch {
     sec = null;
   }
+  document.dispatchEvent(new CustomEvent('secrets-changed'));
   const t = document.getElementById('tgCard');
   if (t) t.replaceWith(telegramCard());
   const a = document.getElementById('aiCard');
