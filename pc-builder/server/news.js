@@ -17,8 +17,8 @@ const TOPICS = [
   { id: 'mem', name: 'Память и SSD', re: /\bddr\d|оперативн|памят[ьи]\b|\bssd\b|nvme|накопител|\bram\b|\bdram\b/i },
   { id: 'oc', name: 'Разгон', re: /разгон|overclock|андервольт|undervolt|тайминг|curve optimizer|\bpbo\b|\bxmp\b|\bexpo\b|рекорд частот/i },
   { id: 'laptop', name: 'Ноутбуки', re: /ноутбук|laptop|notebook|макбук|macbook/i },
-  { id: 'games', name: 'Игры', re: /\bигр[аыуе]?\b|игров|steam|playstation|xbox|nintendo|\bgame/i },
-  { id: 'prices', name: 'Цены', re: /подешев|подорож|снижен[иы]е цен|рост цен|дефицит|\bцен[аы]\b/i },
+  { id: 'games', name: 'Игры', re: /(?<![а-яё])игр[аыуе]?(?![а-яё])|игров|steam|playstation|xbox|nintendo|\bgame/i },
+  { id: 'prices', name: 'Цены', re: /подешев|подорож|снижен[иы]е цен|рост цен|дефицит|(?<![а-яё])цен[аы](?![а-яё])/i },
 ];
 
 const decode = (s) => String(s || '')

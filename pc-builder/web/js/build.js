@@ -725,7 +725,7 @@ function renderBuild(v) {
       el('div.kv',
         el('span', 'Пиковая нагрузка'), el('span', `~${need.load} Вт`),
         el('span', 'Рекомендуемый БП'), el('span', `от ${need.rec} Вт`),
-        el('span', 'Выбранный БП'), el('span', parts.psu ? `${parts.psu.specs.watts} Вт` : have.psu ? 'ваш' : '—'),
+        el('span', 'Выбранный БП'), el('span', parts.psu ? (parts.psu.specs && parts.psu.specs.watts ? `${parts.psu.specs.watts} Вт` : 'мощность не указана') : have.psu ? 'ваш' : '—'),
         el('span', 'Нужен кулер'), el('span', Compat.coolerNeed(parts.cpu) ? `от ${Compat.coolerNeed(parts.cpu)} Вт` : 'в комплекте')),
       renderPowerCost(parts)),
     renderUsedSummary(v),

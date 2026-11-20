@@ -228,7 +228,8 @@ async function enrich(slot, item) {
   } else if (slot === 'ssd' || slot === 'hdd') {
     out.specs = { capacityGb: capacityGb(pv(item, 'ccscp')) || capacityGb(name), iface: /nvme|m\.2/i.test(name + pv(item, 'ccsi')) ? 'NVMe' : 'SATA', form: /m\.2/i.test(name + pv(item, 'ccff')) ? 'M.2' : '2.5"' };
   } else if (slot === 'psu') {
-    const w = Number((name.match(/(\d{3,4})\s*(w|вт)\b/i) || [])[1]) || null;
+    // \b в JS не работает с кириллицей: «600 Вт» в конце строки не находился — граница задаётся явно
+    const w = Number((`${name} ${pv(item, 'ccpw')}`.match(/(\d{3,4})\s*(?:w|вт|ватт)(?![a-zа-яё])/i) || [])[1]) || null;
     out.specs = { watts: w, cert: /gold|золот/i.test(name) ? 4 : /bronze|бронз/i.test(name) ? 2 : 0, form: 'ATX' };
     out.specs.certName = ['нет', '80+', 'Bronze', 'Silver', 'Gold'][out.specs.cert] || '';
     if (!w) notes.push('мощность не указана — уточните у продавца');

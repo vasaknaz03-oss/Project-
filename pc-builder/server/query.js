@@ -15,7 +15,7 @@ function normalize(q) {
     .replace(/(\d)\s*(гц|hz)(?![a-zа-я])/g, '$1hz')
     .replace(/(\d)\s*(дюйм\w*|inch|"|''|”)/g, '$1"')
     .replace(/(\d)\s*ти(?![a-zа-я])/g, '$1 ti').replace(/(\d)ti(?![a-z])/g, '$1 ti')
-    .replace(/\bсупер\b/g, 'super').replace(/(\d)\s*super/g, '$1 super')
+    .replace(/(?<![а-яё])супер(?![а-яё])/g, 'super').replace(/(\d)\s*super/g, '$1 super')
     .replace(/[,;]+/g, ' ').replace(/\s+/g, ' ');
 }
 
