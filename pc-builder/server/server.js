@@ -29,6 +29,7 @@ const kufarCompat = require('./kufarCompat');
 const wb = require('./providers/wildberries');
 const market = require('./market');
 const reviews = require('./reviews');
+const kufarIndex = require('./kufarIndex');
 const query = require('./query');
 const watch = require('./watch');
 
@@ -382,6 +383,29 @@ function kufarQuery(section, q, p) {
   return { query: q || undefined, cat: null, parent: 16000, params: f };
 }
 
+/** «Сначала выгодные» на Kufar: по всем объявлениям поиска, а не по одной странице. */
+async function kufarValuePage(kq, p, sectionId) {
+  const ix = kufarIndex.ensure({
+    ...kq, priceMin: num(p.get('min')), priceMax: num(p.get('max')), condition: p.get('cond') || '',
+  });
+  // Пока полного списка ещё нет — дождёмся хотя бы первой порции, чтобы не показывать пустоту
+  if (!ix.items.size && ix.scanning) {
+    await Promise.race([ix.scanning, new Promise((r) => setTimeout(r, 8000))]);
+    const t0 = Date.now();
+    while (!ix.items.size && ix.scanning && Date.now() - t0 < 6000) await new Promise((r) => setTimeout(r, 300));
+  }
+  const all = kufarIndex.list(ix);
+  for (const it of all) it.best = false;
+  if (sectionId) await market.annotate(all, sectionId);
+  const ranked = market.rankByValue(all, sectionId || '');
+  const per = 50;
+  const page = Math.max(1, num(p.get('page')) || 1);
+  return {
+    items: ranked.slice((page - 1) * per, page * per), total: ix.total || ranked.length,
+    pages: Math.max(1, Math.ceil(ranked.length / per)), next: null, index: kufarIndex.status(ix),
+  };
+}
+
 async function route(req, res, url) {
   const p = url.searchParams;
   const pathname = url.pathname;
@@ -514,12 +538,15 @@ async function route(req, res, url) {
           r = smart.rest ? await searchOnlinerText(sec, smart.rest, p2) : await searchOnliner('', p2);
         } else {
           const kq = kufarQuery(sec, query.kufarText(q0), p2);
+          if (p.get('sort') === 'value') {
+            const r2 = await kufarValuePage(kq, p, sec.id);
+            return send(res, 200, { ...r2, smart: { section: smart.section, chips: smart.chips, filters: {}, rest: smart.rest } });
+          }
           const kr = await kufar.search({
             ...kq, priceMin: num(p.get('min')), priceMax: num(p.get('max')), sort: p.get('sort') === 'rating' ? '' : p.get('sort'),
             condition: p.get('cond') || '', size: 50, cursor: (p.get('cursor') || '').slice(0, 400) || undefined,
           });
           await market.annotate(kr.items, sec.id);
-          if (p.get('sort') === 'value') kr.items = market.rankByValue(kr.items, sec.id);
           r = { items: kr.items, total: kr.total, pages: 1, next: kr.next };
         }
         return send(res, 200, { ...r, smart: { section: smart.section, chips: smart.chips, filters: src === 'onliner' ? smart.filters : {}, rest: smart.rest } });
@@ -543,12 +570,12 @@ async function route(req, res, url) {
     if (src === 'kufar') {
       const section = sectionOf(p.get('cat'));
       const kq = kufarQuery(section, q, p);
+      if (p.get('sort') === 'value') return send(res, 200, await kufarValuePage(kq, p, section ? section.id : ''));
       const r = await kufar.search({
         ...kq, priceMin: num(p.get('min')), priceMax: num(p.get('max')), sort: p.get('sort') === 'rating' ? '' : p.get('sort'),
         condition: p.get('cond') || '', size: 50, cursor: (p.get('cursor') || '').slice(0, 400) || undefined,
       });
       if (section) await market.annotate(r.items, section.id);
-      if (p.get('sort') === 'value') r.items = market.rankByValue(r.items, section ? section.id : '');
       return send(res, 200, { items: r.items, total: r.total, pages: 1, next: r.next });
     }
     return send(res, 200, await searchOnliner(q, p));

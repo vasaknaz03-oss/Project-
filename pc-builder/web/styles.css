@@ -741,3 +741,8 @@ a.chip:hover { border-color: var(--accent); color: var(--text); }
 .novice-tip .tip-row b { white-space: nowrap; }
 .compare-verdict { font-size: 13px; line-height: 1.5; }
 @media (max-width: 760px) { .rev-top { grid-template-columns: 1fr; } }
+
+/* ---------- Kufar: полный просмотр объявлений ---------- */
+.index-line { display: grid; gap: 6px; }
+.index-bar { height: 6px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; max-width: 520px; }
+.index-bar i { display: block; height: 100%; background: var(--grad); transition: width .6s ease; }

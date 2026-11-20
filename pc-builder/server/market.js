@@ -15,9 +15,9 @@ function ramKey(it) {
   const text = `${it.name} ${pv(it, 'ccrt')}`;
   if (/so-?dimm|ноутбук/i.test(text)) return null;
   const type = (text.toUpperCase().match(/DDR[345]/) || [])[0];
-  // «2x8GB» — комплект на 16 ГБ
+  // «2x8GB» — комплект на 16 ГБ. Объём из названия надёжнее поля объявления (его часто заполняют наугад)
   const kit = String(it.name || '').match(/(\d)\s*[xх×]\s*(\d{1,2})\s*(?:gb|гб)/i);
-  const gb = parseFloat(pv(it, 'cdr')) || (kit ? kit[1] * kit[2] : capacityGb(it.name));
+  const gb = (kit ? kit[1] * kit[2] : capacityGb(it.name)) || parseFloat(pv(it, 'cdr'));
   return type && gb ? `${type}-${gb}` : null;
 }
 
@@ -30,7 +30,7 @@ function ssdKey(it) {
 }
 
 function gpuKeyOf(it) {
-  const key = perf.gpuKey(it.name) || perf.gpuKey(pv(it, 'ccvc'));
+  const key = kufar.adGpuKey(it);
   if (!key) return null;
   // У некоторых моделей несколько объёмов памяти с разной ценой (RTX 3060 8/12 ГБ, RX 580 4/8 ГБ)
   const vram = parseFloat(pv(it, 'cdr')) || Number((it.name.match(/(\d{1,2})\s*(?:gb|гб)/i) || [])[1]) || 0;
@@ -155,7 +155,7 @@ function valueScore(it, kind) {
   if (!it.price) return { tier: 0, v: 0 };
   kind = KIND_OF[kind] || kind;
   if (!it.perf && kind === 'gpu') {
-    const key = perf.gpuKey(it.name) || perf.gpuKey(pv(it, 'ccvc'));
+    const key = kufar.adGpuKey(it);
     const p = key && perf.gpuPerf(key, parseFloat(pv(it, 'cdr')) || 0);
     if (p) it.perf = { key, ...p };
   }
@@ -173,17 +173,31 @@ function valueScore(it, kind) {
     const g = Number(gbs);
     base = (g * (t === 'nvme' ? 1.15 : 1) / it.price) * (g < 240 ? 0.5 : g < 480 ? 0.8 : 1);
   }
+  // DDR3/DDR2 и SSD меньше 240 ГБ для новой сборки не годятся — всегда ниже современных
+  const rk = kind === 'ram' ? ramKey(it) : null;
+  // Серверная память (ECC Registered, RDIMM/LRDIMM) в обычные платы не встанет
+  const server = kind === 'ram' && /\b(ecc|reg|rdimm|lrdimm)\b|registered|серверн|\d\s*rx\s*[48]/i.test(`${it.name || ''} ${pv(it, 'ccrt')}`);
+  const obsolete = server || (rk && /^DDR[23]-/.test(rk)) || (kind === 'ssd' && ssdKey(it) && Number(ssdKey(it).split('-')[1]) < 240);
+  const gbOf = rk ? Number(rk.split('-')[1]) : 0;
   const m = it.market;
-  const bad = (m && m.deal === 'suspicious')
+  // Нереально дёшево для такой мощности (б/у RTX 4060 не стоит 100 р.): «корпус для RTX 5090», запчасти, приманки
+  const tooCheap = (kind === 'gpu' && it.perf && it.perf.score && it.price < it.perf.score * 2.5)
+    || (kind === 'cpu' && it.perf && it.perf.gaming && it.price < it.perf.gaming * 0.7)
+    // и за гигабайт памяти (объём в объявлении часто указан неверно)
+    || (rk && it.price < gbOf * ({ DDR3: 1, DDR4: 3, DDR5: 6 }[rk.split('-')[0]] || 0));
+  // Объявление не из своего раздела (видеокарта в разделе памяти, мобильная видеокарта ноутбука)
+  const foreign = ((kind === 'ram' || kind === 'ssd') && (perf.gpuKey(it.name || '') || /видеокарт|процессор/i.test(it.name || '')))
+    || (kind === 'gpu' && /ноутбук|ноутбучн|mobile|max-?q|\d{4}\s?[mм](?![a-zа-я])/i.test(it.name || ''));
+  const bad = tooCheap || foreign || (m && m.deal === 'suspicious')
     || ((kind === 'gpu' || kind === 'cpu') && kufar.isJunk(it.name))
-    || /куплю|нерабоч|не\s*рабоч|запчаст|под\s*ремонт|неисправ/i.test(it.name || '');
+    || /куплю|нерабоч|не\s*рабоч|запчаст|под\s*ремонт|неисправ|бронь|брониров|fake|фейк|подделк|locked|заблокир|битый|бэд\s*блок|bad\s*(block|sector)/i.test(it.name || '');
   let f = 1;
   if (m && typeof m.pct === 'number') f *= Math.max(0.75, Math.min(1.3, 1 - m.pct / 100));
   if (KNOWN_BRAND.test(it.name || '')) f *= 1.08;
   else if (kind === 'ssd' || kind === 'ram') f *= 0.85;
   if (it.safedeal) f *= 1.04;
   if (it.delivery) f *= 1.02;
-  const tier = bad ? 0 : base === null && KIND_OF[kind] ? 1 : 2;
+  const tier = bad ? 0 : (base === null && KIND_OF[kind]) || obsolete ? 1 : 2;
   return { tier, v: (base === null ? 1 / it.price : base) * f };
 }
 

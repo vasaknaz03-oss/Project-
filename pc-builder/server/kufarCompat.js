@@ -137,7 +137,7 @@ async function compatible(slot, part, ctx = {}, { limit = 40, pages = 2 } = {}) 
       const key = perf.cpuKey(it.name);
       if (key) it.perf = perf.cpuPerf(it.name, {});
     } else if (slot === 'gpu') {
-      const key = perf.gpuKey(it.name) || perf.gpuKey((it.params.ccvc || {}).vl || '');
+      const key = kufar.adGpuKey(it);
       if (key) it.perf = { key, ...perf.gpuPerf(key) };
     }
     if (part && part.perf && it.perf && part.perf.key && it.perf.key === part.perf.key) it.sameModel = true;

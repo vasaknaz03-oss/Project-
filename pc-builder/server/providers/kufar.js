@@ -51,6 +51,24 @@ function normalize(ad) {
   };
 }
 
+/**
+ * Модель видеокарты из объявления. Поле «чип» продавцы иногда заполняют неверно («GeForce 6600 GT»
+ * с чипом «RTX 4070»), поэтому ему верим, только если номер модели из поля есть в названии
+ * или в названии вообще нет номера модели.
+ */
+function adGpuKey(it) {
+  const byName = perf.gpuKey(it.name || '');
+  if (byName) return byName;
+  const p = it.params && it.params.ccvc;
+  const chip = p ? String(p.vl || '') : '';
+  const key = chip && perf.gpuKey(chip);
+  if (!key) return null;
+  const num = (chip.match(/\d{3,4}/) || [])[0];
+  const nums = String(it.name || '').match(/\d{3,4}/g) || [];
+  if (num && nums.length && !nums.includes(num)) return null;
+  return key;
+}
+
 /** Курс из калькулятора цен Kufar (BYN за 1 единицу валюты). */
 function ratesFromAds(ads) {
   const sums = {};
@@ -75,7 +93,7 @@ function ratesFromAds(ads) {
  * opts: { query, cat, priceMin, priceMax (BYN), sort, condition: 'used'|'new'|'' , size }
  */
 async function search(opts = {}) {
-  const params = { lang: 'ru', size: Math.min(opts.size || 30, 50) };
+  const params = { lang: 'ru', size: Math.min(opts.size || 30, 200) };
   if (opts.query) params.query = opts.query;
   const cat = opts.cat === undefined ? CAT_COMPONENTS : opts.cat;
   if (cat) params.cat = cat;
@@ -90,7 +108,7 @@ async function search(opts = {}) {
   }
   if (opts.condition === 'used') params.cnd = 1;
   if (opts.condition === 'new') params.cnd = 2;
-  const data = await getJSON(`${API}?${qs(params)}`, { ttl: 5 * 60 * 1000 });
+  const data = await getJSON(`${API}?${qs(params)}`, { ttl: opts.noCache ? 0 : 5 * 60 * 1000 });
   const ads = (data.ads || []).filter((a) => a.type !== 'buy');
   const next = ((data.pagination && data.pagination.pages) || []).find((p) => p.label === 'next');
   return { items: ads.map(normalize), total: data.total || 0, rates: ratesFromAds(data.ads), next: next ? next.token : null };
@@ -155,4 +173,4 @@ async function item(id) {
   return data && data.result ? normalize(data.result) : null;
 }
 
-module.exports = { search, count, usedFor, ratesFromAds, isJunk, isMulti, item, normalize, CAT_COMPONENTS, CAT_COMPUTERS };
+module.exports = { adGpuKey, search, count, usedFor, ratesFromAds, isJunk, isMulti, item, normalize, CAT_COMPONENTS, CAT_COMPUTERS };

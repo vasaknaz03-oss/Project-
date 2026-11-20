@@ -78,8 +78,11 @@ async function getJSON(url, { ttl = 15 * 60 * 1000, timeout = 15000, headers = {
           if (!altFetch || e.status !== undefined) throw e;
           data = await fetchOnce(url, timeout, headers, true);
         }
-        cache.set(url, { t: Date.now(), data });
-        if (cache.size > 3000) cache.delete(cache.keys().next().value);
+        // ttl 0 — не кэшировать (большие постраничные выгрузки не должны занимать память)
+        if (ttl > 0) {
+          cache.set(url, { t: Date.now(), data });
+          if (cache.size > 3000) cache.delete(cache.keys().next().value);
+        }
         return data;
       } catch (e) {
         lastErr = e;
