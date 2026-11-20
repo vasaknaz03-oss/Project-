@@ -477,6 +477,9 @@ async function route(req, res, url) {
     store.set(cacheKey, { total: r.total, summary });
     return send(res, 200, summary);
   }
+  if (pathname === '/api/oc/search') {
+    return send(res, 200, await require('./news').searchArticles(p.get('q')));
+  }
   if (pathname === '/api/youtube') {
     return send(res, 200, await youtube.search(p.get('q'), { comments: p.get('comments') !== '0' }));
   }

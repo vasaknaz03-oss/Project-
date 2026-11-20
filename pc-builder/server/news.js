@@ -99,4 +99,25 @@ async function list({ src = '', topic = '', q = '' } = {}) {
   return { items: items.slice(0, 150), sources: src ? sources : sources, feeds: FEEDS.map(({ id, name }) => ({ id, name })), topics: TOPICS.map(({ id, name }) => ({ id, name })) };
 }
 
-module.exports = { list, parse, FEEDS, TOPICS };
+/**
+ * Поиск статей и обсуждений о разгоне по открытым лентам: поиск Хабра, свежие темы форума Overclock.net,
+ * новости Overclockers.ru, 3DNews и других (по словам запроса). Без ключей и без обхода защиты сайтов.
+ */
+async function searchArticles(q) {
+  q = String(q || '').trim().slice(0, 120);
+  if (!q) return { items: [] };
+  const words = q.toLowerCase().split(/\s+/).filter((w) => w.length > 1);
+  const hit = (it) => words.every((w) => `${it.title} ${it.summary}`.toLowerCase().includes(w));
+  const [habr, ocnet, feeds] = await Promise.all([
+    getText(`https://habr.com/ru/rss/search/?q=${encodeURIComponent(q)}&target_type=posts&order=relevance`, { ttl: 6 * 60 * 60 * 1000, timeout: 15000 })
+      .then((x) => parse(x, { id: 'habr', name: 'Хабр' })).catch(() => []),
+    getText('https://www.overclock.net/forums/-/index.rss', { ttl: 30 * 60 * 1000, timeout: 15000 })
+      .then((x) => parse(x, { id: 'ocnet', name: 'Overclock.net (форум, англ.)', en: true }).filter(hit)).catch(() => []),
+    list({ q }).then((r) => r.items).catch(() => []),
+  ]);
+  const seen = new Set();
+  const items = [...habr.slice(0, 15), ...ocnet, ...feeds].filter((it) => !seen.has(it.link) && seen.add(it.link));
+  return { items: items.slice(0, 40) };
+}
+
+module.exports = { list, parse, searchArticles, FEEDS, TOPICS };

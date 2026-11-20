@@ -1,11 +1,19 @@
 // Страница «Разгон»: короткие понятные гайды по разгону и андервольтингу, проверенные ссылки на авторов
 // и инструменты, свежие материалы о разгоне из новостных лент.
-import { el, icon, api } from './util.js';
+import { el, icon, api, copyText, toast } from './util.js';
 import { newsCards } from './news.js';
+import { state } from './state.js';
+import { researchBlock, youtubeBlock } from './ai.js';
+import { BIOS, PLATFORMS, vendorOf, platformOf, memoOf } from './ocdata.js';
 
 let root = null;
 let fresh = null;
 let open = 'start';
+let tab = 'memo';
+let vendorSel = null;
+let biosSide = 'amd';
+const memo = { platform: null, vendor: null, mem: null };
+const search = { q: '', items: null, loading: false, shown: '' };
 
 const SECTIONS = [
   {
@@ -140,6 +148,9 @@ const AUTHORS = [
   { name: 'Гайд по разгону DDR4 (integralfx)', text: 'Подробная пошаговая инструкция по таймингам (англ., GitHub)', url: 'https://github.com/integralfx/MemTestHelper/blob/oc-guide/DDR4%20OC%20Guide.md' },
   { name: 'Overclockers.ru', text: 'Статьи, блоги и форум о разгоне на русском', url: 'https://overclockers.ru/' },
   { name: 'Overclock.net', text: 'Крупнейший форум оверклокеров: темы по каждой плате и памяти (англ.)', url: 'https://www.overclock.net/' },
+  { name: 'r/overclocking', text: 'Reddit: вопросы и результаты разгона по конкретным процессорам и памяти (англ.)', url: 'https://www.reddit.com/r/overclocking/' },
+  { name: 'Конференция iXBT', text: 'Темы владельцев плат и процессоров, разгон на русском', url: 'https://forum.ixbt.com/' },
+  { name: 'DRAM Calculator for Ryzen (1usmus)', text: 'Калькулятор таймингов DDR4 для AM4 (на AM5 не рассчитан)', url: 'https://www.techpowerup.com/download/ryzen-dram-calculator/' },
 ];
 
 const TOOLS = [
@@ -150,6 +161,9 @@ const TOOLS = [
   { name: 'y-cruncher', url: 'http://www.numberworld.org/y-cruncher/' },
   { name: 'MemTest86', url: 'https://www.memtest86.com/' },
   { name: 'Cinebench', url: 'https://www.maxon.net/en/cinebench' },
+  { name: 'Thaiphoon Burner (чипы памяти)', url: 'http://www.softnology.biz/' },
+  { name: 'TestMem5', url: 'https://github.com/CoolCmd/TestMem5' },
+  { name: 'CoreCycler (Curve Optimizer по ядрам)', url: 'https://github.com/sp00n/corecycler' },
 ];
 
 export function initOc(node) {
@@ -171,28 +185,204 @@ function block(b) {
   return null;
 }
 
+// ------------------------------------------------------------------ вкладки
+
+const TABS = [
+  ['memo', 'Памятка для моей сборки', 'check'],
+  ['bios', 'BIOS по производителям', 'board'],
+  ['calc', 'Калькулятор таймингов', 'ram'],
+  ['guides', 'Гайды', 'book'],
+  ['links', 'Авторы и инструменты', 'external'],
+];
+
 function render() {
-  const sec = SECTIONS.find((s) => s.id === open) || SECTIONS[0];
   root.replaceChildren(
     el('div.page-head', el('div',
       el('h1', 'Разгон и настройка'),
-      el('p', 'Короткие понятные гайды: профиль памяти, Curve Optimizer, андервольт процессора и видеокарты, проверка стабильности. Подробности — у авторов и на форумах по ссылкам ниже.'))),
-    el('div.notice', icon('alert'), el('div', el('b', 'Разгон — на свой риск. '), 'Включение EXPO/XMP и андервольт безопасны, но поломки из-за повышения напряжений производители обычно не считают гарантийным случаем. Меняйте настройки постепенно и следите за температурами.')),
-    el('div.oc-tabs', SECTIONS.map((s) => el('button.oc-tab', { class: s.id === open ? 'on' : '', type: 'button', onclick: () => { open = s.id; render(); } }, icon(s.icon), s.title))),
-    el('div.card.oc-section', { key: sec.id },
+      el('p', 'Поиск по статьям и форумам о разгоне, пошаговая памятка под вашу сборку, где что находится в BIOS ASUS, Gigabyte, MSI, ASRock и других, калькулятор таймингов памяти.'))),
+    el('div.notice.compact', icon('alert'), el('div', el('b', 'Разгон — на свой риск. '), 'Профиль EXPO/XMP и андервольт безопасны; повышение напряжений производители обычно не считают гарантийным случаем. Меняйте по одному параметру и следите за температурами.')),
+    searchCard(),
+    el('div.oc-tabs', TABS.map(([id, label, ic]) => el('button.oc-tab', { class: id === tab ? 'on' : '', type: 'button', onclick: () => { tab = id; render(); } }, icon(ic), label))),
+    el('div.oc-view', { 'data-tab': tab },
+      tab === 'memo' ? memoView() : tab === 'bios' ? biosView() : tab === 'calc' ? calcView() : tab === 'guides' ? guidesView() : linksView()));
+}
+
+// ------------------------------------------------------------------ поиск по источникам
+
+function searchCard() {
+  const input = el('input.input', {
+    type: 'search', value: search.q, placeholder: 'Что разогнать? Например: Ryzen 7 7800X3D Curve Optimizer, DDR5 Hynix 6400, RTX 4070 андервольт',
+    oninput: (e) => (search.q = e.target.value),
+    onkeydown: (e) => { if (e.key === 'Enter') go(); },
+  });
+  const go = async () => {
+    const q = search.q.trim();
+    if (!q) return;
+    search.shown = q;
+    search.loading = true;
+    search.items = null;
+    render();
+    try {
+      search.items = (await api('/api/oc/search?q=' + encodeURIComponent(q))).items;
+    } catch {
+      search.items = [];
+    }
+    search.loading = false;
+    render();
+  };
+  const q = search.shown;
+  const e = encodeURIComponent;
+  return el('div.card.oc-search',
+    el('div.row', { style: { gap: '8px' } }, el('div.search-input', icon('search'), input), el('button.btn.btn-primary', { onclick: go }, 'Искать')),
+    q ? el('div.oc-results',
+      el('div.ext-links', el('span.dim', 'Искать на форумах:'),
+        el('a', { href: `https://www.google.com/search?q=${e(q + ' site:forums.overclockers.ru')}`, target: '_blank', rel: 'noopener' }, 'Overclockers.ru'),
+        el('a', { href: `https://www.google.com/search?q=${e(q + ' site:forum.ixbt.com')}`, target: '_blank', rel: 'noopener' }, 'iXBT'),
+        el('a', { href: `https://www.overclock.net/search/?q=${e(q)}`, target: '_blank', rel: 'noopener' }, 'Overclock.net'),
+        el('a', { href: `https://www.reddit.com/r/overclocking/search/?q=${e(q)}`, target: '_blank', rel: 'noopener' }, 'r/overclocking'),
+        el('a', { href: `https://www.youtube.com/results?search_query=${e(q + ' разгон')}`, target: '_blank', rel: 'noopener' }, 'YouTube')),
+      el('div.oc-res-grid',
+        el('div',
+          el('div.panel-title', 'Статьи и обсуждения'),
+          search.loading ? el('div.row', el('div.spinner.inline'), el('span.muted', 'Ищем на Хабре, Overclock.net, Overclockers.ru, 3DNews…'))
+            : search.items && search.items.length ? newsCards(search.items.slice(0, 16), { compact: true })
+              : el('p.muted', 'В открытых лентах ничего не нашлось — попробуйте другие слова или кнопки поиска по форумам выше.')),
+        el('div', { style: { display: 'grid', gap: '12px', alignContent: 'start' } },
+          researchBlock(q, { mode: 'oc', title: 'ИИ: опыт людей с форумов и из гайдов' }),
+          youtubeBlock(q + ' разгон', { title: 'Видео-гайды' })))) : null);
+}
+
+// ------------------------------------------------------------------ памятка
+
+function currentParts() {
+  const r = state.result;
+  const v = r && r.variants && r.variants.find((x) => x.id === state.variant);
+  return (v && v.build && v.build.parts) || {};
+}
+
+function memoView() {
+  const parts = currentParts();
+  if (memo.platform == null) memo.platform = platformOf(parts.cpu) || 'am5';
+  if (memo.vendor == null) memo.vendor = vendorOf(parts.motherboard) || 'asus';
+  if (memo.mem == null) memo.mem = (parts.ram && parts.ram.specs && parts.ram.specs.type) || (PLATFORMS[memo.platform].mem);
+  const sel = (key, options, label) => el('div.field', el('label', label),
+    el('select.select', { onchange: (e) => { memo[key] = e.target.value; render(); } },
+      options.map(([v, l]) => el('option', { value: v, selected: memo[key] === v }, l))));
+  const m = memoOf(memo.platform, memo.vendor, memo.mem, parts);
+  const text = () => [m.title, '', ...m.steps.map((st, i) => `${i + 1}. ${st.title}\n   ${st.text.join('\n   ')}`), '', 'Безопасные пределы:', ...m.limits.map((x) => '- ' + x)].join('\n');
+  return el('div.card.oc-section',
+    el('h2', icon('check'), ' Памятка по разгону'),
+    parts.cpu ? el('p.dim.small', 'Подставлено из текущей сборки: ', [parts.cpu, parts.motherboard, parts.ram].filter(Boolean).map((x) => x.name).join(' · '), '. Можно поменять.') : el('p.dim.small', 'Выберите платформу, производителя платы и тип памяти — или подберите сборку, и памятка заполнится сама.'),
+    el('div.memo-pick',
+      sel('platform', Object.entries(PLATFORMS).map(([k, x]) => [k, x.name]), 'Процессор и платформа'),
+      sel('vendor', Object.entries(BIOS).map(([k, x]) => [k, x.short]), 'Производитель материнской платы'),
+      sel('mem', [['DDR5', 'DDR5'], ['DDR4', 'DDR4']], 'Память')),
+    el('h3', m.title),
+    el('ol.memo-steps', m.steps.map((st) => el('li',
+      el('b', st.title),
+      st.text.map((t) => el('div', t)),
+      st.path ? el('div.bios-path', icon('board'), el('span', st.path)) : null))),
+    el('div.oc-block', el('h4', 'Безопасные пределы'), el('ul.oc-tips', m.limits.map((t) => el('li', t)))),
+    el('div.row', { style: { gap: '8px', marginTop: '12px' } },
+      el('button.btn.btn-sm', { onclick: async () => { await copyText(text()); toast('Памятка скопирована'); } }, icon('copy'), 'Скопировать памятку'),
+      el('a.btn.btn-sm.btn-ghost', { href: BIOS[memo.vendor].support, target: '_blank', rel: 'noopener' }, icon('external'), 'Руководство и BIOS для платы')));
+}
+
+// ------------------------------------------------------------------ BIOS по производителям
+
+function biosView() {
+  const id = vendorSel || vendorOf(currentParts().motherboard) || 'asus';
+  const v = BIOS[id];
+  const side = v.amd && v.intel ? biosSide : v.amd ? 'amd' : 'intel';
+  const rows = [
+    ['Вход в BIOS', v.enter], ['Простой / расширенный режим', v.modes], v.search ? ['Поиск по пунктам', v.search] : null, ['Сохранить и выйти', v.save],
+    ...(v[side] || []).map(([a, b]) => [a, b]),
+    ['Вентиляторы', v.fans], ['Resizable BAR', v.rebar], ['Сохранить свой профиль', v.profiles],
+    ['Обновить BIOS', v.flash], ['Обновить без процессора / при сбое', v.flashback], ['Сброс настроек (CMOS)', v.cmos],
+  ].filter(Boolean);
+  return el('div.card.oc-section',
+    el('h2', icon('board'), ' Где что в BIOS'),
+    el('p.dim.small', 'Названия пунктов немного отличаются в зависимости от модели и версии BIOS. Если пункта нет на месте — включите расширенный режим, воспользуйтесь поиском (если он есть) или откройте руководство к своей плате: ссылка внизу.'),
+    el('div.vendor-chips', Object.entries(BIOS).map(([k, x]) => el('button.chip.toggle-chip', { class: k === id ? 'on' : '', type: 'button', onclick: () => { vendorSel = k; render(); } }, x.short))),
+    v.amd && v.intel ? el('div.seg', { style: { margin: '10px 0' } },
+      el('button', { type: 'button', class: side === 'amd' ? 'on' : '', onclick: () => { biosSide = 'amd'; render(); } }, 'Платы для AMD'),
+      el('button', { type: 'button', class: side === 'intel' ? 'on' : '', onclick: () => { biosSide = 'intel'; render(); } }, 'Платы для Intel')) : null,
+    el('p.oc-intro', v.look),
+    el('table.tbl.oc-table.bios-table', el('tbody', rows.map(([a, b]) => el('tr', el('td', el('b', a)), el('td', b))))),
+    v.note ? el('div.notice', icon('info'), el('div', v.note)) : null,
+    el('div.row', { style: { gap: '8px', marginTop: '12px' } },
+      el('a.btn.btn-sm', { href: v.support, target: '_blank', rel: 'noopener' }, icon('external'), `Поддержка ${v.short}: BIOS и руководства`),
+      v.sources ? el('span.dim.small', 'Сверено с: ', v.sources.map((s2, i) => [i ? ', ' : '', el('a', { href: s2.url, target: '_blank', rel: 'noopener' }, s2.name)])) : null));
+}
+
+// ------------------------------------------------------------------ калькулятор таймингов
+
+const calc = { type: 'DDR5', mts: 6000, cl: 30, trcd: 38, trp: 38, tras: 76, trfc: 884, target: 6400 };
+
+function calcView() {
+  const num = (key, label, step = 1, hint) => el('div.field', el('label', label),
+    el('input.input', { type: 'number', min: '0', step, value: calc[key], oninput: (e) => { calc[key] = +e.target.value || 0; out.replaceChildren(...results()); } }),
+    hint ? el('div.dim.small', hint) : null);
+  const out = el('div.calc-out');
+  const ns = (clk, mts = calc.mts) => (mts ? (clk * 2000) / mts : 0);
+  const clkAt = (nsv, mts) => Math.ceil((nsv * mts) / 2000);
+  const f = (v) => v.toFixed(2).replace('.', ',');
+  function results() {
+    const tl = ns(calc.cl);
+    const rfcNs = ns(calc.trfc);
+    const trc = calc.tras + calc.trp;
+    const rows = [
+      ['Реальная задержка (CL)', `${f(tl)} нс`, tl <= 10.5 ? 'отлично' : tl <= 12.5 ? 'хорошо' : 'обычно', 'CL × 2000 / частота. Меньше — быстрее. Сравнивайте комплекты по ней, а не по одному CL: 6000 CL30 = 6400 CL32 = 10 нс.'],
+      ['tRCD / tRP в нс', `${f(ns(calc.trcd))} / ${f(ns(calc.trp))} нс`, '', 'Задержки открытия и закрытия строки.'],
+      ['tRC (минимум)', `${trc} тактов`, '', 'tRC = tRAS + tRP. Ставить меньше нельзя.'],
+      ['tRFC в нс', `${f(rfcNs)} нс`, '', 'Обновление ячеек. Сильно влияет на задержки; минимум зависит от чипов памяти — смотрите таблицы по чипам в гайдах (вкладка «Авторы и инструменты»).'],
+    ];
+    const t = calc.target;
+    const keep = t ? [['CL', calc.cl], ['tRCD', calc.trcd], ['tRP', calc.trp], ['tRAS', calc.tras], ['tRFC', calc.trfc]].map(([n, v]) => [n, clkAt(ns(v), t)]) : [];
+    return [
+      el('table.tbl.oc-table', el('tbody', rows.map(([a, b, c, d]) => el('tr', el('td', el('b', a)), el('td', el('b', b), c ? el('span.chip.ok', { style: { marginLeft: '6px' } }, c) : null), el('td.dim.small', d))))),
+      t ? el('div.oc-block', el('h4', `Те же задержки на ${t} МТ/с`),
+        el('p.dim.small', 'Чтобы при повышении частоты не стало хуже, задержка в наносекундах должна остаться прежней: тактов нужно больше. Это стартовые значения — дальше проверка стабильности и постепенное уменьшение.'),
+        el('div.row.wrap', { style: { gap: '6px' } }, keep.map(([n, v]) => el('span.chip', `${n} ${v}`)))) : null,
+    ];
+  }
+  out.replaceChildren(...results());
+  return el('div.card.oc-section',
+    el('h2', icon('ram'), ' Калькулятор таймингов памяти'),
+    el('p.oc-intro', 'Введите частоту и тайминги из профиля EXPO/XMP (их видно в BIOS, ZenTimings или на наклейке модуля). Калькулятор переведёт их в наносекунды, проверит tRC и посчитает стартовые тайминги для другой частоты.'),
+    el('div.calc-grid',
+      el('div.field', el('label', 'Тип'), el('select.select', { onchange: (e) => { calc.type = e.target.value; render(); } }, ['DDR5', 'DDR4'].map((x) => el('option', { value: x, selected: calc.type === x }, x)))),
+      num('mts', 'Частота, МТ/с (6000, 3600…)', 100), num('cl', 'CL'), num('trcd', 'tRCD'), num('trp', 'tRP'), num('tras', 'tRAS'), num('trfc', 'tRFC', 1, 'в тактах'), num('target', 'Пересчитать на частоту', 100)),
+    out,
+    el('div.oc-block', el('h4', 'Как разгонять по шагам'), el('ol.oc-steps', [
+      'Узнайте чипы памяти: Thaiphoon Burner (бесплатная версия) или HWiNFO → SPD. Для DDR5 лучшие для разгона — SK Hynix A-die и M-die, для DDR4 — Samsung B-die.',
+      'Включите EXPO/XMP и проверьте стабильность (TestMem5 / MemTest86, 1–2 часа). Без этого шага дальше не идите.',
+      'Поднимайте частоту на шаг (DDR5 +200 МТ/с, DDR4 +100), тайминги — по калькулятору выше. Тест после каждого шага.',
+      'Затем уменьшайте tRFC и вторичные тайминги по таблицам для ваших чипов. Напряжения — только в безопасных пределах из памятки.',
+    ].map((t) => el('li', t)))));
+}
+
+function guidesView() {
+  const sec = SECTIONS.find((x) => x.id === open) || SECTIONS[0];
+  return el('div',
+    el('div.seg.guide-tabs', SECTIONS.map((x) => el('button', { type: 'button', class: x.id === open ? 'on' : '', onclick: () => { open = x.id; render(); } }, x.title))),
+    el('div.card.oc-section',
       el('h2', icon(sec.icon), ' ', sec.title),
       el('p.oc-intro', sec.intro),
-      el('div.oc-blocks', sec.blocks.map(block))),
-    el('div.layout-2',
-      el('div',
-        el('div.card',
-          el('h3', icon('flame'), ' Свежие материалы о разгоне'),
-          fresh == null ? el('div.row', el('div.spinner', { style: { width: '18px', height: '18px', borderWidth: '2px' } }), el('span.muted', 'Загружаем…'))
-            : fresh.length ? newsCards(fresh.slice(0, 12), { compact: true })
-              : el('p.muted', 'В новостных лентах сейчас нет материалов о разгоне — загляните позже или в раздел «Новости».'))),
-      el('div.side',
-        el('div.card', el('h3', icon('book'), ' Авторы и гайды'),
-          el('div.oc-links', AUTHORS.map((a) => el('a.oc-link', { href: a.url, target: '_blank', rel: 'noopener' }, el('b', a.name), el('span', a.text))))),
-        el('div.card', el('h3', icon('gear'), ' Инструменты'),
-          el('div.row.wrap', { style: { gap: '6px' } }, TOOLS.map((t) => el('a.chip', { href: t.url, target: '_blank', rel: 'noopener' }, t.name, ' ↗')))))));
+      el('div.oc-blocks', sec.blocks.map(block))));
+}
+
+function linksView() {
+  return el('div.layout-2',
+    el('div',
+      el('div.card',
+        el('h3', icon('flame'), ' Свежие материалы о разгоне'),
+        fresh == null ? el('div.row', el('div.spinner.inline'), el('span.muted', 'Загружаем…'))
+          : fresh.length ? newsCards(fresh.slice(0, 12), { compact: true })
+            : el('p.muted', 'В новостных лентах сейчас нет материалов о разгоне — загляните позже или в раздел «Новости».'))),
+    el('div.side',
+      el('div.card', el('h3', icon('book'), ' Авторы, форумы и гайды'),
+        el('div.oc-links', AUTHORS.map((a) => el('a.oc-link', { href: a.url, target: '_blank', rel: 'noopener' }, el('b', a.name), el('span', a.text))))),
+      el('div.card', el('h3', icon('gear'), ' Инструменты'),
+        el('div.row.wrap', { style: { gap: '6px' } }, TOOLS.map((t) => el('a.chip', { href: t.url, target: '_blank', rel: 'noopener' }, t.name, ' ↗'))))));
 }
