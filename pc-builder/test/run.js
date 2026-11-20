@@ -454,6 +454,14 @@ test('ИИ-поиск: продолжение после pause_turn, цитат�
   await assert.rejects(() => ai.research('x', { mode: 'free' }), /отказалась/);
 });
 
+test('умный поиск: слово в запросе важнее открытого раздела', async () => {
+  const query = require('../server/query');
+  assert.strictEqual((await query.parse('ноутбук игровой', 'videocard')).section, 'notebook');
+  assert.strictEqual((await query.parse('rtx 5070', 'videocard')).section, 'videocard');
+  assert.strictEqual((await query.parse('ddr5 32gb', 'nb_ram')).section, 'nb_ram', 'в разделе SO-DIMM «ddr5» не уводит в память для ПК');
+  assert.strictEqual((await query.parse('so-dimm 16', 'dram')).section, 'nb_ram');
+});
+
 async function live() {
   if (!process.argv.includes('--live')) return;
   console.log('Живой подбор (Onliner)');

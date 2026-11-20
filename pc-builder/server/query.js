@@ -105,8 +105,16 @@ async function rangeId(schema, param, num) {
  */
 async function parse(q, hint) {
   let t = normalize(q);
+  // Явное слово в запросе («ноутбук», «ssd», «монитор») важнее раздела, который открыт сейчас:
+  // в «Видеокартах» запрос «ноутбук игровой» — про ноутбуки
+  const named = matchSection(t);
   let section = hint && Catalog.byId[hint] ? hint : null;
-  if (!section) section = matchSection(t);
+  if (named && named !== section) {
+    // Разделы с общим каталогом Onliner (память ПК и SO-DIMM): более точный — «для ноутбуков» — выигрывает
+    const same = section && Catalog.byId[section].onliner === Catalog.byId[named].onliner;
+    if (!same || /^nb_/.test(named)) section = named;
+  }
+  if (!section) section = named;
   if (!section) return null;
   const sec = Catalog.byId[section];
   const schema = sec.onliner;

@@ -649,7 +649,9 @@ async function route(req, res, url) {
         p2.set('smart', '0');
         let r;
         if (src === 'onliner') {
-          p2.set('f', JSON.stringify({ ...smart.filters, ...parseFilters(p) }));
+          // Фильтры пользователя — только если раздел не поменялся (фильтры видеокарт у ноутбуков Onliner отвергает с ошибкой 422)
+          const own = smart.section === p.get('cat') ? parseFilters(p) : {};
+          p2.set('f', JSON.stringify({ ...smart.filters, ...own }));
           r = smart.rest ? await searchOnlinerText(sec, smart.rest, p2) : await searchOnliner('', p2);
         } else {
           const kq = kufarQuery(sec, query.kufarText(q0), p2);
