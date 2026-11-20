@@ -4,8 +4,8 @@
 //
 // Источники (только открытые API и RSS, страницы — обычными запросами, без обхода защиты сайтов):
 //  - отзывы покупателей Onliner (если запрос похож на товар);
-//  - статьи и обсуждения: поиск Хабра, форум Overclock.net, новостные ленты 3DNews, Overclockers.ru,
-//    Onliner, Tom's Hardware — с текстом самих статей;
+//  - статьи и обсуждения: поиск Хабра, форум Overclock.net и 20 новостных лент (3DNews, iXBT, Overclockers.ru,
+//    Onliner, Tom's Hardware, TechPowerUp…) — с текстом самих статей;
 //  - комментарии зрителей к видео-обзорам (если есть ключ YouTube).
 // Модель видит пронумерованные материалы и ставит ссылки [n] — так видно, откуда каждое утверждение.
 
@@ -13,7 +13,7 @@ const llm = require('./llm');
 const { getText } = require('./http');
 
 // Страницы каких сайтов программа читает сама (остальные — только заголовок и анонс из ленты)
-const READABLE = /^https:\/\/(?:www\.)?(habr\.com|3dnews\.ru|overclockers\.ru|tech\.onliner\.by|overclock\.net|tomshardware\.com|ixbt\.com)\//i;
+const READABLE = /^https:\/\/(?:www\.)?(habr\.com|3dnews\.ru|overclockers\.ru|tech\.onliner\.by|overclock\.net|tomshardware\.com|ixbt\.com|ferra\.ru|hi-tech\.mail\.ru|techpowerup\.com|wccftech\.com|pcgamer\.com|kitguru\.net|tweaktown\.com|hothardware\.com)\//i;
 
 const STOP = new Set(['видеокарта', 'видеокарты', 'процессор', 'процессора', 'материнская', 'плата', 'память', 'оперативная',
   'блок', 'питания', 'корпус', 'кулер', 'ssd', 'hdd', 'накопитель', 'gb', 'гб', 'tb', 'тб', 'oc', 'edition', 'обзор', 'отзывы',

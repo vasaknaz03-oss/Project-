@@ -120,6 +120,24 @@ async function getJSON(url, { ttl = 15 * 60 * 1000, timeout = 15000, headers = {
   }
 }
 
+/**
+ * Текст ответа в его кодировке: часть русских сайтов (например 4PDA) отдаёт windows-1251.
+ * Кодировку берём из заголовка Content-Type, иначе из <?xml encoding="…"?> или <meta charset>.
+ */
+function decodeBody(buf, contentType = '') {
+  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf);
+  let cs = (String(contentType).match(/charset=["']?([\w-]+)/i) || [])[1];
+  if (!cs) {
+    const head = new TextDecoder('latin1').decode(bytes.subarray(0, 1024));
+    cs = (head.match(/<\?xml[^>]*encoding=["']([\w-]+)["']/i) || head.match(/<meta[^>]*charset=["']?([\w-]+)/i) || [])[1];
+  }
+  try {
+    return new TextDecoder(cs || 'utf-8').decode(bytes);
+  } catch {
+    return new TextDecoder('utf-8').decode(bytes);
+  }
+}
+
 /** GET текста (HTML) с кэшем — для данных, которых нет в JSON API. */
 async function getText(url, { ttl = 12 * 60 * 60 * 1000, timeout = 20000 } = {}) {
   const key = 'text:' + url;
@@ -132,14 +150,14 @@ async function getText(url, { ttl = 12 * 60 * 60 * 1000, timeout = 20000 } = {})
     try {
       const res = await fetch(url, { signal: ctrl.signal, headers: { 'User-Agent': USER_AGENT, 'Accept-Language': 'ru' } });
       if (!res.ok) throw new HttpError(`HTTP ${res.status} для ${new URL(url).host}`, res.status);
-      const data = await res.text();
+      const data = decodeBody(await res.arrayBuffer(), res.headers.get('content-type'));
       cache.set(key, { t: Date.now(), data });
       return data;
     } catch (e) {
       if (e.name === 'AbortError') throw new HttpError(`Таймаут запроса к ${new URL(url).host}`, 0);
       if (altFetch && e.status === undefined) {
         const res = await altFetch(url, { headers: { 'User-Agent': USER_AGENT } });
-        const data = await res.text();
+        const data = decodeBody(await res.arrayBuffer(), res.headers.get('content-type'));
         cache.set(key, { t: Date.now(), data });
         return data;
       }
@@ -194,4 +212,4 @@ function qs(params) {
   return parts.join('&');
 }
 
-module.exports = { request, setRemoteFetch, getJSON, getText, clearCache, qs, HttpError, setAltFetch };
+module.exports = { request, setRemoteFetch, getJSON, getText, decodeBody, clearCache, qs, HttpError, setAltFetch };

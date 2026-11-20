@@ -628,7 +628,8 @@ async function route(req, res, url) {
   if (pathname === '/api/news') {
     const src = (p.get('src') || '').replace(/[^\w-]/g, '').slice(0, 30);
     const topic = (p.get('topic') || '').replace(/[^\w-]/g, '').slice(0, 30);
-    return send(res, 200, await require('./news').list({ src, topic, q: (p.get('q') || '').slice(0, 100) }));
+    const lang = ['ru', 'en'].includes(p.get('lang')) ? p.get('lang') : '';
+    return send(res, 200, await require('./news').list({ src, lang, topic, q: (p.get('q') || '').slice(0, 100) }));
   }
 
   // Подбор ноутбука под бюджет

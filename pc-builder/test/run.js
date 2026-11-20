@@ -610,6 +610,24 @@ test('локальная модель: текст статьи без меню �
   assert.ok(total <= 3000 + 10, 'в бюджете: ' + total);
 });
 
+test('новости: 20 лент на двух языках; лента в windows-1251 (4PDA) читается без «кракозябр»', () => {
+  const news = require('../server/news');
+  const { decodeBody } = require('../server/http');
+  assert.ok(news.FEEDS.length >= 20, 'источников: ' + news.FEEDS.length);
+  assert.ok(news.FEEDS.every((f) => ['ru', 'en'].includes(f.lang) && /^https:\/\//.test(f.url)));
+  assert.strictEqual(new Set(news.FEEDS.map((f) => f.id)).size, news.FEEDS.length, 'id не повторяются');
+  // «Привет» в windows-1251, кодировка указана только в <?xml … ?>
+  const head = Buffer.from('<?xml version="1.0" encoding="windows-1251"?><rss><channel><item><title>', 'latin1');
+  const body = Buffer.from([0xcf, 0xf0, 0xe8, 0xe2, 0xe5, 0xf2]);
+  const tail = Buffer.from('</title><link>https://4pda.to/a</link></item></channel></rss>', 'latin1');
+  const xml = decodeBody(Buffer.concat([head, body, tail]), 'text/xml');
+  const items = news.parse(xml, { id: '4pda', name: '4PDA', lang: 'ru' });
+  assert.strictEqual(items[0].title, 'Привет');
+  // Кодировка из заголовка ответа важнее
+  assert.strictEqual(decodeBody(body, 'text/html; charset=windows-1251'), 'Привет');
+  assert.strictEqual(decodeBody(Buffer.from('Привет'), ''), 'Привет', 'по умолчанию UTF-8');
+});
+
 async function live() {
   if (!process.argv.includes('--live')) return;
   console.log('Живой подбор (Onliner)');
