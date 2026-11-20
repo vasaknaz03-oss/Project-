@@ -806,3 +806,16 @@ a.cite:hover { background: var(--accent); color: #fff; }
 details.also-links { margin-top: 10px; }
 details.also-links summary { cursor: pointer; color: var(--text-2); font-size: 13px; }
 details.also-links[open] summary { margin-bottom: 6px; }
+
+/* ---------- локальная модель в «Настройках» ---------- */
+.llm-block { margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.llm-steps { margin: 6px 0 10px; padding-left: 20px; font-size: 13px; color: var(--text-2); }
+.llm-steps li { margin: 2px 0; }
+.llm-out { margin-top: 8px; }
+.llm-out .select { max-width: 320px; }
+.llm-pull { display: grid; gap: 6px; max-width: 420px; }
+.llm-bar { height: 8px; border-radius: 6px; background: var(--surface-3); overflow: hidden; }
+.llm-bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .4s ease; }
+details.ai-alt { margin: 10px 0 6px; }
+details.ai-alt > summary { cursor: pointer; font-weight: 600; }
+details.ai-alt[open] > summary { margin-bottom: 6px; }

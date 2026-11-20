@@ -1,5 +1,5 @@
-// ИИ-помощник (Claude + веб-поиск) и YouTube в интерфейсе: выжимка с форумов и обзоров со ссылками,
-// разбор отзывов по смыслу, видео-обзоры с комментариями зрителей.
+// ИИ-помощник (Claude + веб-поиск или локальная модель) и YouTube в интерфейсе: выжимка с форумов и обзоров
+// со ссылками, разбор отзывов по смыслу, видео-обзоры с комментариями зрителей.
 import { el, icon, api } from './util.js';
 
 let status = null;
@@ -19,7 +19,7 @@ const toSettings = () => document.dispatchEvent(new CustomEvent('goto-page', { d
 
 function needKey(what) {
   return el('div.notice', icon('info'), el('div',
-    `${what} Ключ вставляется один раз в «Настройках». `,
+    `${what} Настраивается один раз в «Настройках». `,
     el('button.link-btn', { onclick: toSettings }, 'Открыть настройки')));
 }
 
@@ -79,10 +79,20 @@ function answer(r) {
     r.more && r.more.length ? el('details.ai-more', el('summary', `Ещё найдено (${r.more.length})`),
       el('ul', r.more.map((s) => el('li', el('a', { href: s.url, target: '_blank', rel: 'noopener' }, s.title || s.url), el('span.dim', ' — ' + host(s.url)))))) : null,
     el('div.dim.small', { style: { marginTop: '8px' } },
-      `Собрано ИИ по ${r.searches || 0} ${r.searches === 1 ? 'поиску' : 'поискам'} в интернете`,
-      r.cached ? ' · из сохранённого (сегодня уже искали — повторно не оплачивалось)' : '',
+      r.engine === 'local'
+        ? `Пересказ локальной модели ${r.model || ''} по ${r.searches || 0} ${plural(r.searches || 0, 'материалу', 'материалам', 'материалам')}, найденным программой`
+        : `Собрано ИИ по ${r.searches || 0} ${r.searches === 1 ? 'поиску' : 'поискам'} в интернете`,
+      r.cached ? (r.engine === 'local' ? ' · из сохранённого (сегодня уже спрашивали)' : ' · из сохранённого (сегодня уже искали — повторно не оплачивалось)') : '',
       r.t ? ` · ${new Date(r.t).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : '',
       '. ИИ может ошибаться — важное проверяйте по источникам.'));
+}
+
+function plural(n, one, few, many) {
+  const a = n % 10;
+  const b = n % 100;
+  if (a === 1 && b !== 11) return one;
+  if (a >= 2 && a <= 4 && (b < 12 || b > 14)) return few;
+  return many;
 }
 
 function host(u) {
@@ -101,8 +111,11 @@ export function researchBlock(query, { mode = 'part', title = 'Что пишут
   const out = el('div.ai-out');
   const box = el('div.ai-block', el('div.ai-head', icon('sparkles'), el('b', title)), out);
   const run = async (depth, fresh = false) => {
+    const local = status && status.via && status.via.ai === 'local';
     out.replaceChildren(el('div.row', el('div.spinner.inline'),
-      el('span.muted', depth === 'deep' ? 'ИИ ищет и читает форумы, обзоры и статьи — подробно, это займёт 1–3 минуты…' : 'ИИ ищет на форумах и в обзорах — обычно до минуты…')));
+      el('span.muted', local
+        ? 'Программа собирает отзывы, статьи и обсуждения, а модель на вашем компьютере их читает — на видеокарте до минуты, на процессоре 1–5 минут…'
+        : depth === 'deep' ? 'ИИ ищет и читает форумы, обзоры и статьи — подробно, это займёт 1–3 минуты…' : 'ИИ ищет на форумах и в обзорах — обычно до минуты…')));
     try {
       const r = await api('/api/ai/research', { method: 'POST', body: { query, mode, depth, fresh } });
       out.replaceChildren(answer(r),
@@ -115,7 +128,7 @@ export function researchBlock(query, { mode = 'part', title = 'Что пишут
   };
   aiStatus().then((st) => {
     if (!st.ai) {
-      out.replaceChildren(needKey('ИИ-помощник найдёт и перескажет, что пишут люди на форумах и в обзорах, со ссылками на источники. Нужен ключ Anthropic (платно, по факту использования).'),
+      out.replaceChildren(needKey('ИИ-помощник перескажет, что пишут люди в отзывах, статьях и на форумах, со ссылками на источники. Бесплатно — с моделью на вашем компьютере (Ollama), настраивается за пару минут.'),
         el('div.ext-links', el('span.dim', 'Без ключа можно открыть поиск самому:'),
           el('a', { href: 'https://www.google.com/search?q=' + encodeURIComponent(query + (mode === 'oc' ? ' разгон' : ' отзывы форум')), target: '_blank', rel: 'noopener' }, 'Google ↗'),
           el('a', { href: 'https://www.reddit.com/search/?q=' + encodeURIComponent(query), target: '_blank', rel: 'noopener' }, 'Reddit ↗'),
@@ -124,7 +137,9 @@ export function researchBlock(query, { mode = 'part', title = 'Что пишут
     }
     const lim = st.via && st.via.ai === 'server' && st.limits ? st.limits : null;
     const left = (k) => (lim && lim.limits[k] != null ? Math.max(0, lim.limits[k] - (lim.used[k] || 0)) : null);
-    out.replaceChildren(el('p.dim.small', 'ИИ найдёт обсуждения и обзоры, прочитает их и коротко расскажет главное — со ссылками. «Быстро» — несколько источников, «Подробно» — больше источников и глубже.',
+    out.replaceChildren(el('p.dim.small', st.via && st.via.ai === 'local'
+      ? `Программа найдёт отзывы покупателей, статьи и обсуждения, а модель ${st.model || ''} на вашем компьютере прочитает их и коротко расскажет главное — со ссылками. «Подробно» — больше материалов, дольше.`
+      : 'ИИ найдёт обсуждения и обзоры, прочитает их и коротко расскажет главное — со ссылками. «Быстро» — несколько источников, «Подробно» — больше источников и глубже.',
       lim ? ` Через сервер ПодборПК сегодня осталось: быстро — ${left('research_quick')}, подробно — ${left('research_deep')}. Вопросы, которые уже кто-то задавал, лимит не тратят.` : ''),
       el('div.row', { style: { gap: '8px' } },
         el('button.btn.btn-primary.btn-sm', { onclick: () => run('quick') }, icon('sparkles'), 'Быстро'),
@@ -145,12 +160,12 @@ export function aiReviewsButton(it) {
   const btn = el('button.btn.btn-sm', {
     onclick: async () => {
       btn.disabled = true;
-      out.replaceChildren(el('div.row', el('div.spinner.inline'), el('span.muted', 'ИИ читает отзывы…')));
+      out.replaceChildren(el('div.row', el('div.spinner.inline'), el('span.muted', status && status.via && status.via.ai === 'local' ? 'Модель на вашем компьютере читает отзывы — на процессоре это до пары минут…' : 'ИИ читает отзывы…')));
       try {
         const r = await api('/api/ai/reviews', { method: 'POST', body: { key: it.id, cat: it.category || '', name: it.name } });
         btn.remove();
         out.replaceChildren(el('div.ai-reviews',
-          el('div.verdict.v-good', icon('sparkles'), el('div', el('b', 'ИИ о отзывах: '), r.verdict)),
+          el('div.verdict.v-good', icon('sparkles'), el('div', el('b', 'ИИ об отзывах: '), r.verdict)),
           el('div.ai-cols',
             r.pros.length ? el('div', el('div.panel-title', 'Хвалят'), el('ul', r.pros.map((x) => el('li', x)))) : null,
             r.cons.length ? el('div', el('div.panel-title', 'Жалуются'), el('ul', r.cons.map((x) => el('li', x)))) : null),
@@ -165,7 +180,7 @@ export function aiReviewsButton(it) {
   aiStatus().then((st) => {
     if (!st.ai) {
       btn.disabled = true;
-      btn.title = 'Нужен ключ Anthropic в «Настройках»';
+      btn.title = 'Нужна локальная модель или ключ в «Настройках» → «ИИ-помощник»';
     }
   });
   return el('div.ai-rev-wrap', btn, out);

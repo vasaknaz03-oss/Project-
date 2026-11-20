@@ -472,6 +472,144 @@ test('Kufar «выгодные» для блоков питания: ватты 
   assert.strictEqual(r[r.length - 1], 'Кабель питания');
 });
 
+test('локальная модель (Ollama/LM Studio): поиск модели, выжимка по материалам [n], разбор отзывов JSON, скачивание', async () => {
+  // Ждём предыдущие тесты: они ставят ключ Anthropic в общее хранилище
+  await Promise.all(pending.slice());
+  const http = require('http');
+  const llm = require('../server/llm');
+  const aiLocal = require('../server/aiLocal');
+  const ai = require('../server/ai');
+  const secrets = require('../server/secrets');
+  const seen = [];
+  let thinkUnsupported = true;
+  const ollama = http.createServer((req, res) => {
+    let b = '';
+    req.on('data', (c) => (b += c));
+    req.on('end', () => {
+      const body = b ? JSON.parse(b) : null;
+      seen.push({ path: req.url, body });
+      const json = (code, o) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); };
+      if (req.url === '/api/tags') return json(200, { models: [{ name: 'qwen3:8b', size: 5.2e9 }] });
+      if (req.url === '/api/pull') {
+        res.writeHead(200, { 'Content-Type': 'application/x-ndjson' });
+        res.write(JSON.stringify({ status: 'pulling manifest' }) + '\n');
+        res.write(JSON.stringify({ status: 'downloading', total: 100, completed: 40 }) + '\n');
+        return res.end(JSON.stringify({ status: 'success' }) + '\n');
+      }
+      if (req.url === '/api/chat') {
+        if (body.think !== undefined && thinkUnsupported) return json(400, { error: '"qwen3:8b" does not support thinking' });
+        if (body.format) return json(200, { message: { content: '```json\n{"verdict":"Хорошая тихая карта","pros":["тихая"],"cons":["греется"],"who":"для FullHD","warnings":[]}\n```' }, prompt_eval_count: 10, eval_count: 5 });
+        return json(200, { message: { content: '<think>думаю…</think>## Коротко\nКарта тихая [1], но бывает писк [2].' }, prompt_eval_count: 100, eval_count: 20 });
+      }
+      json(404, { error: 'not found' });
+    });
+  });
+  const lmstudio = http.createServer((req, res) => {
+    let b = '';
+    req.on('data', (c) => (b += c));
+    req.on('end', () => {
+      const body = b ? JSON.parse(b) : null;
+      const json = (code, o) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); };
+      if (req.url === '/v1/models') return json(200, { data: [{ id: 'local-model' }] });
+      if (req.url === '/v1/chat/completions') {
+        if (body.response_format) return json(400, { error: { message: 'response_format not supported' } });
+        return json(200, { model: 'local-model', choices: [{ message: { content: 'Вот ответ: {"verdict":"Норм","pros":"тихая","cons":[],"who":"всем","warnings":[]}' } }], usage: { prompt_tokens: 7, completion_tokens: 3 } });
+      }
+      json(404, { error: 'not found' });
+    });
+  });
+  await new Promise((r) => ollama.listen(0, '127.0.0.1', r));
+  await new Promise((r) => lmstudio.listen(0, '127.0.0.1', r));
+  const oUrl = `http://127.0.0.1:${ollama.address().port}`;
+  const lUrl = `http://127.0.0.1:${lmstudio.address().port}/v1/`;
+  const news = require('../server/news');
+  const onliner = require('../server/providers/onliner');
+  const reviews = require('../server/reviews');
+  const orig = { s: news.searchArticles, o: onliner.search, r: reviews.forProduct };
+  try {
+    // Что за программа по адресу
+    const p1 = await llm.probe(oUrl);
+    assert.strictEqual(p1.kind, 'ollama');
+    assert.deepStrictEqual(p1.models.map((m) => m.id), ['qwen3:8b']);
+    const p2 = await llm.probe(lUrl);
+    assert.strictEqual(p2.kind, 'openai');
+    assert.strictEqual(p2.url, lUrl.replace(/\/v1\/$/, ''), 'адрес без /v1');
+    await assert.rejects(() => llm.probe('http://127.0.0.1:1'), /не отвечает/);
+
+    assert.deepStrictEqual(aiLocal.shortQueries('Видеокарта Gigabyte GeForce RTX 4060 Eagle OC 8GB'), ['rtx 4060', '4060']);
+
+    // Без ключа Anthropic, с локальной моделью — ИИ доступен и отвечает локальная
+    secrets.set({ anthropicKey: '', llmUrl: oUrl, llmModel: 'qwen3:8b', llmKind: 'ollama' });
+    assert.strictEqual(ai.engine(), 'local');
+    assert.strictEqual(ai.modelLabel(), 'qwen3:8b');
+
+    news.searchArticles = async () => ({ items: [
+      { link: 'https://example.org/review-4060', title: 'Обзор RTX 4060', sourceName: 'Пример', summary: 'Карта тихая и холодная, в FullHD тянет всё. '.repeat(3) },
+      { link: 'https://example.org/forum-4060', title: 'Писк дросселей у 4060', sourceName: 'Форум', summary: 'У некоторых владельцев пищат дроссели под нагрузкой. '.repeat(3) },
+    ] });
+    onliner.search = async () => ({ items: [{ id: 'rtx4060eagle', name: 'Gigabyte GeForce RTX 4060 Eagle OC 8GB', reviews: 3, category: 'videocard', url: 'https://catalog.onliner.by/videocard/gigabyte/rtx4060eagle' }] });
+    reviews.forProduct = async () => ({ total: 3, rating: 4.7, items: [{ rating: 5, summary: 'Тихая', pros: 'тихая', cons: 'нет', text: 'Отличная карта' }] });
+
+    const r = await ai.research('Gigabyte GeForce RTX 4060 Eagle OC 8GB', { mode: 'part' });
+    assert.strictEqual(r.engine, 'local');
+    assert.ok(!/think|думаю/.test(r.text), 'размышления модели убраны');
+    assert.ok(/Карта тихая \[1\]/.test(r.text), r.text);
+    assert.strictEqual(r.searches, 3, 'отзывы Onliner + 2 статьи');
+    assert.deepStrictEqual(r.sources.map((s) => s.n), [1, 2], 'источники — те, на которые сослалась модель');
+    assert.ok(/Отзывы покупателей Onliner/.test(r.sources[0].title), r.sources[0].title);
+    assert.strictEqual(r.more.length, 1);
+    const chats = seen.filter((x) => x.path === '/api/chat');
+    assert.strictEqual(chats.length, 2, 'повтор без think после ошибки');
+    assert.strictEqual(chats[1].body.think, undefined);
+    assert.strictEqual(chats[1].body.options.num_ctx, 8192);
+    assert.ok(/\[1\] Отзывы покупателей Onliner/.test(chats[1].body.messages[1].content), 'материалы пронумерованы');
+
+    // Разбор отзывов: JSON-схема в format, ответ в ```json``` всё равно разбирается
+    const sum = await ai.reviewSummary('RTX 4060', [{ rating: 5, summary: 'Тихая', pros: 'тихая', cons: 'греется', text: 'ok' }]);
+    assert.strictEqual(sum.verdict, 'Хорошая тихая карта');
+    assert.deepStrictEqual(sum.cons, ['греется']);
+    assert.ok(seen.some((x) => x.path === '/api/chat' && x.body.format && x.body.format.required.includes('verdict')));
+
+    // OpenAI-совместимый (LM Studio): без response_format — повтор, JSON достаётся из текста
+    secrets.set({ llmUrl: lUrl, llmModel: 'local-model', llmKind: 'openai' });
+    const sum2 = await ai.reviewSummary('RTX 4060', [{ rating: 4, summary: 'ok' }]);
+    assert.strictEqual(sum2.verdict, 'Норм');
+    assert.deepStrictEqual(sum2.pros, ['тихая'], 'строка вместо списка → список');
+
+    // Скачивание модели с прогрессом
+    const prog = [];
+    await llm.pull(oUrl, 'qwen3:4b', (x) => prog.push(x));
+    assert.ok(prog.some((x) => x.total === 100 && x.completed === 40));
+    assert.strictEqual(prog[prog.length - 1].status, 'success');
+
+    // Отключили модель — ИИ снова недоступен
+    secrets.set({ llmModel: '' });
+    assert.strictEqual(ai.engine(), null);
+    thinkUnsupported = false;
+  } finally {
+    news.searchArticles = orig.s;
+    onliner.search = orig.o;
+    reviews.forProduct = orig.r;
+    ollama.close();
+    lmstudio.close();
+  }
+});
+
+test('локальная модель: текст статьи без меню и скриптов; материалы укладываются в бюджет', () => {
+  const aiLocal = require('../server/aiLocal');
+  const html = '<html><nav><p>Меню сайта и ссылки на разделы, которые не нужны модели совсем</p></nav><script>var x=1</script><article><h1>t</h1>'
+    + '<p>Первый абзац статьи про видеокарту, достаточно длинный, чтобы считаться текстом.</p>'
+    + '<p>Второй абзац статьи: температура под нагрузкой 65 градусов, шум низкий.</p>'
+    + '<p>Третий абзац: писк дросселей не замечен, драйверы стабильные.</p></article><footer><p>© Сайт, все права защищены и так далее и тому подобное</p></footer></html>';
+  const t = aiLocal.readable(html);
+  assert.ok(/Первый абзац/.test(t) && /Третий абзац/.test(t), t);
+  assert.ok(!/Меню сайта|var x|права защищены/.test(t), t);
+  const out = aiLocal.fit([{ text: 'a'.repeat(100) }, { text: 'b '.repeat(3000) }, { text: 'c '.repeat(3000) }], 3000);
+  assert.strictEqual(out[0].text.length, 100, 'короткий — целиком');
+  const total = out.reduce((s, x) => s + x.text.length, 0);
+  assert.ok(total <= 3000 + 10, 'в бюджете: ' + total);
+});
+
 async function live() {
   if (!process.argv.includes('--live')) return;
   console.log('Живой подбор (Onliner)');

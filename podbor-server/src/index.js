@@ -19,6 +19,7 @@ const appStore = require(path.join(APP, 'server', 'store'));
 appStore.setDir(path.join(cfg.dataDir, 'app')); // индексы Kufar и служебные данные модулей программы
 const appHttp = require(path.join(APP, 'server', 'http'));
 const ai = require(path.join(APP, 'server', 'ai'));
+const llm = require(path.join(APP, 'server', 'llm'));
 const youtube = require(path.join(APP, 'server', 'youtube'));
 const reviews = require(path.join(APP, 'server', 'reviews'));
 const kufarIndex = require(path.join(APP, 'server', 'kufarIndex'));
@@ -26,6 +27,7 @@ const market = require(path.join(APP, 'server', 'market'));
 const VERSION = require('../package.json').version;
 
 ai.setKeyProvider(() => cfg.anthropicKey);
+llm.setConfigProvider(() => cfg.llm);
 youtube.setKeyProvider(() => cfg.youtubeKey);
 
 class HttpErr extends Error {
@@ -94,13 +96,15 @@ function checkLimit(d, kind) {
   if (used >= lim) throw new HttpErr(429, `Дневной лимит исчерпан (${lim}). Завтра он обновится${d.plan === 'free' ? '; в платной версии лимиты больше' : ''}.`);
 }
 
-function aiCost(u) {
-  if (!u) return 0;
+function aiCost(u, engine) {
+  if (!u || engine === 'local') return 0;
   return (u.input || 0) / 1e6 * cfg.priceInputPerM + (u.output || 0) / 1e6 * cfg.priceOutputPerM + (u.webSearches || 0) / 1000 * cfg.priceWebSearchPer1k;
 }
 
 function checkBudget() {
-  if (!cfg.anthropicKey) throw new HttpErr(503, 'ИИ на сервере не настроен');
+  if (!ai.available()) throw new HttpErr(503, 'ИИ на сервере не настроен');
+  // Своя модель бесплатна — бюджет считаем только для Anthropic
+  if (ai.engine() !== 'anthropic') return;
   const s = db.spend.today();
   if (s.usd >= cfg.aiDailyBudgetUsd) throw new HttpErr(429, 'Дневной бюджет ИИ на сервере исчерпан — попробуйте завтра.');
 }
@@ -140,7 +144,7 @@ async function route(req, res, url) {
   if (pth === '/v1/health') {
     return send(res, 200, {
       ok: true, version: VERSION,
-      features: { ai: !!cfg.anthropicKey, youtube: !!cfg.youtubeKey, telegram: bot.enabled(), kufar: true, fetch: true },
+      features: { ai: ai.available(), youtube: !!cfg.youtubeKey, telegram: bot.enabled(), kufar: true, fetch: true },
       bot: bot.botName() || null,
     });
   }
@@ -196,7 +200,7 @@ async function route(req, res, url) {
     checkLimit(d, kind);
     checkBudget();
     const r = await ai.research(query, { mode, depth });
-    db.spend.add(aiCost(r.usage));
+    db.spend.add(aiCost(r.usage, r.engine));
     db.usage.add(d.id, kind);
     const { usage, ...pub } = r;
     db.cache.set(key, pub, cfg.ttl.research);
@@ -217,7 +221,7 @@ async function route(req, res, url) {
     checkLimit(d, 'reviews');
     checkBudget();
     const sum = await ai.reviewSummary(text(b.name, 200) || pkey, r.items);
-    db.spend.add(aiCost(sum.usage));
+    db.spend.add(aiCost(sum.usage, sum.engine));
     db.usage.add(d.id, 'reviews');
     db.cache.set(key, sum, cfg.ttl.reviews);
     return send(res, 200, sum);

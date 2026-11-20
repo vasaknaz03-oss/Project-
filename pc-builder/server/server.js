@@ -34,6 +34,9 @@ const kufarIndex = require('./kufarIndex');
 const secrets = require('./secrets');
 const telegram = require('./telegram');
 const ai = require('./ai');
+const llm = require('./llm');
+// Загрузка модели в Ollama из «Настроек» (одна за раз)
+let llmPull = null;
 const youtube = require('./youtube');
 const query = require('./query');
 const watch = require('./watch');
@@ -439,8 +442,35 @@ async function route(req, res, url) {
     const patch = {};
     if (anthropicKey !== undefined) patch.anthropicKey = anthropicKey;
     if (youtubeKey !== undefined) patch.youtubeKey = youtubeKey;
+    // Локальная модель: адрес, название, тип программы (ollama/openai) и ключ — для внешних совместимых сервисов
+    for (const k of ['llmUrl', 'llmModel', 'llmKind', 'llmKey']) {
+      if (body && body[k] !== undefined) patch[k] = String(body[k] || '').slice(0, 300);
+    }
+    if (patch.llmUrl) patch.llmUrl = llm.base(patch.llmUrl);
+    if (patch.llmKind && !['ollama', 'openai'].includes(patch.llmKind)) delete patch.llmKind;
     return send(res, 200, secrets.set(patch));
   }
+  // ---------------- локальная модель (Ollama, LM Studio…)
+  if (pathname === '/api/llm/probe' && req.method === 'POST') {
+    const body = await readBody(req);
+    const key = body.key !== undefined ? String(body.key || '') : secrets.get('llmKey');
+    const r = await llm.probe(body.url || llm.DEFAULT_URL, key);
+    return send(res, 200, { ...r, ramGb: Math.round(require('os').totalmem() / 2 ** 30) });
+  }
+  if (pathname === '/api/llm/pull' && req.method === 'POST') {
+    const body = await readBody(req);
+    const model = String(body.model || '').trim();
+    if (!/^[\w.:/-]{1,80}$/.test(model)) throw new Error('Неверное название модели');
+    if (llmPull && !llmPull.done) throw new Error(`Уже скачивается ${llmPull.model} — дождитесь окончания`);
+    const url = llm.base(body.url || secrets.get('llmUrl') || llm.DEFAULT_URL);
+    llmPull = { model, url, status: 'начинаем', total: 0, completed: 0, done: false, error: null };
+    const st = llmPull;
+    llm.pull(url, model, (p) => Object.assign(st, p))
+      .then(() => Object.assign(st, { done: true, status: 'готово' }))
+      .catch((e) => Object.assign(st, { done: true, error: e.message }));
+    return send(res, 200, llmPull);
+  }
+  if (pathname === '/api/llm/pull') return send(res, 200, llmPull || { done: true, none: true });
   if (pathname === '/api/telegram/connect' && req.method === 'POST') {
     const body = await readBody(req);
     return send(res, 200, await telegram.connect(body.token));
@@ -462,9 +492,10 @@ async function route(req, res, url) {
     const f = (st && st.ok && st.features) || {};
     let me = null;
     if (f.ai || f.youtube) me = await remote.call('/v1/me').catch(() => null);
+    const eng = ai.engine();
     return send(res, 200, {
-      ai: ai.available() || !!f.ai, youtube: youtube.available() || !!f.youtube, model: ai.MODEL,
-      via: { ai: ai.available() ? 'own' : f.ai ? 'server' : null, youtube: youtube.available() ? 'own' : f.youtube ? 'server' : null },
+      ai: !!eng || !!f.ai, youtube: youtube.available() || !!f.youtube, model: ai.modelLabel() || ai.MODEL,
+      via: { ai: eng === 'anthropic' ? 'own' : eng === 'local' ? 'local' : f.ai ? 'server' : null, youtube: youtube.available() ? 'own' : f.youtube ? 'server' : null },
       limits: me ? { limits: me.limits, used: me.usedToday } : null,
     });
   }

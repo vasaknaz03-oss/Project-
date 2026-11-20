@@ -20,8 +20,13 @@
    Hetzner, DigitalOcean, Vultr, Timeweb Cloud, Selectel и т. п.).
 2. **Домен** (например `api.podborpk.by`) — A-запись в DNS на IP сервера. HTTPS-сертификат получится сам.
 3. Ключи (каждый можно добавить позже — без ключа функция просто выключена):
-   - **Anthropic** — [console.anthropic.com](https://console.anthropic.com/settings/keys) → API Keys. Оплата по факту использования;
-     в `.env` задайте дневной бюджет `AI_DAILY_BUDGET_USD`.
+   - **ИИ — один из двух вариантов:**
+     - **своя модель (бесплатно):** Ollama в том же Docker — `docker compose --profile ollama up -d`, затем
+       `docker compose exec ollama ollama pull qwen3:4b`; в `.env`: `AI_BASE_URL=http://ollama:11434`, `AI_MODEL=qwen3:4b`,
+       `AI_KIND=ollama`. Нужен сервер с 8+ ГБ памяти; без видеокарты ответ идёт минуты, поэтому лимиты ИИ держите небольшими.
+       Подойдёт и любой OpenAI-совместимый сервис: `AI_BASE_URL`, `AI_MODEL`, `AI_API_KEY`, `AI_KIND=openai`;
+     - **Anthropic** — [console.anthropic.com](https://console.anthropic.com/settings/keys) → API Keys (доступен не во всех странах).
+       Оплата по факту использования; в `.env` задайте дневной бюджет `AI_DAILY_BUDGET_USD`. Если ключ задан, он главнее своей модели.
    - **YouTube Data API v3** — [Google Cloud Console](https://console.cloud.google.com/apis/library/youtube.googleapis.com) →
      «Включить» → «Учётные данные» → «Создать ключ API». Бесплатно, 10 000 единиц в день.
    - **Telegram-бот** — в Telegram у [@BotFather](https://t.me/BotFather): `/newbot`, имя «ПодборПК», адрес вроде `podborpk_bot`.

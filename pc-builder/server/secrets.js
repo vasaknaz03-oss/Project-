@@ -1,10 +1,10 @@
 'use strict';
-// Ключи внешних сервисов (Telegram, Anthropic, YouTube). Хранятся только на этом компьютере, в файле данных
+// Ключи внешних сервисов (Telegram, Anthropic, YouTube, локальная модель). Хранятся только на этом компьютере, в файле данных
 // программы, и не отдаются интерфейсу целиком — только «задан / не задан» и последние символы.
 
 const store = require('./store');
 
-const KEYS = ['telegramToken', 'telegramChatId', 'telegramBot', 'anthropicKey', 'youtubeKey', 'serverToken', 'serverDevice', 'serverUrl'];
+const KEYS = ['telegramToken', 'telegramChatId', 'telegramBot', 'anthropicKey', 'youtubeKey', 'serverToken', 'serverDevice', 'serverUrl', 'llmUrl', 'llmModel', 'llmKind', 'llmKey'];
 
 function all() {
   return store.get('secrets') || {};
@@ -34,6 +34,8 @@ function masked() {
     telegram: { connected: !!(s.telegramToken && s.telegramChatId), token: !!s.telegramToken, bot: s.telegramBot || '' },
     anthropic: { set: !!s.anthropicKey, tail: tail(s.anthropicKey) },
     youtube: { set: !!s.youtubeKey, tail: tail(s.youtubeKey) },
+    // Локальная модель: адрес и название не секрет, ключ (для внешних сервисов) — только «задан»
+    llm: { set: !!s.llmModel, url: s.llmUrl || '', model: s.llmModel || '', kind: s.llmKind || '', key: !!s.llmKey },
   };
 }
 

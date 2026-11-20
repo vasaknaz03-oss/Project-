@@ -16,6 +16,9 @@ const mock = http.createServer((req, res) => {
     const ok = (result) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ ok: true, result })); };
     if (req.url.startsWith('/yt/search')) { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ items: [{ id: { videoId: 'v1' }, snippet: { title: 'Обзор RTX 5070', channelTitle: 'Канал', publishedAt: '2026-01-01T00:00:00Z', description: '', thumbnails: {} } }] })); }
     if (req.url.startsWith('/yt/commentThreads')) { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ items: [] })); }
+    // Поддельная Ollama (своя модель на сервере)
+    if (req.url === '/api/tags') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ models: [{ name: 'qwen3:4b' }] })); }
+    if (req.url === '/api/chat') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ message: { content: '## Коротко\nПо отзывам тихая [1]' }, prompt_eval_count: 900000, eval_count: 900000 })); }
     const m = req.url.match(/^\/bot[^/]+\/(\w+)/);
     const body = b ? JSON.parse(b) : {};
     if (!m) { res.writeHead(404); return res.end(); }
@@ -89,7 +92,7 @@ async function test(name, fn) {
 
   await test('YouTube: кэш на всех, видео со ссылкой и каналом', async () => {
     const r = await call('GET', '/v1/youtube?q=' + encodeURIComponent('RTX 5070 обзор'), null, tok);
-    assert.strictEqual(r.status, 200, JSON.stringify(r.data));
+    assert.strictEqual(r.status, 200, JSON.stringify(r.data) + " ");
     assert.strictEqual(r.data.videos[0].url, 'https://www.youtube.com/watch?v=v1');
     assert.strictEqual(r.data.videos[0].channel, 'Канал');
     const r2 = await call('GET', '/v1/youtube?q=' + encodeURIComponent('rtx 5070  обзор'), null, tok);
@@ -130,6 +133,31 @@ async function test(name, fn) {
     assert.strictEqual(s.status, 200);
     assert.ok(s.data.devices >= 2);
     assert.ok(s.data.aiSpendToday.usd > 0.05);
+  });
+
+  await test('своя модель вместо Anthropic: ИИ включён, бюджет не тратится', async () => {
+    const cfg = require('../src/config');
+    const APP = path.join(__dirname, '..', '..', 'pc-builder', 'server');
+    const news = require(path.join(APP, 'news'));
+    const onliner = require(path.join(APP, 'providers', 'onliner'));
+    const orig = { s: news.searchArticles, o: onliner.search };
+    news.searchArticles = async () => ({ items: [{ link: 'https://example.org/a', title: 'Обзор RTX 9070', summary: 'Тихая и холодная видеокарта, хорошо держит частоты в играх, драйверы стабильные, писка нет.' }] });
+    onliner.search = async () => ({ items: [] });
+    const saved = { key: cfg.anthropicKey, llm: cfg.llm, budget: cfg.aiDailyBudgetUsd };
+    Object.assign(cfg, { anthropicKey: '', llm: { url: mockUrl, model: 'qwen3:4b', kind: 'ollama' }, aiDailyBudgetUsd: 0 });
+    try {
+      const h = await call('GET', '/v1/health');
+      assert.strictEqual(h.data.features.ai, true);
+      const d = await call('POST', '/v1/devices', {});
+      const r = await call('POST', '/v1/ai/research', { query: 'RTX 9070', mode: 'part' }, d.data.token);
+      assert.strictEqual(r.status, 200, JSON.stringify(r.data) + " ");
+      assert.strictEqual(r.data.engine, 'local');
+      assert.ok(/тихая \[1\]/.test(r.data.text));
+    } finally {
+      Object.assign(cfg, { anthropicKey: saved.key, llm: saved.llm, aiDailyBudgetUsd: saved.budget });
+      news.searchArticles = orig.s;
+      onliner.search = orig.o;
+    }
   });
 
   console.log(`\nПройдено: ${passed}, ошибок: ${failed}`);

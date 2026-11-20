@@ -28,7 +28,17 @@ services:
       - api
     restart: unless-stopped
 
+  # Своя языковая модель (по желанию, бесплатно): docker compose --profile ollama up -d
+  # Нужен сервер с 8+ ГБ памяти; без видеокарты отвечает медленно (минуты) — для начала берите qwen3:4b.
+  ollama:
+    image: ollama/ollama:0.12.6
+    profiles: ["ollama"]
+    volumes:
+      - ollama-models:/root/.ollama
+    restart: unless-stopped
+
 volumes:
+  ollama-models:
   podbor-data:
   caddy-data:
   caddy-config:

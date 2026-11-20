@@ -33,6 +33,11 @@ module.exports = {
   trustProxy: env.TRUST_PROXY === '1', // за Caddy/nginx — брать IP из X-Forwarded-For
   adminToken: env.ADMIN_TOKEN || '',
   anthropicKey: env.ANTHROPIC_API_KEY || '',
+  // Вместо Anthropic — своя модель (Ollama на этом же сервере) или OpenAI-совместимый сервис.
+  // Если задан ANTHROPIC_API_KEY, он главнее.
+  llm: env.AI_BASE_URL && env.AI_MODEL
+    ? { url: env.AI_BASE_URL, model: env.AI_MODEL, key: env.AI_API_KEY || '', kind: ['ollama', 'openai'].includes(env.AI_KIND) ? env.AI_KIND : '' }
+    : null,
   youtubeKey: env.YOUTUBE_API_KEY || '',
   telegramToken: env.TELEGRAM_BOT_TOKEN || '',
   telegramApi: env.TELEGRAM_API || 'https://api.telegram.org',

@@ -49,7 +49,7 @@ function refreshCards(force = false) {
   const sigs = {
     srvCard: JSON.stringify([srv && srv.enabled, srv && srv.url, h && h.ok, h && h.version, f, srv && srv.me && srv.me.usedToday, state.settings.serverMode, state.settings.serverFetch, !!srv]),
     tgCard: JSON.stringify([sec && sec.telegram, !!sec, f.telegram, h && h.bot, state.settings.serverTelegram]),
-    aiCard: JSON.stringify([sec && sec.anthropic, sec && sec.youtube, !!sec, f.ai, f.youtube]),
+    aiCard: JSON.stringify([sec && sec.anthropic, sec && sec.youtube, sec && sec.llm, !!sec, f.ai, f.youtube]),
   };
   const make = { srvCard: serverCard, tgCard: telegramCard, aiCard };
   for (const id of Object.keys(make)) {
@@ -230,15 +230,15 @@ function telegramCard() {
     status);
 }
 
-/** ИИ-помощник (Claude) и YouTube: читают форумы, статьи, обзоры и отзывы и делают выжимку со ссылками. */
+/** ИИ-помощник и YouTube: локальная модель (бесплатно) или ключ Anthropic; ключ YouTube для видео. */
 function aiCard() {
   const head = [el('h3', icon('sparkles'), ' ИИ-помощник и YouTube'),
-    el('p', 'С ключом Anthropic программа сама ищет в интернете — на форумах (Overclockers.ru, Reddit, iXBT…), в статьях и обзорах, в рассказах людей о своих сборках и разгоне — и пишет понятную выжимку со ссылками на источники. Отзывы покупателей она тоже разбирает по смыслу, а не по ключевым словам. С ключом YouTube в программе видны обзоры и комментарии зрителей.')];
+    el('p', 'ИИ читает отзывы покупателей, статьи и обсуждения и пишет понятную выжимку со ссылками на источники. Бесплатный способ — модель на вашем компьютере: без оплаты, без ключей и из любой страны.')];
   if (!sec) return el('div.card.full#aiCard', head, el('div.muted', 'Загрузка…'));
   const sf = srv && srv.health && srv.health.ok ? srv.health.features || {} : {};
   if (sf.ai || sf.youtube) {
     head.push(el('div.notice.ok', icon('check'), el('div', 'Работает через сервер ПодборПК — ключи не нужны', sf.ai && sf.youtube ? '' : sf.ai ? ' (ИИ)' : ' (YouTube)',
-      '. Свой ключ можно вставить ниже, если хотите без дневных лимитов сервера (оплата — в вашем аккаунте).')));
+      '. Своя модель или свой ключ ниже — если хотите без дневных лимитов сервера.')));
   }
   const keyRow = (label, field, info, placeholder, help) => {
     const inp = el('input.input', { type: 'password', placeholder: info.set ? `ключ задан (${info.tail}) — вставьте новый, чтобы заменить` : placeholder, autocomplete: 'off' });
@@ -256,14 +256,94 @@ function aiCard() {
         info.set ? el('button.btn.btn-sm.btn-ghost', { onclick: async () => { sec = await api('/api/secrets', { method: 'POST', body: { [field]: '' } }); toast('Ключ удалён'); loadSecrets(); } }, 'Удалить') : null),
       el('div.dim.small', help));
   };
+  const anth = sec.anthropic || {};
   return el('div.card.full#aiCard', head,
-    keyRow('Ключ Anthropic (Claude)', 'anthropicKey', sec.anthropic, 'sk-ant-…',
-      el('span', 'Где взять: ', el('a', { href: 'https://console.anthropic.com/settings/keys', target: '_blank', rel: 'noopener' }, 'console.anthropic.com → API Keys ↗'),
-        '. Запросы платные: оплата по факту использования в аккаунте Anthropic (обычно центы за один разбор).')),
-    keyRow('Ключ YouTube Data API (необязательно)', 'youtubeKey', sec.youtube, 'AIza…',
-      el('span', 'Бесплатно: ', el('a', { href: 'https://console.cloud.google.com/apis/library/youtube.googleapis.com', target: '_blank', rel: 'noopener' }, 'Google Cloud → YouTube Data API v3 ↗'),
+    localModelBlock(),
+    keyRow('Ключ YouTube Data API (необязательно, бесплатно)', 'youtubeKey', sec.youtube, 'AIza…',
+      el('span', 'Видео и комментарии зрителей; ИИ тоже их учитывает. ', el('a', { href: 'https://console.cloud.google.com/apis/library/youtube.googleapis.com', target: '_blank', rel: 'noopener' }, 'Google Cloud → YouTube Data API v3 ↗'),
         ' → «Включить» → «Учётные данные» → «Создать ключ API».')),
-    el('p.dim.small', 'Ключи хранятся только на этом компьютере и используются только для запросов к Anthropic и Google.'));
+    el('details.ai-alt', anth.set ? { open: true } : {},
+      el('summary', 'Платный вариант: ключ Anthropic (Claude)', anth.set ? el('span.chip.ok', { style: { marginLeft: '8px' } }, 'подключено') : null),
+      el('p.dim.small', 'Claude сам ищет в интернете и читает больше источников, но оплачивается по факту и доступен не во всех странах (в Беларуси официально — нет). Если ключ задан, он главнее локальной модели.'),
+      keyRow('Ключ Anthropic', 'anthropicKey', anth, 'sk-ant-…',
+        el('span', 'Где взять: ', el('a', { href: 'https://console.anthropic.com/settings/keys', target: '_blank', rel: 'noopener' }, 'console.anthropic.com → API Keys ↗')))),
+    el('p.dim.small', 'Ключи и настройки хранятся только на этом компьютере.'));
+}
+
+const RECOMMENDED = (ramGb) => (ramGb && ramGb < 14 ? { id: 'qwen3:4b', size: '2,5 ГБ', why: 'для компьютера с 8 ГБ памяти' } : { id: 'qwen3:8b', size: '5,2 ГБ', why: 'хорошо пишет по-русски, нужно 16 ГБ памяти или видеокарта с 8 ГБ' });
+const gb = (b) => (b / 1e9).toFixed(1).replace('.', ','); // как на ollama.com: 1 ГБ = 10⁹ байт
+
+/** Локальная модель: Ollama или LM Studio на этом компьютере. Найти, скачать, выбрать. */
+function localModelBlock() {
+  const L = sec.llm || {};
+  const urlInp = el('input.input', { value: L.url || 'http://127.0.0.1:11434', placeholder: 'http://127.0.0.1:11434', style: { maxWidth: '280px' } });
+  const keyInp = el('input.input', { type: 'password', placeholder: L.key ? 'ключ задан — вставьте новый, чтобы заменить' : 'только для внешних сервисов', autocomplete: 'off' });
+  const out = el('div.llm-out');
+  const save = async (patch, msg) => {
+    sec = await api('/api/secrets', { method: 'POST', body: patch });
+    toast(msg);
+    loadSecrets();
+  };
+  const pollPull = (url, kind) => {
+    const line = el('div.dim.small', 'Скачивание…');
+    const bar = el('div.llm-bar', el('i'));
+    out.replaceChildren(el('div.llm-pull', line, bar));
+    const tick = async () => {
+      let st;
+      try {
+        st = await api('/api/llm/pull');
+      } catch {
+        return setTimeout(tick, 2000);
+      }
+      if (st.error) return out.replaceChildren(el('div.notice.err', icon('error'), el('div', st.error)));
+      const pct = st.total ? Math.floor((st.completed / st.total) * 100) : 0;
+      line.textContent = st.total ? `${st.model}: скачано ${gb(st.completed)} из ${gb(st.total)} ГБ (${pct}%)` : `${st.model}: ${st.status || 'подготовка'}…`;
+      bar.firstChild.style.width = pct + '%';
+      if (!st.done) return setTimeout(tick, 1000);
+      await save({ llmUrl: url, llmModel: st.model, llmKind: kind }, `Модель ${st.model} скачана и подключена`);
+    };
+    tick();
+  };
+  const find = async () => {
+    out.replaceChildren(el('div.row', el('div.spinner.inline'), el('span.muted', 'Ищем программу и модели…')));
+    let r;
+    try {
+      r = await api('/api/llm/probe', { method: 'POST', body: { url: urlInp.value.trim(), key: keyInp.value.trim() || undefined } });
+    } catch (e) {
+      return out.replaceChildren(el('div.notice.err', icon('error'), el('div', e.message,
+        el('div.dim.small', 'Ollama после установки работает сама (значок в трее). LM Studio: вкладка Developer → Start Server, адрес http://127.0.0.1:1234.'))));
+    }
+    const rec = RECOMMENDED(r.ramGb);
+    const prog = r.kind === 'ollama' ? 'Ollama' : 'совместимая программа';
+    if (!r.models.length) {
+      return out.replaceChildren(el('div.notice', icon('info'), el('div',
+        `Найдена ${prog}, но моделей в ней пока нет. `,
+        r.kind === 'ollama' ? el('span', 'Рекомендую ', el('b', rec.id), ` (${rec.size}, ${rec.why}).`) : 'Скачайте модель в самой программе (например Qwen3 8B) и нажмите «Найти модели» ещё раз.')),
+        r.kind === 'ollama' ? el('div.row', { style: { gap: '8px', marginTop: '8px' } },
+          el('button.btn.btn-sm.btn-primary', { onclick: async () => { try { await api('/api/llm/pull', { method: 'POST', body: { model: rec.id, url: r.url } }); pollPull(r.url, r.kind); } catch (e) { toast(e.message, 'err'); } } }, icon('download'), `Скачать ${rec.id}`)) : null);
+    }
+    const sel = el('select.select', r.models.map((m) => el('option', { value: m.id, selected: m.id === L.model }, m.id + (m.size ? ` (${gb(m.size)} ГБ)` : ''))));
+    out.replaceChildren(el('div.dim.small', `Найдена ${prog}. Выберите модель:`),
+      el('div.row', { style: { gap: '8px', marginTop: '6px' } }, sel,
+        el('button.btn.btn-sm.btn-primary', { onclick: () => save({ llmUrl: r.url, llmModel: sel.value, llmKind: r.kind, ...(keyInp.value.trim() ? { llmKey: keyInp.value.trim() } : {}) }, `Подключено: ${sel.value}`) }, 'Использовать')),
+      r.kind === 'ollama' && !r.models.some((m) => m.id.startsWith('qwen3')) ? el('div.dim.small', { style: { marginTop: '6px' } }, 'Лучше всего по-русски пишут модели Qwen3. ',
+        el('button.link-btn', { onclick: async () => { try { await api('/api/llm/pull', { method: 'POST', body: { model: rec.id, url: r.url } }); pollPull(r.url, r.kind); } catch (e) { toast(e.message, 'err'); } } }, `Скачать ${rec.id} (${rec.size})`)) : null);
+  };
+  return el('div.llm-block',
+    el('div.field',
+      el('label', 'Локальная модель (бесплатно)', L.set ? el('span.chip.ok', { style: { marginLeft: '8px' } }, `подключено: ${L.model}`) : null),
+      L.set ? null : el('ol.llm-steps',
+        el('li', 'Установите ', el('a', { href: 'https://ollama.com/download', target: '_blank', rel: 'noopener' }, 'Ollama ↗'), ' (бесплатно, Windows и macOS) — или LM Studio.'),
+        el('li', 'Нажмите «Найти модели». Если моделей нет — программа предложит скачать подходящую (одна кнопка).'),
+        el('li', 'Готово: кнопки «Быстро» и «Подробно» в карточках товаров заработают бесплатно.')),
+      el('div.row', { style: { gap: '8px', flexWrap: 'wrap' } }, urlInp,
+        el('button.btn.btn-sm' + (L.set ? '' : '.btn-primary'), { onclick: find }, icon('search'), L.set ? 'Сменить модель' : 'Найти модели'),
+        L.set ? el('button.btn.btn-sm.btn-ghost', { onclick: () => save({ llmModel: '', llmKind: '', llmKey: '' }, 'Локальная модель отключена') }, 'Отключить') : null),
+      el('details.dim.small', el('summary', 'Внешний совместимый сервис (OpenAI-совместимый адрес)'),
+        el('p', 'Вместо своей программы можно указать адрес любого сервиса с OpenAI-совместимым API (…/v1) и ключ доступа к нему — если такой сервис вам доступен.'),
+        keyInp),
+      el('div.dim.small', 'Работает на вашем компьютере: чем мощнее видеокарта, тем быстрее ответ. На процессоре «Быстро» занимает 1–3 минуты.'),
+      out));
 }
 
 /** Общие предпочтения подбора и интерфейса. */

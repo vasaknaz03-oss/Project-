@@ -1,5 +1,5 @@
 'use strict';
-// ИИ-помощник на Claude (Anthropic API, ключ пользователя из «Настроек»).
+// ИИ-помощник на Claude (Anthropic API, ключ пользователя из «Настроек») или на локальной модели (aiLocal.js).
 // 1) research — ищет в интернете (форумы, статьи, обзоры, рассказы о сборках и разгоне) серверным
 //    веб-поиском Anthropic, читает найденное и пишет выжимку для новичка со ссылками на источники.
 // 2) reviewSummary — разбирает отзывы покупателей по смыслу (а не по ключевым словам).
@@ -32,8 +32,23 @@ function client() {
   return cached.c;
 }
 
+// Без ключа Anthropic — локальная модель (Ollama, LM Studio…), если она настроена
+const llm = require('./llm');
+
+/** Какой «движок» ответит: свой ключ Anthropic главнее, затем локальная модель. */
+function engine() {
+  if (keyProvider()) return 'anthropic';
+  if (llm.available()) return 'local';
+  return null;
+}
+
 function available() {
-  return !!keyProvider();
+  return !!engine();
+}
+
+function modelLabel() {
+  const e = engine();
+  return e === 'local' ? llm.label() : e === 'anthropic' ? MODEL : null;
 }
 
 /** Понятная ошибка вместо технической. */
@@ -86,6 +101,7 @@ const MODES = {
 async function research(query, { mode = 'part', depth = 'quick' } = {}) {
   query = String(query || '').trim().slice(0, 500);
   if (!query) throw new Error('Пустой запрос');
+  if (engine() === 'local') return require('./aiLocal').research(query, { mode, depth });
   const deep = depth === 'deep';
   const prompt = (MODES[mode] || MODES.free)(query);
   const messages = [{ role: 'user', content: prompt }];
@@ -182,6 +198,7 @@ const REVIEW_SCHEMA = {
 
 /** Сводка отзывов по смыслу. items — отзывы Onliner ({ rating, summary, pros, cons, text }). */
 async function reviewSummary(name, items) {
+  if (engine() === 'local') return require('./aiLocal').reviewSummary(name, items);
   const list = (items || []).slice(0, 30).map((r, i) => `Отзыв ${i + 1} (${r.rating || '?'}★): ${r.summary || ''}\nДостоинства: ${r.pros || '—'}\nНедостатки: ${r.cons || '—'}\n${r.text || ''}`).join('\n\n');
   if (!list) throw new Error('Нет отзывов для разбора');
   try {
@@ -205,4 +222,4 @@ async function reviewSummary(name, items) {
   }
 }
 
-module.exports = { research, reviewSummary, available, setKeyProvider, MODEL, assemble, _setClientForTests: (c) => (cached = { key: keyProvider(), c }) };
+module.exports = { research, reviewSummary, available, engine, modelLabel, setKeyProvider, MODEL, assemble, _setClientForTests: (c) => (cached = { key: keyProvider(), c }) };
