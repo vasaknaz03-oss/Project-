@@ -188,7 +188,8 @@ function toParams(filters) {
       const kop = k === 'prc'; // цена у Kufar — в копейках
       const f = v.from !== undefined && v.from !== '' ? Math.round(Number(v.from) * (kop ? 100 : 1)) : '';
       const t = v.to !== undefined && v.to !== '' ? Math.round(Number(v.to) * (kop ? 100 : 1)) : '';
-      if (f !== '' || t !== '') out[k] = `r:${f},${t}`;
+      // Открытый диапазон («от 5000», «до 30») Kufar отвергает с ошибкой 422 — подставляем крайние значения
+      if (f !== '' || t !== '') out[k] = `r:${f === '' ? 0 : f},${t === '' ? 99999999 : t}`;
     } else if (v === 1) out[k] = '1';
   }
   return out;

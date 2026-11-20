@@ -102,8 +102,9 @@ async function search(opts = {}) {
   if (opts.cursor) params.cursor = opts.cursor;
   if (opts.sort && SORTS[opts.sort]) params.sort = SORTS[opts.sort];
   if (opts.priceMin || opts.priceMax) {
+    // Kufar больше не принимает открытый диапазон «r:5000,» (ошибка 422) — верхняя граница нужна всегда
     const lo = Math.round((opts.priceMin || 0) * 100);
-    const hi = opts.priceMax ? Math.round(opts.priceMax * 100) : '';
+    const hi = opts.priceMax ? Math.round(opts.priceMax * 100) : 99999999;
     params.prc = `r:${lo},${hi}`;
   }
   if (opts.condition === 'used') params.cnd = 1;

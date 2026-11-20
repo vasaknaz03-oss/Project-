@@ -206,7 +206,7 @@ test('фильтры Kufar → параметры поиска', () => {
   const KF = require('../server/providers/kufarFilters');
   assert.deepStrictEqual(KF.toParams({ ccbr: ['13', '54'], rgn: ['7'], prc: { from: 500, to: 1500 }, dle: 1, ar: [] }),
     { ccbr: 'v.or:13,54', rgn: '7', prc: 'r:50000,150000', dle: '1' });
-  assert.deepStrictEqual(KF.toParams({ prc: { to: 300 } }), { prc: 'r:,30000' });
+  assert.deepStrictEqual(KF.toParams({ prc: { to: 300 } }), { prc: 'r:0,30000' }, 'открытый диапазон Kufar отвергает (422) — нижняя граница 0');
 });
 test('каталог: у каждого раздела есть источник, сетап ссылается на разделы', () => {
   const C = require('../web/catalog');
