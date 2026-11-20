@@ -36,9 +36,28 @@ async function loadServer(force = false) {
     srv = null;
   }
   document.dispatchEvent(new CustomEvent('secrets-changed'));
-  for (const id of ['srvCard', 'tgCard', 'aiCard']) {
+  refreshCards();
+}
+
+/**
+ * Перерисовать карточки внешних сервисов, но только если их состояние изменилось:
+ * иначе поздний ответ сервера стирал бы набранный токен и сообщение об ошибке.
+ */
+function refreshCards(force = false) {
+  const h = srv && srv.health;
+  const f = (h && h.ok && h.features) || {};
+  const sigs = {
+    srvCard: JSON.stringify([srv && srv.enabled, srv && srv.url, h && h.ok, h && h.version, f, srv && srv.me && srv.me.usedToday, state.settings.serverMode, state.settings.serverFetch, !!srv]),
+    tgCard: JSON.stringify([sec && sec.telegram, !!sec, f.telegram, h && h.bot, state.settings.serverTelegram]),
+    aiCard: JSON.stringify([sec && sec.anthropic, sec && sec.youtube, !!sec, f.ai, f.youtube]),
+  };
+  const make = { srvCard: serverCard, tgCard: telegramCard, aiCard };
+  for (const id of Object.keys(make)) {
     const n = document.getElementById(id);
-    if (n) n.replaceWith(id === 'srvCard' ? serverCard() : id === 'tgCard' ? telegramCard() : aiCard());
+    if (!n || (!force && n.dataset.sig === sigs[id])) continue;
+    const fresh = make[id]();
+    fresh.dataset.sig = sigs[id];
+    n.replaceWith(fresh);
   }
 }
 
@@ -90,10 +109,7 @@ async function loadSecrets() {
     sec = null;
   }
   document.dispatchEvent(new CustomEvent('secrets-changed'));
-  const t = document.getElementById('tgCard');
-  if (t) t.replaceWith(telegramCard());
-  const a = document.getElementById('aiCard');
-  if (a) a.replaceWith(aiCard());
+  refreshCards();
 }
 
 /** Уведомления через общий бот ПодборПК (сервер): одна кнопка и «Старт» в Telegram. */
