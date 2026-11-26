@@ -1,6 +1,7 @@
 // ИИ-помощник (Claude + веб-поиск или локальная модель) и YouTube в интерфейсе: выжимка с форумов и обзоров
 // со ссылками, разбор отзывов по смыслу, видео-обзоры с комментариями зрителей.
-import { el, icon, api } from './util.js';
+import { el, icon, api, money, modal } from './util.js';
+import { SLOTS } from './state.js';
 
 let status = null;
 export async function aiStatus(force = false) {
@@ -21,6 +22,68 @@ function needKey(what) {
   return el('div.notice', icon('info'), el('div',
     `${what} Настраивается один раз в «Настройках». `,
     el('button.link-btn', { onclick: toSettings }, 'Открыть настройки')));
+}
+
+export function openBuildAdvice({ purpose, parts, setup, have, alternatives, budget, apply }) {
+  const panel = el('div', el('p.muted', 'Проверяем, подключён ли ИИ…'));
+  const close = modal('ИИ-помощник для сборки', panel);
+  aiStatus(true).then((st) => {
+    if (!st.buildAdvice) {
+      const message = st.via?.ai === 'server'
+        ? 'На сервере ПодборПК пока недоступна оценка сборок. Подключите личного провайдера в настройках или обновите общий сервер.'
+        : 'Чтобы оценить сборку, откройте «Настройки» → «ИИ-помощник и YouTube» и подключите провайдера.';
+      panel.replaceChildren(el('p', message), el('button.btn.btn-primary', {
+        onclick: () => { close(); toSettings(); },
+      }, 'Открыть настройки'));
+      return;
+    }
+    const cur = money.currency;
+    const inCurrency = money.toCur(budget, cur);
+    const limit = el('input.input#ai-build-budget', { type: 'number', min: '0.01', step: '0.01', required: true, value: inCurrency > 0 ? inCurrency.toFixed(2) : '' });
+    const out = el('div.ai-out', { role: 'status' });
+    const run = el('button.btn.btn-primary', { type: 'submit' }, icon('sparkles'), 'Оценить сборку');
+    panel.replaceChildren(
+      el('p', el('b', st.providerLabel || 'Подключённый провайдер'), ' получит список деталей, их характеристики, цены и бюджет. ПодборПК проверит совместимость и стоимость рекомендованных замен.'),
+      el('form', { onsubmit: async (e) => {
+        e.preventDefault();
+        const budgetByn = Math.round(money.fromCur(Number(limit.value), cur) * 100) / 100;
+        run.disabled = true;
+        limit.disabled = true;
+        out.replaceChildren(el('div.row', el('div.spinner.inline'), el('span.muted', 'Проверяем цены и ждём оценку ИИ…')));
+        try {
+          const result = await api('/api/ai/build-advice', { method: 'POST', body: { provider: st.provider, purpose, parts, setup, have, alternatives, budget: budgetByn } });
+          out.replaceChildren(renderBuildAdvice(result, (choice) => { if (apply(choice, result.budget)) close(); }));
+        } catch (err) {
+          out.replaceChildren(el('div.notice.err', icon('error'), err.message));
+        } finally {
+          run.disabled = false;
+          limit.disabled = false;
+        }
+      } },
+      el('div.field', el('label', { for: limit.id }, `Общий бюджет, ${cur}`), limit),
+      el('div.row', { style: { marginTop: '10px' } }, run)),
+      out);
+  });
+}
+
+function renderBuildAdvice(result, apply) {
+  const issue = { error: 'error', warn: 'alert', info: 'info' };
+  return el('div.ai-answer',
+    result.model ? el('p.dim.small', `Оценка модели ${result.model}`) : null,
+    el('p.dim.small', `${result.missingPrice ? 'По указанным ценам' : 'Текущий итог'} ${money.fmt(result.total)} · бюджет ${money.fmt(result.budget)}`),
+    el('h3', 'Что проверить в сборке'),
+    result.findings.length ? el('div.checks', result.findings.map((f) => el('div.ck', { class: f.level },
+      icon(issue[f.level]), el('div', f.text)))) : el('p.muted', 'По имеющимся данным явных проблем не найдено.'),
+    el('h3', 'Предложения в рамках бюджета'),
+    result.suggestions.length ? el('p.dim.small', 'Каждая замена рассчитана отдельно по текущему списку деталей.') : el('p.muted', 'Подходящих замен для этого бюджета ИИ не выбрал.'),
+    el('div.alt-list', result.suggestions.map((a) => el('article.ai-block',
+      el('b', `${SLOTS.find((s) => s.key === a.slot).label} · ${a.item.name}`),
+      el('div.dim.small', `Цена детали ${money.fmt(a.item.price)} · сборка после замены ${money.fmt(a.cost)}`),
+      el('ul', a.reasons.map((reason) => el('li', reason))),
+      a.warnings.length ? el('details.ai-more', el('summary', 'Что ещё проверить'), el('ul', a.warnings.map((w) => el('li', w)))) : null,
+      el('div.row.wrap',
+        el('button.btn.btn-sm', { onclick: () => apply(a) }, 'Заменить деталь'),
+        /^https:\/\/catalog\.onliner\.by\//i.test(a.item.url || '') ? el('a.link-btn', { href: a.item.url, target: '_blank', rel: 'noopener' }, 'На Onliner ↗') : null)))));
 }
 
 // ------------------------------------------------------------------ простой Markdown → DOM (без innerHTML)

@@ -18,7 +18,12 @@ const mock = http.createServer((req, res) => {
     if (req.url.startsWith('/yt/commentThreads')) { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ items: [] })); }
     // Поддельная Ollama (своя модель на сервере)
     if (req.url === '/api/tags') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ models: [{ name: 'qwen3:4b' }] })); }
-    if (req.url === '/api/chat') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ message: { content: '## Коротко\nПо отзывам тихая [1]' }, prompt_eval_count: 900000, eval_count: 900000 })); }
+    if (req.url === '/api/chat') {
+      const body = JSON.parse(b);
+      const answer = body.format?.properties?.choices ? JSON.stringify({ findings: ['f1'], choices: ['c1'], extra: 'игнорируется' }) : '## Коротко\nПо отзывам тихая [1]';
+      res.writeHead(200, { 'content-type': 'application/json' });
+      return res.end(JSON.stringify({ message: { content: answer }, prompt_eval_count: 900000, eval_count: 900000 }));
+    }
     const m = req.url.match(/^\/bot[^/]+\/(\w+)/);
     const body = b ? JSON.parse(b) : {};
     if (!m) { res.writeHead(404); return res.end(); }
@@ -205,6 +210,25 @@ async function test(name, fn) {
       Object.assign(cfg, saved);
       news.searchArticles = searchArticles;
       global.fetch = fetch;
+    }
+  });
+
+  await test('общий сервер: оценка сборки через свою модель и учёт лимита', async () => {
+    const cfg = require('../src/config');
+    const saved = { anthropicKey: cfg.anthropicKey, llm: cfg.llm };
+    Object.assign(cfg, { anthropicKey: '', llm: { url: mockUrl, model: 'qwen3:4b', kind: 'ollama' } });
+    try {
+      const path = '/v1/ai/build-advice';
+      const body = { parts: [{ name: 'Тестовый процессор' }], findings: [{ id: 'f1' }], candidates: [{ id: 'c1' }] };
+      assert.strictEqual((await call('GET', '/v1/health')).data.features.aiBuild, true);
+      assert.strictEqual((await call('POST', path, body)).status, 401);
+      const d = await call('POST', '/v1/devices', {});
+      const r = await call('POST', path, body, d.data.token);
+      assert.strictEqual(r.status, 200, JSON.stringify(r.data));
+      assert.deepStrictEqual(r.data, { findings: ['f1'], choices: ['c1'], model: 'qwen3:4b' });
+      assert.strictEqual((await call('GET', '/v1/me', null, d.data.token)).data.usedToday.research_quick, 1);
+    } finally {
+      Object.assign(cfg, saved);
     }
   });
 

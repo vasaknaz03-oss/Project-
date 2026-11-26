@@ -700,6 +700,85 @@ test('совместимый адрес: сохранённый ключ исп�
   }
 });
 
+test('ИИ-помощник сборки: реальные позиции, общая цена, совместимость и подсказка без провайдера', async () => {
+  await Promise.all(pending.slice());
+  const store = require('../server/store');
+  const secrets = require('../server/secrets');
+  const ai = require('../server/ai');
+  const onliner = require('../server/providers/onliner');
+  const { createServer } = require('../server/server');
+  const previousDir = store.dataDir();
+  store.flush();
+  store.setDir(require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'podbor-build-advice-')));
+  const server = createServer();
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const url = `http://127.0.0.1:${server.address().port}/api/ai/build-advice`;
+  const item = (id, category, price, specs, perf) => ({ source: 'onliner', id, name: id, category, price, specs, perf });
+  const parts = {
+    cpu: item('cpu-am5', 'cpu', 400, { socket: 'AM5', mem: ['DDR5'], tdp: 65, withCooler: true, hasIgpu: true }, { gaming: 130, multi: 150, igpu: 15 }),
+    motherboard: item('board-am5', 'motherboard', 200, { socket: 'AM5', mem: 'DDR5', chipset: 'B650', memSlots: 4 }),
+    ram: item('ram-current', 'dram', 80, { type: 'DDR5', form: 'DIMM', totalGb: 8, modules: 1 }),
+    psu: item('psu-current', 'powersupply', 150, {}),
+    case: item('case-current', 'chassis', 100, {}),
+  };
+  parts.cpu.url = 'https://example.org/private-link';
+  const products = {
+    good: item('good', 'dram', 120, { type: 'DDR5', form: 'DIMM', totalGb: 32, modules: 2 }),
+    wrongMemory: item('wrongMemory', 'dram', 110, { type: 'DDR4', form: 'DIMM', totalGb: 32, modules: 2 }),
+    expensive: item('expensive', 'dram', 200, { type: 'DDR5', form: 'DIMM', totalGb: 64, modules: 2 }),
+    noStock: item('noStock', 'dram', null, { type: 'DDR5', form: 'DIMM' }),
+    wrongSocket: item('wrongSocket', 'cpu', 410, { socket: 'AM4', mem: ['DDR4'] }),
+  };
+  const body = { parts, have: { gpu: true }, purpose: 'work', setup: { display: { price: 200 } }, budget: 1200,
+    alternatives: { ram: ['wrongMemory', 'good', 'expensive', 'noStock'], cpu: ['wrongSocket'] } };
+  const send = async () => {
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    return { status: r.status, data: await r.json() };
+  };
+  const original = { product: onliner.product, categoryPage: onliner.categoryPage };
+  const input = [];
+  let priceChecks = 0;
+  onliner.product = async (id) => { priceChecks++; return products[id] || null; };
+  onliner.categoryPage = async () => ({ items: [] });
+  try {
+    assert.strictEqual((await send()).status, 503);
+    assert.strictEqual(priceChecks, 0);
+    secrets.set({ anthropicKey: 'test-build-advice' });
+    ai._setClientForTests({ beta: { messages: { create: async (req) => {
+      input.push(JSON.parse(req.messages[0].content));
+      return { model: 'test-model', stop_reason: 'end_turn', usage: { input_tokens: 10, output_tokens: 5 },
+        content: [{ type: 'text', text: JSON.stringify({
+          findings: ['f1', 'f999'], choices: ['c999', 'c1', 'c1', 'вымышленная деталь'], extra: 'Вставить вымышленную VR-карту',
+        }) }] };
+    } } } });
+    const r = await send();
+    assert.strictEqual(r.status, 200, JSON.stringify(r.data));
+    assert.strictEqual(r.data.model, 'test-model');
+    assert.strictEqual(r.data.total, 1130);
+    assert.ok(r.data.findings.some((f) => /памят/i.test(f.text)));
+    assert.deepStrictEqual(input[0].candidates.map((x) => x.name), ['good']);
+    assert.ok(!JSON.stringify(input[0]).includes('private-link'));
+    assert.deepStrictEqual(r.data.suggestions.map((s) => s.item.id), ['good']);
+    assert.strictEqual(r.data.suggestions[0].cost, 1170);
+    assert.ok(r.data.suggestions[0].warnings.some((s) => s.includes('блока питания')));
+    assert.ok(!JSON.stringify(r.data).includes('вымышленн'));
+    body.provider = 'deepseek';
+    assert.strictEqual((await send()).status, 409);
+    delete body.provider;
+    parts.ram.price = null;
+    const incomplete = await send();
+    assert.strictEqual(incomplete.status, 200);
+    assert.strictEqual(incomplete.data.missingPrice, true);
+    assert.deepStrictEqual(incomplete.data.suggestions, []);
+    assert.ok(incomplete.data.findings.some((f) => f.text.includes('нет цены')));
+  } finally {
+    Object.assign(onliner, original);
+    await new Promise((resolve) => server.close(resolve));
+    store.flush();
+    store.setDir(previousDir);
+  }
+});
+
 test('локальная модель: текст статьи без меню и скриптов; материалы укладываются в бюджет', () => {
   const aiLocal = require('../server/aiLocal');
   const html = '<html><nav><p>Меню сайта и ссылки на разделы, которые не нужны модели совсем</p></nav><script>var x=1</script><article><h1>t</h1>'

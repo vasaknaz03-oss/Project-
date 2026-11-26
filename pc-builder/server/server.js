@@ -34,6 +34,7 @@ const kufarIndex = require('./kufarIndex');
 const secrets = require('./secrets');
 const telegram = require('./telegram');
 const ai = require('./ai');
+const buildAdvice = require('./buildAdvice');
 const llm = require('./llm');
 const { PROVIDERS } = require('./aiProviders');
 // Загрузка модели в Ollama из «Настроек» (одна за раз)
@@ -528,11 +529,29 @@ async function route(req, res, url) {
     const model = eng === 'local' ? llm.config() : null;
     const provider = model?.provider || (eng === 'anthropic' ? 'anthropic' : f.ai ? 'server' : null);
     return send(res, 200, {
-      ai: !!eng || !!f.ai, youtube: youtube.available() || !!f.youtube, model: ai.modelLabel() || ai.MODEL,
+      ai: !!eng || !!f.ai, buildAdvice: !!eng || !!f.aiBuild, youtube: youtube.available() || !!f.youtube, model: ai.modelLabel() || ai.MODEL,
       provider, providerLabel: provider ? PROVIDERS[provider].label : null,
       via: { ai: eng === 'anthropic' ? 'own' : model ? (model.cloud ? 'cloud' : 'local') : f.ai ? 'server' : null, youtube: youtube.available() ? 'own' : f.youtube ? 'server' : null },
       limits: me ? { limits: me.limits, used: me.usedToday } : null,
     });
+  }
+  if (pathname === '/api/ai/build-advice' && req.method === 'POST') {
+    const own = ai.cacheScope();
+    const endpoint = remote.baseUrl();
+    if (!own && !(await remote.has('aiBuild'))) {
+      return send(res, 503, { error: 'Подключите провайдера ИИ в настройках. Для общего сервера нужна поддержка оценки сборки.' });
+    }
+    const body = await readBody(req);
+    const provider = own ? (ai.engine() === 'anthropic' ? 'anthropic' : llm.config()?.provider) : 'server';
+    const changed = () => ai.cacheScope() !== own || (!own && remote.baseUrl() !== endpoint);
+    const retry = { error: 'Подключение к ИИ изменилось. Откройте помощник ещё раз.' };
+    if ((body?.provider && body.provider !== provider) || changed()) return send(res, 409, retry);
+    const context = await buildAdvice.prepare(body);
+    if (changed()) return send(res, 409, retry);
+    const answer = own
+      ? await ai.reviewBuild(context.input)
+      : await remote.call('/v1/ai/build-advice', { method: 'POST', body: context.input, timeout: 3 * 60 * 1000 });
+    return send(res, 200, buildAdvice.result(context, answer));
   }
   if (pathname === '/api/ai/research' && req.method === 'POST') {
     const body = await readBody(req);

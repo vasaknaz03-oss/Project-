@@ -1203,4 +1203,4 @@ async function upgrade(opts) {
   return { current: owned, index: nowIdx, bottleneck: bottleneck(owned), scenarios: results, best: results[0] ? results[0].id : null, value: value ? value.id : null, purpose };
 }
 
-module.exports = { build, hybrid, upgrade, PROFILES, boardSuitable, _internal: { gather, preparePools, optimize, scoreParts } };
+module.exports = { build, hybrid, upgrade, PROFILES, boardSuitable, COOLER_FAMILY, _internal: { gather, preparePools, optimize, scoreParts } };

@@ -145,7 +145,7 @@ async function route(req, res, url) {
   if (pth === '/v1/health') {
     return send(res, 200, {
       ok: true, version: VERSION,
-      features: { ai: ai.available(), youtube: !!cfg.youtubeKey, telegram: bot.enabled(), kufar: true, fetch: true },
+      features: { ai: ai.available(), aiBuild: ai.available(), youtube: !!cfg.youtubeKey, telegram: bot.enabled(), kufar: true, fetch: true },
       bot: bot.botName() || null,
     });
   }
@@ -188,6 +188,16 @@ async function route(req, res, url) {
   }
 
   // ---------------- ИИ: выжимка с форумов и обзоров
+  if (pth === '/v1/ai/build-advice' && req.method === 'POST') {
+    const kind = 'research_quick';
+    checkLimit(d, kind);
+    checkBudget();
+    const { usage, engine, ...answer } = await ai.reviewBuild(await readBody(req));
+    db.spend.add(aiCost(usage, engine));
+    db.usage.add(d.id, kind);
+    return send(res, 200, answer);
+  }
+
   if (pth === '/v1/ai/research' && req.method === 'POST') {
     const b = await readBody(req);
     const mode = ['part', 'oc', 'build', 'free'].includes(b.mode) ? b.mode : 'free';

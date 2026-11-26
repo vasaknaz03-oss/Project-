@@ -8,6 +8,7 @@ import { adChips, adLink, hideButton, isHidden, isViewed, hiddenToggle } from '.
 import { watchButton } from './watch.js';
 import { offersTable, historyBlock, openBuyPlan } from './shops.js';
 import { fpsTable, powerDraw, monthlyCost, RESOLUTIONS } from './games.js';
+import { openBuildAdvice } from './ai.js';
 
 const Compat = window.Compat;
 const Catalog = window.Catalog;
@@ -684,6 +685,7 @@ function renderBuild(v) {
     meter('Рабочий индекс', idx.work, 300, 'монтаж, рендер, компиляция'),
     el('div.sum-actions',
       b.custom ? el('button.btn.btn-primary', { title: 'Оставить ваши детали и подобрать недостающее под бюджет', onclick: fillMissing }, icon('sparkles'), 'Подобрать недостающее') : null,
+      el('button.btn.btn-primary', { title: 'Оценка сборки через подключённого провайдера ИИ', onclick: () => askBuildAdvice(v, have) }, icon('sparkles'), 'ИИ-помощник'),
       el('button.btn', { onclick: () => saveCurrent(v) }, icon('save'), 'Сохранить'),
       el('button.btn', { title: 'В каком магазине (или паре магазинов) есть вся сборка и сколько это стоит', onclick: () => openBuyPlan(Object.values(parts).concat(Object.values(b.setup || {}))) }, icon('store'), 'Где купить всё'),
       el('button.btn', { onclick: () => copyText(buildText(textTitle(v), parts, total, '', b.setup)) }, icon('copy'), 'Копировать список'),
@@ -736,6 +738,31 @@ function renderBuild(v) {
         `Подбор занял ${(state.result.stats.ms / 1000).toFixed(1)} с, просмотрено ${state.result.stats.cpus} процессоров, ${state.result.stats.gpus} моделей видеокарт, ${state.result.stats.boards} плат.`)));
 
   return el('div', summary, el('div.layout-2', partsBox, side));
+}
+
+function askBuildAdvice(v, have) {
+  const { parts, setup, alternatives = {} } = v.build;
+  const ids = Object.fromEntries(SLOTS.map(({ key }) => {
+    const list = [...(alternatives[key] || []), ...(key === 'gpu' ? alternatives.gpuSame || [] : [])];
+    return [key, [...new Set(list.filter(({ item }) => item?.source === 'onliner').map(({ item }) => item.id))].slice(0, 8)];
+  }));
+  openBuildAdvice({
+    purpose: state.result.purpose, parts, setup, have, alternatives: ids, budget: state.result.budget || fullTotal(v.build),
+    apply: ({ slot, item }, budget) => {
+      if (current() !== v || v.build.parts !== parts || v.build.setup !== setup) {
+        toast('Сборка изменилась. Проверьте её заново.', 'err');
+        return false;
+      }
+      const next = { ...parts, [slot]: item };
+      const cents = (items) => Object.values(items || {}).reduce((n, it) => n + Math.round((Number(it?.price) || 0) * 100), 0);
+      if (cents(next) + cents(setup) > Math.round(budget * 100) || Compat.check(next, have).some((c) => c.level === 'error')) {
+        toast('ПодборПК не смог подтвердить эту замену по совместимости и бюджету.', 'err');
+        return false;
+      }
+      replacePart(slot, item);
+      return true;
+    },
+  });
 }
 
 let fpsRes = '1080';
