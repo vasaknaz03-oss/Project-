@@ -1,7 +1,7 @@
 // Страница «Слежение»: цены товаров, сохранённые поиски Kufar, уведомления и работа в фоне.
 import { el, icon, api, money, toast, thumb, plural } from './util.js';
 import { state, saveSettings } from './state.js';
-import { adChips, adLink, ago } from './kufarui.js';
+import { adChips, adRisk, adLink, ago } from './kufarui.js';
 
 let root = null;
 let W = null; // ответ /api/watch
@@ -147,7 +147,7 @@ function renderEvents() {
 function adRow(a) {
   return el('div.alt',
     thumb(a.image, 'recycle'),
-    el('div', el('div.alt-name', adLink(a)), el('div.row.wrap.ad-chips', adChips(a))),
+    el('div', el('div.alt-name', adLink(a)), el('div.row.wrap.ad-chips', adChips(a)), adRisk(a, rerenderWatch)),
     el('div.alt-price', el('b', money.fmt(a.price))));
 }
 

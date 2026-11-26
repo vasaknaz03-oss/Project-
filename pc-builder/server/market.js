@@ -83,9 +83,11 @@ async function index(kind) {
       if (!r.next) break;
       cursor = r.next;
     }
+    const candidates = all.filter((it) => it.price >= 15 && !kufar.offTopic(it.name) && K.key(it));
+    await kufar.inspect(candidates, { limit: 24 });
     const groups = {};
-    for (const it of all) {
-      if (!it.price || it.price < 15 || kufar.isJunk(it.name)) continue;
+    for (const it of candidates) {
+      if (kufar.risk(it).level !== 'clear') continue;
       const k = K.key(it);
       if (k) (groups[k] = groups[k] || []).push(it.price);
     }
@@ -130,6 +132,10 @@ async function annotate(items, kindOrCat) {
   }
   for (const it of items) {
     if (it.source !== 'kufar') continue;
+    if (kufar.risk(it).level !== 'clear') {
+      delete it.market;
+      continue;
+    }
     const k = KINDS[kind].key(it);
     const v = k && verdict(it.price, map[k]);
     if (v) it.market = v;
@@ -139,9 +145,10 @@ async function annotate(items, kindOrCat) {
 
 /** Рынок по готовому списку объявлений одной модели (панель «Та же модель»). */
 function annotateSame(items) {
-  const s = stats(items.map((it) => it.price));
+  const usable = items.filter((it) => kufar.risk(it).level === 'clear');
+  const s = stats(usable.map((it) => it.price));
   if (!s) return null;
-  for (const it of items) it.market = verdict(it.price, s);
+  for (const it of usable) it.market = verdict(it.price, s);
   return s;
 }
 
@@ -154,6 +161,8 @@ const KNOWN_BRAND = /asus|msi|gigabyte|aorus|palit|gainward|zotac|sapphire|power
  * цена относительно рынка, понятный бренд, безопасная сделка.
  */
 function valueScore(it, kind) {
+  const state = kufar.risk(it).level;
+  if (state === 'blocked' || state === 'caution') return { tier: 0, v: state === 'blocked' ? -2 : -1 };
   if (!it.price) return { tier: 0, v: 0 };
   kind = KIND_OF[kind] || VALUE_KIND[kind] || kind;
   const name = String(it.name || '');
@@ -166,7 +175,7 @@ function valueScore(it, kind) {
     const guess = model && +model[1] >= 300 && +model[1] <= 2000 && +model[1] % 50 === 0 ? +model[1] : 0;
     const w = wattsList.length ? Number(wattsList[0].replace(/\D/g, '')) : guess;
     const cert = /titanium|platinum|платин/i.test(name) ? 1.25 : /gold|голд|золот/i.test(name) ? 1.15 : /silver|bronze|бронз/i.test(name) ? 1.05 : 1;
-    const junkPsu = /куплю|нерабоч|не\s*рабоч|запчаст|под\s*ремонт|неисправ|бронь|кабел|переходник|шнур|разветвит/i.test(name);
+    const junkPsu = /куплю|бронь|кабел|переходник|шнур|разветвит/i.test(name);
     const brand = KNOWN_BRAND.test(name) ? 1.15 : 1;
     if (junkPsu) return { tier: 0, v: 0 };
     if (listing || !w || w < 300) return { tier: 1, v: brand / it.price };
@@ -174,7 +183,7 @@ function valueScore(it, kind) {
   }
   // Разделы без мерила (корпуса, кулеры, платы, мониторы…): сначала понятные бренды, списки и «куплю» — вниз
   if (!KIND_OF[kind] && kind !== 'psu') {
-    const bad = /куплю|нерабоч|не\s*рабоч|запчаст|под\s*ремонт|неисправ|бронь|брониров/i.test(name);
+    const bad = /куплю|бронь|брониров/i.test(name);
     if (bad) return { tier: 0, v: 0 };
     const m0 = it.market;
     let f = m0 && typeof m0.pct === 'number' ? Math.max(0.75, Math.min(1.3, 1 - m0.pct / 100)) : 1;
@@ -216,8 +225,8 @@ function valueScore(it, kind) {
   const foreign = ((kind === 'ram' || kind === 'ssd') && (perf.gpuKey(it.name || '') || /видеокарт|процессор/i.test(it.name || '')))
     || (kind === 'gpu' && /ноутбук|ноутбучн|mobile|max-?q|\d{4}\s?[mм](?![a-zа-я])/i.test(it.name || ''));
   const bad = tooCheap || foreign || (m && m.deal === 'suspicious')
-    || ((kind === 'gpu' || kind === 'cpu') && kufar.isJunk(it.name))
-    || /куплю|нерабоч|не\s*рабоч|запчаст|под\s*ремонт|неисправ|бронь|брониров|fake|фейк|подделк|locked|заблокир|битый|бэд\s*блок|bad\s*(block|sector)/i.test(it.name || '');
+    || ((kind === 'gpu' || kind === 'cpu') && kufar.offTopic(it.name))
+    || /куплю|бронь|брониров|fake|фейк|подделк|locked/i.test(it.name || '');
   let f = 1;
   if (m && typeof m.pct === 'number') f *= Math.max(0.75, Math.min(1.3, 1 - m.pct / 100));
   if (KNOWN_BRAND.test(it.name || '')) f *= 1.08;
@@ -237,12 +246,14 @@ function multiOption(name) {
 }
 
 /** Сортировка объявлений «сначала выгодные»; лучшим трём ставится отметка best. */
-function rankByValue(items, kind) {
-  const scored = items.map((it) => ({ it, s: valueScore(it, kind) }));
-  scored.sort((a, b) => b.s.tier - a.s.tier || b.s.v - a.s.v);
-  scored.forEach((x, i) => {
-    if (i < 3 && x.s.tier === 2) x.it.best = true;
-  });
+function rankByValue(items, kind, markBest = true) {
+  const scored = items.map((it) => ({ it, s: valueScore(it, kind), checked: kufar.risk(it).level === 'clear' }));
+  scored.sort((a, b) => b.s.tier - a.s.tier || Number(b.checked) - Number(a.checked) || b.s.v - a.s.v);
+  let marked = 0;
+  for (const x of scored) {
+    x.it.best = markBest && x.checked && x.s.tier === 2 && marked < 3;
+    if (x.it.best) marked++;
+  }
   return scored.map((x) => x.it);
 }
 

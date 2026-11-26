@@ -1,6 +1,6 @@
 // Страница «Поиск комплектующих»: Onliner (новые, цены магазинов) и Kufar (объявления).
 import { el, icon, api, money, toast, modal, thumb, plural } from './util.js';
-import { adChips, adLink, hideButton, isHidden, isViewed, hiddenToggle } from './kufarui.js';
+import { adChips, adRisk, adLink, hideButton, isBlocked, isFiltered, isViewed, hiddenToggle } from './kufarui.js';
 import { isWatched, toggleWatch, saveKufarSearch } from './watch.js';
 import { offersTable, historyBlock } from './shops.js';
 import { state, CAT_TO_SLOT, CAT_ICON, specChips, shopLinks, linkFor } from './state.js';
@@ -317,8 +317,8 @@ function renderResults() {
     out.push(el('div.dim.small', { style: { marginTop: '14px' } },
       S.src === 'kufar' && S.index ? indexLine(S.index)
         : S.src === 'kufar' ? `Найдено объявлений: ${S.total.toLocaleString('ru-RU')} · показано ${S.items.length}${S.next ? ' — ниже кнопка «Показать ещё»' : ''}` : S.cat ? `Товаров в разделе: ${S.total.toLocaleString('ru-RU')}` : 'Результаты каталога Onliner: компьютеры, периферия, мониторы и всё для сетапа'));
-    const hiddenN = S.src === 'kufar' ? S.items.filter(isHidden).length : 0;
-    const shown = S.src === 'kufar' && !S.showHidden ? S.items.filter((it) => !isHidden(it)) : S.items;
+    const hiddenN = S.src === 'kufar' ? S.items.filter(isFiltered).length : 0;
+    const shown = S.src === 'kufar' && !S.showHidden ? S.items.filter((it) => !isFiltered(it)) : S.items;
     if (hiddenN) out.push(el('div.dim.small', { style: { marginTop: '6px' } }, `Скрыто объявлений: ${hiddenN}. `, hiddenToggle(hiddenN, S.showHidden, () => { S.showHidden = !S.showHidden; render(); })));
     if (S.src === 'kufar') {
       out.push(el('div.notice.watch-hint', icon('bell'),
@@ -375,7 +375,7 @@ function card(it) {
     isOnliner
       ? el('div.part-specs', specChips(it.category, it).slice(0, 4))
       : it.source === 'wb' ? el('div.pcard-desc', 'Маркетплейс Wildberries, доставка в Беларусь')
-      : el('div', el('div.pcard-desc', it.location || ''), el('div.row.wrap.ad-chips', adChips(it))),
+      : el('div', el('div.pcard-desc', it.location || ''), el('div.row.wrap.ad-chips', adChips(it)), adRisk(it, render)),
     isOnliner && it.description ? el('div.pcard-desc', it.description) : null,
     el('div.pcard-foot',
       el('div',
@@ -390,12 +390,14 @@ function card(it) {
           style: isWatched(it) ? { color: 'var(--accent)' } : null,
           onclick: async (e) => { await toggleWatch(it, e.currentTarget); render(); },
         }, icon('bell')) : null,
-        !isOnliner && hasActiveBuild() && S.cat && (CAT_TO_SLOT[S.cat] || Catalog.setupById[S.cat]) ? el('button.btn.btn-sm', {
+        !isOnliner && !isBlocked(it) && hasActiveBuild() && S.cat && (CAT_TO_SLOT[S.cat] || Catalog.setupById[S.cat]) ? el('button.btn.btn-sm', {
           title: CAT_TO_SLOT[S.cat] ? 'Взять объявление в сборку и закрепить' : 'Добавить объявление в сетап',
           onclick: async (e) => {
-            e.currentTarget.disabled = true;
+            const button = e.currentTarget;
+            button.disabled = true;
             const ok = CAT_TO_SLOT[S.cat] ? await takeKufarToBuild(CAT_TO_SLOT[S.cat], it) : await takeKufarToBuild(S.cat, it, true);
             if (ok) document.dispatchEvent(new CustomEvent('goto-page', { detail: 'build' }));
+            else button.disabled = false;
           },
         }, CAT_TO_SLOT[S.cat] ? 'В сборку' : 'В сетап') : null,
         el('button.icon-btn', { title: inCompare ? 'Убрать из сравнения' : 'Добавить к сравнению', style: inCompare ? { color: 'var(--accent)' } : null, onclick: () => toggleCompare(it) }, icon('scale')),

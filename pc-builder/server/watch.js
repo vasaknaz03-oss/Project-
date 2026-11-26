@@ -122,15 +122,17 @@ async function checkItem(d, it) {
 // ------------------------------------------------------------------ поиски Kufar
 
 function slimAd(a) {
-  const { id, name, price, url, image, location, date, company, delivery, safedeal, market: m } = a;
-  return { id, name, price, url, image, location, date, company, delivery, safedeal, market: m || null, source: 'kufar' };
+  const { id, name, price, url, image, location, date, company, delivery, safedeal, risk, market: m } = a;
+  return { id, name, price, url, image, location, date, company, delivery, safedeal, risk, market: m || null, source: 'kufar' };
 }
 
 async function runSearch(s, size = 50) {
   if (!kufarOptsFor) throw new Error('Поиск Kufar не настроен');
   const opts = kufarOptsFor(s);
   const r = await kufar.search({ ...opts, sort: 'new', size, priceMax: s.priceMax || undefined, condition: s.cond || '' });
-  const items = r.items.filter((a) => a.price > 0 && !kufar.isJunk(a.name) && (!s.priceMax || a.price <= s.priceMax));
+  const candidates = r.items.filter((a) => a.price > 0 && !kufar.offTopic(a.name) && (!s.priceMax || a.price <= s.priceMax));
+  await kufar.inspect(candidates, { limit: 10, timeout: 2200 });
+  const items = kufar.prioritize(candidates).filter((a) => a.risk.level !== 'blocked');
   if (s.cat) await market.annotate(items, s.cat);
   return { items, total: r.total };
 }

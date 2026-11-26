@@ -1,6 +1,7 @@
 // Общие элементы объявлений Kufar: продавец, дата, доставка и оплата, оценка цены относительно рынка,
 // отметки «просмотрено» и «скрыто».
-import { el, icon, api, money, debounce } from './util.js';
+import { el, icon, api, money, debounce, modal } from './util.js';
+import { aiStatus } from './ai.js';
 
 const marks = { hidden: {}, viewed: {} };
 let loaded = false;
@@ -31,6 +32,8 @@ const saveMarks = debounce(() => {
 }, 600);
 
 export const isHidden = (u) => !!marks.hidden[u.id];
+export const isBlocked = (ad) => ad.risk?.level === 'blocked';
+export const isFiltered = (ad) => isHidden(ad) || isBlocked(ad);
 export const isViewed = (u) => !!marks.viewed[u.id];
 export const hiddenCount = (list) => list.filter(isHidden).length;
 
@@ -88,6 +91,58 @@ export function adChips(u) {
   return out;
 }
 
+const RISK_TITLE = { blocked: 'Скрыто фильтром', caution: 'Понижено в выдаче', unknown: 'Описание не проверено', clear: 'Признаков неисправности в тексте не найдено' };
+const CONFIDENCE = { high: 'высокая', medium: 'средняя', low: 'низкая' };
+const AI_VERDICT = {
+  fault: 'По мнению ИИ, продавец описывает текущий дефект.',
+  seller_reports_working: 'ИИ считает, что продавец заявляет о рабочем состоянии.',
+  unclear: 'ИИ не смог определить, что продавец сообщает о работоспособности.',
+};
+
+export function adRisk(ad, onChange) {
+  const risk = ad.risk;
+  if (!risk || risk.level === 'clear') return null;
+  return el('div.small', { style: { marginTop: '5px' } },
+    el('b', RISK_TITLE[risk.level]),
+    risk.level !== 'unknown' && risk.reasons[0] ? el('div.dim', risk.reasons[0]) : null,
+    /^\d{1,16}$/.test(ad.id) ? el('button.link-btn', { onclick: () => checkAd(ad, onChange) }, 'Проверить объявление') : null);
+}
+
+async function checkAd(ad, onChange) {
+  const panel = el('div', el('p.muted', 'Загружаем описание Kufar…'));
+  modal('Проверка объявления Kufar', panel);
+  const request = (useAi = false) => api('/api/kufar/check', { method: 'POST', body: { id: ad.id, ai: useAi } });
+  try {
+    const { risk } = await request();
+    ad.risk = risk;
+    if (onChange) onChange();
+    const answer = el('div', { role: 'status' });
+    const note = risk.level === 'clear' ? 'Проверка основана на словах продавца.' : `Уверенность по тексту — ${CONFIDENCE[risk.confidence]}.`;
+    panel.replaceChildren(el('h3', ad.name), el('p', RISK_TITLE[risk.level]),
+      risk.reasons.length ? el('ul', risk.reasons.map((reason) => el('li', reason))) : null,
+      el('p.dim.small', note), answer);
+    if (risk.level !== 'caution' || !risk.full) return;
+    const status = await aiStatus(true);
+    if (!status.kufarReview) return;
+    const button = el('button.btn.btn-sm.btn-primary', { onclick: async () => {
+      button.disabled = true;
+      answer.replaceChildren(el('p.muted', 'ИИ читает описание…'));
+      try {
+        const r = await request(true);
+        ad.risk = r.risk;
+        if (onChange) onChange();
+        answer.replaceChildren(el('p', r.review ? AI_VERDICT[r.review.verdict] || AI_VERDICT.unclear : RISK_TITLE[r.risk.level]));
+      } catch (e) {
+        answer.replaceChildren(el('div.notice.err', e.message));
+        button.disabled = false;
+      }
+    } }, icon('sparkles'), 'Проверить через ИИ');
+    answer.before(el('p.dim.small', `Заголовок и описание будут переданы в ${status.providerLabel || 'подключённый сервис'}. Ссылки и распознанные контакты скрываются.`), button);
+  } catch (e) {
+    panel.replaceChildren(el('div.notice.err', icon('error'), e.message));
+  }
+}
+
 /** Цена относительно рынка (медиана б/у этой модели на Kufar). */
 export function dealChip(u) {
   const m = u.market;
@@ -102,6 +157,7 @@ export function dealChip(u) {
 
 /** Кнопка «Скрыть / Вернуть». */
 export function hideButton(u, onChange) {
+  if (isBlocked(u)) return null;
   const hidden = isHidden(u);
   return el('button.btn.btn-sm.btn-ghost', {
     title: hidden ? 'Вернуть объявление в списки' : 'Скрыть объявление: больше не показывать его',

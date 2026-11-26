@@ -11,7 +11,7 @@ const { normSocket, capacityGb } = require('./parsers');
 // «Тип» в категории «Комплектующие» Kufar для каждого слота сборки
 const TYPE = { cpu: '10', gpu: '11', motherboard: '7', ram: '9', ssd: '15', hdd: '13', psu: '5', case: '1', cooler: '3' };
 const SCHEMA = { cpu: 'cpu', gpu: 'videocard', motherboard: 'motherboard', ram: 'dram', ssd: 'ssd', hdd: 'hdd', psu: 'powersupply', case: 'chassis', cooler: 'fan' };
-const JUNK = /куплю|коробк|нерабоч|не\s*рабоч|запчаст|под\s*ремонт|только\s*обмен|на\s*детали|деф+ект|неисправ|сломан|битая|битый|восстанов|артефакт|без\s*видео|не\s*стартует|не\s*определяется|заброниров|продан[оа]?\b|(?:^|[^а-яёa-z])(cmp|смр)\s*\d|frankenstein|франкен|\d{4}\s*m\b|mobile|мобильн/i;
+const OTHER = /куплю|коробк|только\s*обмен|заброниров|продан[оа]?(?![а-яё])|(?:^|[^а-яёa-z])(cmp|смр)\s*\d|frankenstein|франкен|\d{4}\s*m\b|mobile|мобильн/i;
 
 const norm = (s) => String(s || '').toUpperCase().replace(/[\s_-]+/g, '');
 
@@ -128,9 +128,9 @@ async function compatible(slot, part, ctx = {}, { limit = 40, pages = 2 } = {}) 
     if (!r.next) break;
     cursor = r.next;
   }
-  // Цены-приманки («1 р.», «10 р.») и неисправное — отбрасываем
+  // Исключаем объявления с ценой-приманкой и товары другого типа.
   const floor = Math.max(20, ((part && part.price) || 0) * 0.15);
-  const items = all.filter((it) => it.price >= floor && !JUNK.test(it.name));
+  const items = all.filter((it) => it.price >= floor && !OTHER.test(it.name));
   // Производительность для процессоров и видеокарт
   for (const it of items) {
     if (slot === 'cpu') {
@@ -143,7 +143,9 @@ async function compatible(slot, part, ctx = {}, { limit = 40, pages = 2 } = {}) 
     if (part && part.perf && it.perf && part.perf.key && it.perf.key === part.perf.key) it.sameModel = true;
   }
   items.sort((a, b) => a.price - b.price);
-  return { items: items.slice(0, limit), total, url: webUrl(params, query), criteria: crit.join(', ') };
+  const shown = items.slice(0, limit);
+  await kufar.inspect(shown);
+  return { items: kufar.prioritize(shown), total, url: webUrl(params, query), criteria: crit.join(', ') };
 }
 
 // ---------------------------------------------------------------- объявление → деталь сборки
@@ -187,7 +189,8 @@ async function onlinerTwin(schema, query, keyFn, key) {
 }
 
 async function enrich(slot, item) {
-  const out = { ...item, source: 'kufar', category: SCHEMA[slot], specs: {}, offers: 0, fromKufar: true };
+  const { description, ...fields } = item;
+  const out = { ...fields, source: 'kufar', category: SCHEMA[slot], specs: {}, offers: 0, fromKufar: true };
   const name = item.name || '';
   const notes = [];
 

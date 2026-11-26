@@ -9,6 +9,7 @@ const path = require('path');
 const crypto = require('crypto');
 const kufar = require('./providers/kufar');
 const store = require('./store');
+const market = require('./market');
 
 const PAGE = 200;
 const MAX_ADS = 8000; // больше в одном разделе почти не бывает; защита от бесконечного листания
@@ -54,7 +55,7 @@ function loadSaved(key) {
 
 // На диск — без вычисляемых полей (оценка рынка и «лучшее» пересчитываются при каждом показе)
 function compact(it) {
-  const { market, best, perf, ...rest } = it;
+  const { market, best, perf, description, ...rest } = it;
   return rest;
 }
 
@@ -155,4 +156,18 @@ function list(ix) {
   return [...ix.items.values()];
 }
 
-module.exports = { ensure, status, list, keyOf, refresh, _indexes: indexes };
+async function pageOf(ix, sectionId, page) {
+  const all = list(ix);
+  if (sectionId) await market.annotate(all, sectionId);
+  const ranked = market.rankByValue(all, sectionId);
+  const per = 50;
+  const items = ranked.slice((page - 1) * per, page * per);
+  await kufar.inspect(items);
+  if (sectionId) await market.annotate(items, sectionId);
+  return {
+    items: market.rankByValue(items, sectionId, page === 1), total: ix.total || ranked.length,
+    pages: Math.max(1, Math.ceil(ranked.length / per)), next: null, index: status(ix), condition: true,
+  };
+}
+
+module.exports = { ensure, status, list, pageOf, keyOf, refresh, _indexes: indexes };

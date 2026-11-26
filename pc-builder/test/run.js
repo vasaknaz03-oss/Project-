@@ -281,7 +281,9 @@ test('слежение: снижение цены, цель и новые объ
   const kufar = require('../server/providers/kufar');
   const orig = { product: onliner.product, search: kufar.search };
   let price = 1000;
-  let ads = [{ id: '1', name: 'Видеокарта RTX 3060 12GB', price: 900, source: 'kufar' }];
+  const assessed = (name, description) => require('../server/kufarCondition').assess(name, description, true);
+  const good = assessed('RTX 3060', 'В рабочем состоянии.');
+  let ads = [{ id: '1', name: 'Видеокарта RTX 3060 12GB', price: 900, source: 'kufar', risk: good }];
   onliner.product = async () => ({ price });
   kufar.search = async () => ({ items: ads, total: ads.length });
   try {
@@ -296,10 +298,13 @@ test('слежение: снижение цены, цель и новые объ
     assert.deepStrictEqual(got.sort(), ['price', 'target']);
     await W.addSearch({ cat: 'videocard', q: 'rtx 3060' });
     got.length = 0;
-    ads = [{ id: '2', name: 'RTX 3060 Palit', price: 850, source: 'kufar' }, ...ads];
+    const broken = assessed('RTX 3060', 'Вентиляторы крутятся, но нет картинки.');
+    ads = [{ id: '9', name: 'RTX 3060', price: 100, source: 'kufar', risk: broken },
+      { id: '2', name: 'RTX 3060 Palit', price: 850, source: 'kufar', risk: good }, ...ads];
     await W.check({ force: true });
     assert.deepStrictEqual(got, ['ads']);
     const sum = W.summary();
+    assert.ok(sum.searches[0].latest.every((a) => a.id !== '9'));
     assert.strictEqual(sum.items[0].lastPrice, 940);
     assert.ok(sum.unread >= 3);
     off();
@@ -773,6 +778,125 @@ test('ИИ-помощник сборки: реальные позиции, об�
     assert.ok(incomplete.data.findings.some((f) => f.text.includes('нет цены')));
   } finally {
     Object.assign(onliner, original);
+    await new Promise((resolve) => server.close(resolve));
+    store.flush();
+    store.setDir(previousDir);
+  }
+});
+
+test('Kufar: явные дефекты, опечатки, отрицания и контекст', () => {
+  const { assess } = require('../server/kufarCondition');
+  const examples = [
+    // Фрагменты описаний Kufar: item/1094690014, item/1083769765, item/1083096605, item/1093132953.
+    ['GT 9600', 'работает но артефакты вертикальные', 'blocked'],
+    ['GTX 1060', 'при долгой нагрузке изредка могут появляться артефакты', 'blocked'],
+    ['RTX 3060', 'не майнила, не грелась, не разбиралась, артефактов нет', 'clear'],
+    ['GTX 670', 'под нагрузкой артефакты, на запчасти', 'blocked'],
+    ['RTX 4060', 'Рабочая, проверена. Без дефектов и артефактов.', 'clear'],
+    ['RTX 4060', 'Артефактов, перегревов и глюков нет.', 'clear'],
+    ['RTX 4060', 'Артефактов/перегревов нет.', 'clear'],
+    ['Комплект 2x8GB DDR4', 'Проверено на ошибки, дефектов не наблюдается.', 'clear'],
+    ['RTX 4060', 'Не работала до ремонта. После ремонта проверена.', 'caution'],
+    ['RTX 3070', 'Работает, после маининга, тесты прошла.', 'caution'],
+    ['RTX 3070', 'Без артефактов. Не майнила. Ремонтировалась.', 'caution'],
+    ['GTX 1060', 'Не вклучается, вентиляторы крутятся.', 'blocked'],
+    ['RTX 3060', 'Запускается, но нет картинки.', 'blocked'],
+    ['RTX 3060', 'Не даёт изображения. Чип отвалился.', 'blocked'],
+    ['RTX 3060', 'Никаких следов ремонта, но чип отвалился.', 'blocked'],
+    ['RTX 3060', 'Возможно артефакты, проверить нечем.', 'caution'],
+    ['RTX 3060', 'Рабочая. Иногда глючит подсветка.', 'caution'],
+    ['RTX 4060', 'HDMI не работает. Через DisplayPort всё хорошо.', 'caution'],
+    ['Материнская плата', 'Не работает с DDR4, стабильно работает с DDR5.', 'clear'],
+    ['RTX 4060', 'Для компьютера. Не для майнинга. Продаю, потому что обновился.', 'clear'],
+    ['RTX 4060', 'В нормальном состоянии. Если не работает, можно вернуть.', 'caution'],
+    ['RTX 4060', '<p>Без дефектов</p><p>&#x43D;е запускается</p>', 'blocked'],
+  ];
+  for (const [title, body, expected] of examples) assert.strictEqual(assess(title, body, true).level, expected, title + ' / ' + body);
+  assert.deepStrictEqual(assess('RTX 4060', '', true).level, 'unknown');
+  assert.strictEqual(assess('RTX 4060', '', false).confidence, 'low');
+  assert.strictEqual(assess('RTX 4060 на запчасти').confidence, 'high');
+});
+
+test('Kufar: полные описания, кэш, выдача, сборка и добровольная проверка ИИ', async () => {
+  await Promise.all(pending.slice());
+  const store = require('../server/store');
+  const secrets = require('../server/secrets');
+  const ai = require('../server/ai');
+  const kufar = require('../server/providers/kufar');
+  const market = require('../server/market');
+  const { _internal: builder } = require('../server/builder');
+  const { createServer } = require('../server/server');
+  const previousDir = store.dataDir();
+  store.flush();
+  store.setDir(require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'podbor-kufar-check-')));
+  const server = createServer();
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const local = `http://127.0.0.1:${server.address().port}`;
+  const fixtures = [
+    ['95070001', 100, 'Без изображения, вентиляторы крутятся.'],
+    ['95070002', 500, 'После майнинга. Состояние рабочее. Пишите user@example.com, +375 (29) 111-22-33 или https://example.com/chat'],
+    ['95070003', 600, 'Не майнила, артефактов нет.'],
+    ['95070004', 620, 'Рабочая, проверена. Без дефектов.'],
+    ['95070005', 640, 'Исправна, можно проверить.'],
+    ['95070006', 110, ''],
+  ];
+  const entry = (id, price, body) => ({ ad_id: id, price_byn: String(price * 100), subject: 'Palit RTX 4060', body, body_short: '', ad_parameters: [] });
+  const fetchReal = global.fetch;
+  const fetched = new Map();
+  global.fetch = async (url, init) => {
+    const adr = new URL(url);
+    if (adr.origin === local) return fetchReal(url, init);
+    if (adr.hostname !== 'api.kufar.by') return Response.json({}, { status: 404 });
+    const match = adr.pathname.match(/\/item\/(\d+)\/rendered$/);
+    if (!match) return Response.json({ ads: fixtures.map(([id, price]) => entry(id, price, '')), total: fixtures.length });
+    const id = match[1];
+    fetched.set(id, (fetched.get(id) || 0) + 1);
+    const ad = fixtures.find((x) => x[0] === id);
+    return ad ? Response.json({ result: entry(...ad) }) : Response.json({}, { status: 404 });
+  };
+  const api = async (path, body) => {
+    const req = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : undefined;
+    const r = await fetchReal(local + path, req);
+    return { status: r.status, data: await r.json() };
+  };
+  const prompts = [];
+  try {
+    const searched = await api('/api/search?src=kufar&q=rtx%204060&sort=price_asc');
+    assert.strictEqual(searched.status, 200);
+    assert.deepStrictEqual(searched.data.items.map((a) => a.risk.level), ['clear', 'clear', 'clear', 'unknown', 'caution', 'blocked']);
+    assert.ok(searched.data.items.every((ad) => ad.description === undefined));
+    assert.strictEqual(market.annotateSame(searched.data.items).median, 620);
+    assert.ok(searched.data.items.filter((a) => a.risk.level !== 'clear').every((ad) => !ad.market));
+    assert.strictEqual((await api('/api/kufar/enrich', { slot: 'gpu', item: { id: fixtures[0][0], name: 'RTX 4060' } })).status, 400);
+
+    const gpus = [{ name: 'Palit RTX 4060', perf: { key: 'rtx4060', score: 100 }, specs: {} }];
+    const eligible = await builder.kufarUsedParts('gpu', { gpus }, {}, 1800);
+    assert.deepStrictEqual(eligible.map((x) => x.id), ['kufar-95070003', 'kufar-95070004']);
+
+    secrets.set({ anthropicKey: 'test-kufar-advice' });
+    ai._setClientForTests({ beta: { messages: { create: async (req) => {
+      prompts.push(req.messages[0].content);
+      return { model: 'test-kufar', stop_reason: 'end_turn', usage: { input_tokens: 10, output_tokens: 5 },
+        content: [{ type: 'text', text: '{"verdict":"seller_reports_working"}' }] };
+    } } } });
+    const cautious = await api('/api/kufar/check', { id: fixtures[1][0] });
+    assert.strictEqual(cautious.data.risk.level, 'caution');
+    assert.strictEqual(prompts.length, 0);
+    const blocked = await api('/api/kufar/check', { id: fixtures[0][0], ai: true });
+    assert.strictEqual(blocked.data.risk.level, 'blocked');
+    assert.strictEqual(prompts.length, 0);
+    const review = await api('/api/kufar/check', { id: fixtures[1][0], ai: true });
+    assert.strictEqual(review.data.risk.level, 'caution');
+    assert.strictEqual(review.data.review.verdict, 'seller_reports_working');
+    assert.strictEqual(prompts.length, 1);
+    assert.ok(!/375|example/.test(prompts[0]));
+    assert.ok(fixtures.every(([id]) => fetched.get(id) === 1));
+    const sorted = market.rankByValue(searched.data.items, 'gpu');
+    assert.strictEqual(sorted.at(-1).risk.level, 'blocked');
+    assert.ok(sorted.slice(-2).every((ad) => !ad.best));
+    assert.strictEqual(kufar.risk(sorted.at(-1)).confidence, 'high');
+  } finally {
+    global.fetch = fetchReal;
     await new Promise((resolve) => server.close(resolve));
     store.flush();
     store.setDir(previousDir);

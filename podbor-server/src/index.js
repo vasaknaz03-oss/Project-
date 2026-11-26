@@ -23,7 +23,6 @@ const llm = require(path.join(APP, 'server', 'llm'));
 const youtube = require(path.join(APP, 'server', 'youtube'));
 const reviews = require(path.join(APP, 'server', 'reviews'));
 const kufarIndex = require(path.join(APP, 'server', 'kufarIndex'));
-const market = require(path.join(APP, 'server', 'market'));
 const VERSION = require('../package.json').version;
 
 ai.setKeyProvider(() => cfg.anthropicKey);
@@ -145,7 +144,7 @@ async function route(req, res, url) {
   if (pth === '/v1/health') {
     return send(res, 200, {
       ok: true, version: VERSION,
-      features: { ai: ai.available(), aiBuild: ai.available(), youtube: !!cfg.youtubeKey, telegram: bot.enabled(), kufar: true, fetch: true },
+      features: { ai: ai.available(), aiBuild: ai.available(), aiKufar: ai.available(), youtube: !!cfg.youtubeKey, telegram: bot.enabled(), kufar: true, fetch: true },
       bot: bot.botName() || null,
     });
   }
@@ -196,6 +195,17 @@ async function route(req, res, url) {
     db.spend.add(aiCost(usage, engine));
     db.usage.add(d.id, kind);
     return send(res, 200, answer);
+  }
+
+  if (pth === '/v1/ai/kufar-check' && req.method === 'POST') {
+    const kind = 'research_quick';
+    checkLimit(d, kind);
+    checkBudget();
+    const b = await readBody(req);
+    const { usage, engine, ...result } = await ai.reviewKufar(text(b.title, 240), text(b.description, 12000));
+    db.spend.add(aiCost(usage, engine));
+    db.usage.add(d.id, kind);
+    return send(res, 200, result);
   }
 
   if (pth === '/v1/ai/research' && req.method === 'POST') {
@@ -279,16 +289,8 @@ async function route(req, res, url) {
     }
     const ix = kufarIndex.ensure(opts);
     if (!ix.items.size && ix.scanning) await Promise.race([ix.scanning, new Promise((r) => setTimeout(r, 8000))]);
-    const all = kufarIndex.list(ix);
-    for (const it of all) it.best = false;
-    if (sectionId) await market.annotate(all, sectionId);
-    const ranked = market.rankByValue(all, sectionId);
-    const per = 50;
-    const page = Math.max(1, Math.min(200, +b.page || 1));
-    return send(res, 200, {
-      items: ranked.slice((page - 1) * per, page * per), total: ix.total || ranked.length,
-      pages: Math.max(1, Math.ceil(ranked.length / per)), next: null, index: kufarIndex.status(ix),
-    });
+    const page = Math.max(1, Math.min(200, Math.floor(+b.page) || 1));
+    return send(res, 200, await kufarIndex.pageOf(ix, sectionId, page));
   }
 
   // ---------------- общий Telegram-бот

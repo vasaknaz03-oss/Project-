@@ -1022,13 +1022,11 @@ async function kufarUsedParts(kind, pools, opts, budget) {
     if (!r.next) break;
     cursor = r.next;
   }
-  await market.annotate(all, kind);
-  const out = [];
   const twins = kind === 'gpu' ? pools.gpus : pools.cpus;
+  const matches = [];
   for (const ad of all) {
-    if (!ad.price || kufar.isJunk(ad.name)) continue;
-    if (ad.market && ad.market.deal === 'suspicious') continue; // слишком дёшево — риск
-    const key = kind === 'gpu' ? perf.gpuKey(ad.name) || perf.gpuKey((ad.params.ccvc || {}).vl || '') : perf.cpuKey(ad.name);
+    if (!ad.price || kufar.offTopic(ad.name) || kufar.risk(ad).level === 'blocked') continue;
+    const key = kind === 'gpu' ? kufar.adGpuKey(ad) : perf.cpuKey(ad.name);
     if (!key) continue;
     // Характеристики берём у той же модели из каталога (сокет, память, питание)
     const twin = twins.find((t) => t.perf && t.perf.key === key);
@@ -1037,10 +1035,20 @@ async function kufarUsedParts(kind, pools, opts, budget) {
       if (opts.gpuBrand === 'nvidia' && !/^(rtx|gtx)/.test(key)) continue;
       if (opts.gpuBrand === 'amd' && !/^rx/.test(key)) continue;
     }
+    matches.push({ ad, twin });
+  }
+  const candidates = matches.map(({ ad }) => ad);
+  await kufar.inspect(candidates, { limit: 28, timeout: 5500 });
+  const verified = candidates.filter((ad) => kufar.risk(ad).level === 'clear');
+  await market.annotate(verified, kind);
+  const accepted = new Set(verified);
+  const out = [];
+  for (const { ad, twin } of matches) {
+    if (!accepted.has(ad) || ad.market?.deal === 'suspicious') continue;
     out.push({
       ...twin, id: 'kufar-' + ad.id, source: 'kufar', name: ad.name, price: ad.price, url: ad.url, image: ad.image,
       offers: 0, fromKufar: true, noname: false, market: ad.market || null, location: ad.location, date: ad.date,
-      delivery: ad.delivery, safedeal: ad.safedeal, company: ad.company,
+      delivery: ad.delivery, safedeal: ad.safedeal, company: ad.company, risk: ad.risk,
       specs: kind === 'cpu' ? { ...twin.specs, withCooler: false } : twin.specs,
       kufarNote: 'б/у с Kufar — проверьте перед покупкой',
     });
@@ -1072,7 +1080,7 @@ async function hybrid(opts) {
     o.have && o.have.gpu || pins.gpu ? [] : kufarUsedParts('gpu', pools, o, budget).catch(() => []),
     pins.cpu ? [] : kufarUsedParts('cpu', pools, o, budget).catch(() => []),
   ]);
-  if (!gpus.length && !cpus.length) return { none: true, reason: 'Подходящих б/у процессоров и видеокарт на Kufar сейчас не нашлось.' };
+  if (!gpus.length && !cpus.length) return { none: true, reason: 'Среди проверенных описаний Kufar не нашлось подходящих б/у процессоров и видеокарт.' };
   const mixed = { ...pools, gpus: pools.gpus.concat(gpus), cpus: pools.cpus.concat(cpus) };
   await tick();
   const best = optimize(mixed, o, budget);
@@ -1203,4 +1211,4 @@ async function upgrade(opts) {
   return { current: owned, index: nowIdx, bottleneck: bottleneck(owned), scenarios: results, best: results[0] ? results[0].id : null, value: value ? value.id : null, purpose };
 }
 
-module.exports = { build, hybrid, upgrade, PROFILES, boardSuitable, COOLER_FAMILY, _internal: { gather, preparePools, optimize, scoreParts } };
+module.exports = { build, hybrid, upgrade, PROFILES, boardSuitable, COOLER_FAMILY, _internal: { gather, preparePools, optimize, scoreParts, kufarUsedParts } };

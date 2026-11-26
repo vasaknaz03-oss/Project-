@@ -3,6 +3,7 @@
 
 const { getJSON, qs } = require('../http');
 const perf = require('../perfdb');
+const condition = require('../kufarCondition');
 
 const API = 'https://api.kufar.by/search-api/v2/search/rendered-paginated';
 const CAT_COMPONENTS = 16010; // Компьютерная техника → Комплектующие
@@ -21,15 +22,19 @@ function flag(ad, key) {
   return !!p && (p.v === true || p.v === 1 || p.v === '1' || p.vl === 'Да');
 }
 
-function normalize(ad) {
+function normalize(ad, detail = false) {
   const img = ad.images && ad.images[0];
   const priceByn = ad.price_byn ? parseInt(ad.price_byn, 10) / 100 : 0;
   const area = param(ad, 'area');
   const region = param(ad, 'region');
+  const fullText = condition.plain(ad.body || ad.ad_body || ad.description);
+  const excerpt = fullText || condition.plain(ad.body_short);
   return {
     source: 'kufar',
     id: String(ad.ad_id),
     name: ad.subject,
+    risk: condition.assess(ad.subject, excerpt, !!fullText),
+    ...(detail ? { description: fullText } : {}),
     price: priceByn,
     priceUsd: ad.price_usd ? parseInt(ad.price_usd, 10) / 100 : null,
     url: ad.ad_link,
@@ -112,7 +117,7 @@ async function search(opts = {}) {
   const data = await getJSON(`${API}?${qs(params)}`, { ttl: opts.noCache ? 0 : 5 * 60 * 1000 });
   const ads = (data.ads || []).filter((a) => a.type !== 'buy');
   const next = ((data.pagination && data.pagination.pages) || []).find((p) => p.label === 'next');
-  return { items: ads.map(normalize), total: data.total || 0, rates: ratesFromAds(data.ads), next: next ? next.token : null };
+  return { items: ads.map((ad) => normalize(ad)), total: data.total || 0, rates: ratesFromAds(data.ads), next: next ? next.token : null };
 }
 
 /** Сколько объявлений подходит под условия. */
@@ -127,7 +132,7 @@ async function count(opts = {}) {
 }
 
 // Внимание: \b в JS не работает с кириллицей, поэтому границы слов заданы явно
-const JUNK = /куплю|комплект|сборк|(?:^|[^а-яё])пк(?:$|[^а-яё])|компьютер|ноутбук|коробк|нерабоч|не\s*рабоч|запчаст|под\s*ремонт|только\s*обмен|\+|заброниров|продан[оа]?\b|деф+ект|неисправ|артефакт|(?:^|[^а-яёa-z])(cmp|смр)\s*\d|frankenstein|франкен/i;
+const OTHER = /куплю|сборк|(?:^|[^а-яё])пк(?:$|[^а-яё])|компьютер|ноутбук|коробк|только\s*обмен|\+|заброниров|продан[оа]?(?![а-яё])|(?:^|[^а-яёa-z])(cmp|смр)\s*\d|frankenstein|франкен/i;
 
 /**
  * Б/у предложения конкретной модели (для альтернатив в сборке).
@@ -147,11 +152,12 @@ async function usedFor(kind, key, query, newPrice) {
   const items = pool.filter((it) => {
     if (!it.price || it.price < floor) return false;
     if (newPrice && it.price > newPrice * 1.05) return false;
-    if (JUNK.test(it.name)) return false;
+    if (offTopic(it.name)) return false;
     return matcher(it.name) === key;
   });
   items.sort((a, b) => a.price - b.price);
-  return items;
+  await inspect(items, { limit: 20 });
+  return prioritize(items);
 }
 
 // Объявление сразу с несколькими моделями («Ryzen 5 5600, 3600, 2600», «RTX 3060 Ti и RTX 3060»):
@@ -166,12 +172,85 @@ function isMulti(name) {
   return nums.size >= 3;
 }
 
-const isJunk = (name) => JUNK.test(name || '') || isMulti(name);
+const offTopic = (name) => OTHER.test(name || '') || isMulti(name);
+const isJunk = (name) => offTopic(name) || condition.assess(name).level === 'blocked';
 
 /** Одно объявление по номеру (для ссылок вида kufar.by/item/123). */
 async function item(id) {
-  const data = await getJSON(`https://api.kufar.by/search-api/v2/item/${encodeURIComponent(id)}/rendered`, { ttl: 10 * 60 * 1000 });
-  return data && data.result ? normalize(data.result) : null;
+  const data = await getJSON('https://api.kufar.by/search-api/v2/item/' + encodeURIComponent(id) + '/rendered', { ttl: 10 * 60 * 1000, timeout: 5000, retries: 0 });
+  return data && data.result ? normalize(data.result, true) : null;
 }
 
-module.exports = { adGpuKey, search, count, usedFor, ratesFromAds, isJunk, isMulti, item, normalize, CAT_COMPONENTS, CAT_COMPUTERS };
+const details = new Map();
+const pendingDetails = new Map();
+const stamp = (ad) => [ad.id, ad.date || '', ad.name || ''].join('|');
+
+function cachedDetail(ad) {
+  const entry = details.get(stamp(ad));
+  return entry && entry.until > Date.now() ? entry : null;
+}
+
+function risk(ad) {
+  const entry = cachedDetail(ad);
+  if (entry?.risk) return entry.risk;
+  if (ad.risk && (!ad.risk.until || ad.risk.until > Date.now())) return ad.risk;
+  return condition.assess(ad.name);
+}
+
+function enrichRisk(ad) {
+  ad.risk = risk(ad);
+  if (ad.risk.level !== 'clear') {
+    ad.best = false;
+    delete ad.market;
+  }
+  return ad;
+}
+
+function detailRisk(ad) {
+  const key = stamp(ad);
+  if (pendingDetails.has(key)) return pendingDetails.get(key);
+  const query = item(ad.id).catch(() => null).then((found) => {
+    const until = Date.now() + (found?.risk.full ? 10 * 60 * 1000 : 90 * 1000);
+    const assessment = found && (found.risk.full || found.risk.level !== 'unknown') ? { ...found.risk, until } : null;
+    details.set(key, { until, risk: assessment });
+    if (details.size > 1200) details.delete(details.keys().next().value);
+  }).finally(() => pendingDetails.delete(key));
+  pendingDetails.set(key, query);
+  return query;
+}
+
+// У индекса тысячи объявлений. Подгружаем карточки порциями, не задерживая выдачу целиком.
+async function inspect(ads, { limit = 16, timeout = 4000 } = {}) {
+  const queue = ads.filter((ad) => {
+    const r = risk(ad);
+    return /^\d{1,16}$/.test(ad.id) && !r.full && r.level !== 'blocked' && !cachedDetail(ad);
+  }).slice(0, limit);
+  if (queue.length) {
+    let stopped = false;
+    let timer;
+    const work = async () => {
+      while (!stopped && queue.length) await detailRisk(queue.shift());
+    };
+    try {
+      await Promise.race([
+        Promise.all(Array.from({ length: Math.min(4, queue.length) }, work)),
+        new Promise((resolve) => { timer = setTimeout(resolve, timeout); }),
+      ]);
+    } finally {
+      stopped = true;
+      clearTimeout(timer);
+    }
+  }
+  return ads.map(enrichRisk);
+}
+
+function prioritize(ads) {
+  return ads.map(enrichRisk).sort((a, b) => condition.order(a.risk) - condition.order(b.risk));
+}
+
+function rejectBroken(ad) {
+  const assessment = risk(ad);
+  if (assessment.level === 'blocked') throw new Error(assessment.reasons[0]);
+}
+
+module.exports = { adGpuKey, search, count, usedFor, ratesFromAds, isJunk, offTopic, isMulti, item, normalize, inspect, risk, prioritize, rejectBroken, CAT_COMPONENTS, CAT_COMPUTERS };

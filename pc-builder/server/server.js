@@ -8,6 +8,7 @@ const { URL } = require('url');
 
 const onliner = require('./providers/onliner');
 const kufar = require('./providers/kufar');
+const { forModel } = require('./kufarCondition');
 const currency = require('./currency');
 const builder = require('./builder');
 const filters = require('./filters');
@@ -335,6 +336,7 @@ async function partsFromLinks(text) {
       if (url && /kufar\.by\/item\/(\d+)/.test(url)) {
         const id = url.match(/kufar\.by\/item\/(\d+)/)[1];
         const ad = await kufar.item(id);
+        if (ad) kufar.rejectBroken(ad);
         const cct = ad && ad.params && ad.params.cct ? Number(ad.params.cct.v) : null;
         const slot = SLOT_OF_CCT[cct];
         if (ad && slot) items.push({ slot, item: await kufarCompat.enrich(slot, ad), from: 'kufar' });
@@ -398,10 +400,13 @@ async function kufarValuePage(kq, p, sectionId) {
   // Сервер ПодборПК просматривает Kufar один раз для всех — меньше нагрузки на Kufar и быстрее
   if (await remote.has('kufar')) {
     try {
-      return await remote.call('/v1/kufar/value', {
+      const r = await remote.call('/v1/kufar/value', {
         method: 'POST', timeout: 30000,
         body: { kq, sectionId, page: num(p.get('page')) || 1, min: num(p.get('min')), max: num(p.get('max')), cond: p.get('cond') || '' },
       });
+      if (r.condition) return r;
+      await kufar.inspect(r.items);
+      return { ...r, items: kufar.prioritize(r.items) };
     } catch {
       // сервер недоступен — смотрим сами
     }
@@ -415,16 +420,8 @@ async function kufarValuePage(kq, p, sectionId) {
     const t0 = Date.now();
     while (!ix.items.size && ix.scanning && Date.now() - t0 < 6000) await new Promise((r) => setTimeout(r, 300));
   }
-  const all = kufarIndex.list(ix);
-  for (const it of all) it.best = false;
-  if (sectionId) await market.annotate(all, sectionId);
-  const ranked = market.rankByValue(all, sectionId || '');
-  const per = 50;
-  const page = Math.max(1, num(p.get('page')) || 1);
-  return {
-    items: ranked.slice((page - 1) * per, page * per), total: ix.total || ranked.length,
-    pages: Math.max(1, Math.ceil(ranked.length / per)), next: null, index: kufarIndex.status(ix),
-  };
+  const page = Math.max(1, Math.floor(num(p.get('page'))) || 1);
+  return kufarIndex.pageOf(ix, sectionId || '', page);
 }
 
 async function route(req, res, url) {
@@ -529,7 +526,8 @@ async function route(req, res, url) {
     const model = eng === 'local' ? llm.config() : null;
     const provider = model?.provider || (eng === 'anthropic' ? 'anthropic' : f.ai ? 'server' : null);
     return send(res, 200, {
-      ai: !!eng || !!f.ai, buildAdvice: !!eng || !!f.aiBuild, youtube: youtube.available() || !!f.youtube, model: ai.modelLabel() || ai.MODEL,
+      ai: !!eng || !!f.ai, buildAdvice: !!eng || !!f.aiBuild, kufarReview: !!eng || !!f.aiKufar,
+      youtube: youtube.available() || !!f.youtube, model: ai.modelLabel() || ai.MODEL,
       provider, providerLabel: provider ? PROVIDERS[provider].label : null,
       via: { ai: eng === 'anthropic' ? 'own' : model ? (model.cloud ? 'cloud' : 'local') : f.ai ? 'server' : null, youtube: youtube.available() ? 'own' : f.youtube ? 'server' : null },
       limits: me ? { limits: me.limits, used: me.usedToday } : null,
@@ -752,8 +750,9 @@ async function route(req, res, url) {
             ...kq, priceMin: num(p.get('min')), priceMax: num(p.get('max')), sort: p.get('sort') === 'rating' ? '' : p.get('sort'),
             condition: p.get('cond') || '', size: 50, cursor: (p.get('cursor') || '').slice(0, 400) || undefined,
           });
+          await kufar.inspect(kr.items);
           await market.annotate(kr.items, sec.id);
-          r = { items: kr.items, total: kr.total, pages: 1, next: kr.next };
+          r = { items: kufar.prioritize(kr.items), total: kr.total, pages: 1, next: kr.next };
         }
         return send(res, 200, { ...r, smart: { section: smart.section, chips: smart.chips, filters: src === 'onliner' ? smart.filters : {}, rest: smart.rest } });
       }
@@ -781,8 +780,9 @@ async function route(req, res, url) {
         ...kq, priceMin: num(p.get('min')), priceMax: num(p.get('max')), sort: p.get('sort') === 'rating' ? '' : p.get('sort'),
         condition: p.get('cond') || '', size: 50, cursor: (p.get('cursor') || '').slice(0, 400) || undefined,
       });
+      await kufar.inspect(r.items);
       if (section) await market.annotate(r.items, section.id);
-      return send(res, 200, { items: r.items, total: r.total, pages: 1, next: r.next });
+      return send(res, 200, { items: kufar.prioritize(r.items), total: r.total, pages: 1, next: r.next });
     }
     return send(res, 200, await searchOnliner(q, p));
   }
@@ -916,7 +916,28 @@ async function route(req, res, url) {
   if (pathname === '/api/kufar/enrich' && req.method === 'POST') {
     const body = await readBody(req);
     if (!kufarCompat.TYPE[body.slot] || !body.item || !body.item.name) throw new Error('Нечего добавлять');
-    return send(res, 200, { item: await kufarCompat.enrich(body.slot, body.item) });
+    const latest = /^\d{1,16}$/.test(body.item.id) ? await kufar.item(body.item.id).catch(() => null) : null;
+    const item = latest || body.item;
+    kufar.rejectBroken(item);
+    return send(res, 200, { item: await kufarCompat.enrich(body.slot, item) });
+  }
+
+  if (pathname === '/api/kufar/check' && req.method === 'POST') {
+    const body = await readBody(req);
+    const id = String(body.id || '');
+    if (!/^\d{1,16}$/.test(id)) throw new Error('Неверный номер объявления Kufar.');
+    const ad = await kufar.item(id).catch((e) => { if (e.status !== 404) throw e; return null; });
+    if (!ad) return send(res, 404, { error: 'Объявление Kufar удалено или недоступно.' });
+    const risk = ad.risk;
+    if (body.ai !== true || risk.level !== 'caution' || !risk.full) return send(res, 200, { risk });
+    let review;
+    if (ai.available()) review = await ai.reviewKufar(ad.name, ad.description);
+    else if (await remote.has('aiKufar')) {
+      review = await remote.call('/v1/ai/kufar-check', {
+        method: 'POST', timeout: 120000, body: { title: forModel(ad.name), description: forModel(ad.description).slice(0, 12000) },
+      });
+    } else return send(res, 503, { error: 'Подключите провайдера ИИ для дополнительной проверки.' });
+    return send(res, 200, { risk, review: { verdict: review.verdict, model: review.model } });
   }
 
   if (pathname === '/api/used') {
@@ -934,7 +955,8 @@ async function route(req, res, url) {
     // Для остальных деталей — просто поиск б/у по названию модели
     const r = await kufar.search({ query: q, condition: 'used', size: 30 });
     const items = r.items.filter((it) => it.price > 0 && (!price || it.price < price * 1.05)).sort((a, b) => a.price - b.price);
-    return send(res, 200, { items: items.slice(0, 30), total: items.length, url });
+    await kufar.inspect(items);
+    return send(res, 200, { items: kufar.prioritize(items), total: items.length, url });
   }
 
   const m = pathname.match(/^\/api\/store\/(\w+)$/);

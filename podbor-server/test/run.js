@@ -20,7 +20,12 @@ const mock = http.createServer((req, res) => {
     if (req.url === '/api/tags') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify({ models: [{ name: 'qwen3:4b' }] })); }
     if (req.url === '/api/chat') {
       const body = JSON.parse(b);
-      const answer = body.format?.properties?.choices ? JSON.stringify({ findings: ['f1'], choices: ['c1'], extra: 'игнорируется' }) : '## Коротко\nПо отзывам тихая [1]';
+      let answer = '## Коротко\nПо отзывам тихая [1]';
+      if (body.format?.properties?.choices) answer = JSON.stringify({ findings: ['f1'], choices: ['c1'], extra: 'игнорируется' });
+      if (body.format?.properties?.verdict?.enum) {
+        if (body.messages.some((msg) => msg.content.includes('seller@example.com'))) return res.writeHead(400).end();
+        answer = JSON.stringify({ verdict: 'unclear' });
+      }
       res.writeHead(200, { 'content-type': 'application/json' });
       return res.end(JSON.stringify({ message: { content: answer }, prompt_eval_count: 900000, eval_count: 900000 }));
     }
@@ -226,6 +231,25 @@ async function test(name, fn) {
       const r = await call('POST', path, body, d.data.token);
       assert.strictEqual(r.status, 200, JSON.stringify(r.data));
       assert.deepStrictEqual(r.data, { findings: ['f1'], choices: ['c1'], model: 'qwen3:4b' });
+      assert.strictEqual((await call('GET', '/v1/me', null, d.data.token)).data.usedToday.research_quick, 1);
+    } finally {
+      Object.assign(cfg, saved);
+    }
+  });
+
+  await test('общий сервер: добровольная проверка состояния Kufar и учёт лимита', async () => {
+    const cfg = require('../src/config');
+    const saved = { anthropicKey: cfg.anthropicKey, llm: cfg.llm };
+    Object.assign(cfg, { anthropicKey: '', llm: { url: mockUrl, model: 'qwen3:4b', kind: 'ollama' } });
+    try {
+      const path = '/v1/ai/kufar-check';
+      const body = { title: 'RTX 4060', description: 'После майнинга. Для связи seller@example.com' };
+      assert.strictEqual((await call('GET', '/v1/health')).data.features.aiKufar, true);
+      assert.strictEqual((await call('POST', path, body)).status, 401);
+      const d = await call('POST', '/v1/devices', {});
+      const r = await call('POST', path, body, d.data.token);
+      assert.strictEqual(r.status, 200, JSON.stringify(r.data));
+      assert.deepStrictEqual(r.data, { verdict: 'unclear', model: 'qwen3:4b' });
       assert.strictEqual((await call('GET', '/v1/me', null, d.data.token)).data.usedToday.research_quick, 1);
     } finally {
       Object.assign(cfg, saved);
