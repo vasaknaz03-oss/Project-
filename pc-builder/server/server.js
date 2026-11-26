@@ -35,6 +35,7 @@ const secrets = require('./secrets');
 const telegram = require('./telegram');
 const ai = require('./ai');
 const llm = require('./llm');
+const { PROVIDERS } = require('./aiProviders');
 // Загрузка модели в Ollama из «Настроек» (одна за раз)
 let llmPull = null;
 const youtube = require('./youtube');
@@ -447,14 +448,45 @@ async function route(req, res, url) {
       if (body && body[k] !== undefined) patch[k] = String(body[k] || '').slice(0, 300);
     }
     if (patch.llmUrl) patch.llmUrl = llm.base(patch.llmUrl);
+    if (patch.llmUrl !== undefined && patch.llmKey === undefined && patch.llmUrl !== llm.base(secrets.get('llmUrl') || llm.DEFAULT_URL)) patch.llmKey = '';
     if (patch.llmKind && !['ollama', 'openai'].includes(patch.llmKind)) delete patch.llmKind;
     return send(res, 200, secrets.set(patch));
+  }
+  if (pathname === '/api/ai/provider' && req.method === 'POST') {
+    const { provider, action, url, model, key } = (await readBody(req)) || {};
+    if (!Object.hasOwn(PROVIDERS, provider)) throw new Error('Выберите провайдера ИИ.');
+    if (provider === 'server' && action === 'connect') return send(res, 200, secrets.saveProvider('server'));
+    if (provider !== 'server' && action === 'remove') return send(res, 200, secrets.removeProvider(provider));
+    const suppliedKey = String(key || '').trim();
+    if (suppliedKey.length > 1000 || /\s/.test(suppliedKey)) throw new Error('Вставьте ключ API без пробелов и переносов строки.');
+    if (provider === 'anthropic' && action === 'connect') {
+      const secret = suppliedKey || secrets.get('anthropicKey');
+      if (!secret) throw new Error('Введите ключ API Claude.');
+      await ai.checkAnthropic(secret);
+      return send(res, 200, secrets.saveProvider(provider, { key: secret }));
+    }
+    if (!PROVIDERS[provider].kind || !['models', 'connect'].includes(action)) throw new Error('Выберите действие.');
+    const c = llm.providerConfig(provider, {
+      url: String(url || '').trim(),
+      model: String(model || '').trim(),
+      key: suppliedKey,
+    });
+    if (action === 'models') {
+      const r = await llm.probe(c.url, c.key, provider);
+      return send(res, 200, { models: r.models, ramGb: Math.round(require('os').totalmem() / 2 ** 30) });
+    }
+    if (!c.model || c.model.length > 200) throw new Error('Укажите название модели API.');
+    const check = await llm.chat({ system: 'This is a connection test.', user: 'Reply with OK.', maxTokens: 128, timeout: c.cloud ? 30000 : 90000 }, c);
+    if (!check.text) throw new Error('Модель ответила без текста. Проверьте название или выберите другую модель.');
+    return send(res, 200, secrets.saveProvider(provider, { url: c.url, model: c.model, kind: c.kind, key: c.key }));
   }
   // ---------------- локальная модель (Ollama, LM Studio…)
   if (pathname === '/api/llm/probe' && req.method === 'POST') {
     const body = await readBody(req);
-    const key = body.key !== undefined ? String(body.key || '') : secrets.get('llmKey');
-    const r = await llm.probe(body.url || llm.DEFAULT_URL, key);
+    const url = llm.base(body.url || llm.DEFAULT_URL);
+    const savedUrl = llm.base(secrets.get('llmUrl') || llm.DEFAULT_URL);
+    const key = body.key !== undefined ? String(body.key || '') : url === savedUrl ? secrets.get('llmKey') : '';
+    const r = await llm.probe(url, key);
     return send(res, 200, { ...r, ramGb: Math.round(require('os').totalmem() / 2 ** 30) });
   }
   if (pathname === '/api/llm/pull' && req.method === 'POST') {
@@ -493,9 +525,12 @@ async function route(req, res, url) {
     let me = null;
     if (f.ai || f.youtube) me = await remote.call('/v1/me').catch(() => null);
     const eng = ai.engine();
+    const model = eng === 'local' ? llm.config() : null;
+    const provider = model?.provider || (eng === 'anthropic' ? 'anthropic' : f.ai ? 'server' : null);
     return send(res, 200, {
       ai: !!eng || !!f.ai, youtube: youtube.available() || !!f.youtube, model: ai.modelLabel() || ai.MODEL,
-      via: { ai: eng === 'anthropic' ? 'own' : eng === 'local' ? 'local' : f.ai ? 'server' : null, youtube: youtube.available() ? 'own' : f.youtube ? 'server' : null },
+      provider, providerLabel: provider ? PROVIDERS[provider].label : null,
+      via: { ai: eng === 'anthropic' ? 'own' : model ? (model.cloud ? 'cloud' : 'local') : f.ai ? 'server' : null, youtube: youtube.available() ? 'own' : f.youtube ? 'server' : null },
       limits: me ? { limits: me.limits, used: me.usedToday } : null,
     });
   }
@@ -505,10 +540,11 @@ async function route(req, res, url) {
     const depth = body.depth === 'deep' ? 'deep' : 'quick';
     const query = String(body.query || '').trim().slice(0, 500);
     // Один и тот же вопрос в течение суток не оплачиваем повторно
-    const ckey = `${mode}|${depth}|${query.toLowerCase()}`;
+    const ckey = JSON.stringify([ai.cacheScope() || remote.baseUrl(), mode, depth, query.toLowerCase()]);
     const hist = store.get('aiHistory') || [];
     const hit = !body.fresh && hist.find((h) => h.key === ckey && Date.now() - h.t < 24 * 60 * 60 * 1000);
     if (hit) return send(res, 200, { ...hit.result, cached: true, t: hit.t });
+    if (body.cachedOnly === true) return send(res, 200, { cached: false });
     const result = ai.available() || !(await remote.has('ai'))
       ? await ai.research(query, { mode, depth })
       : await remote.call('/v1/ai/research', { method: 'POST', body: { query, mode, depth }, timeout: 6 * 60 * 1000 });
@@ -531,7 +567,7 @@ async function route(req, res, url) {
     }
     const r = await reviews.forProduct(key, cat);
     if (!r.items.length) throw new Error('У этого товара пока нет отзывов');
-    const cacheKey = 'aiReviews:' + key;
+    const cacheKey = 'aiReviews:' + JSON.stringify([ai.cacheScope(), key]);
     const cachedSum = store.get(cacheKey);
     if (cachedSum && cachedSum.total === r.total) return send(res, 200, { ...cachedSum.summary, cached: true });
     const summary = await ai.reviewSummary(String(body.name || key).slice(0, 200), r.items);

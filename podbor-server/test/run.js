@@ -166,6 +166,48 @@ async function test(name, fn) {
     }
   });
 
+  await test('общий сервер: OpenAI и DeepSeek используют ключ администратора и отдельный кэш', async () => {
+    const cfg = require('../src/config');
+    const news = require('../../pc-builder/server/news');
+    const saved = { anthropicKey: cfg.anthropicKey, llm: cfg.llm };
+    const searchArticles = news.searchArticles;
+    const fetch = global.fetch;
+    const sent = [];
+    news.searchArticles = async () => ({ items: [{
+      link: 'https://example.org/a', title: 'Тест видеокарты',
+      summary: 'Видеокарта тихая и холодная, держит частоты в играх, драйверы стабильные. Автор обзора не заметил писка дросселей.',
+    }] });
+    global.fetch = async (url, init) => {
+      const addr = new URL(url);
+      if (!['api.openai.com', 'api.deepseek.com'].includes(addr.hostname)) return fetch(url, init);
+      sent.push({ path: addr.pathname, key: init.headers.Authorization });
+      return Response.json({ model: JSON.parse(init.body).model, choices: [{ message: { content: 'Тихая [1].' } }], usage: {} });
+    };
+    try {
+      cfg.anthropicKey = '';
+      const d = await call('POST', '/v1/devices', {});
+      const body = { query: 'тест видеокарты', mode: 'build' };
+      cfg.llm = { url: 'https://api.openai.com/v1', model: 'gpt-6-luna', kind: 'openai', key: 'test-openai-server' };
+      const openai = await call('POST', '/v1/ai/research', body, d.data.token);
+      assert.strictEqual(openai.status, 200, JSON.stringify(openai.data));
+      assert.strictEqual(openai.data.model, 'gpt-6-luna');
+      cfg.llm = { url: 'https://api.deepseek.com', model: 'deepseek-flash', kind: 'openai', key: 'test-deepseek-server' };
+      const deepseek = await call('POST', '/v1/ai/research', body, d.data.token);
+      assert.strictEqual(deepseek.status, 200, JSON.stringify(deepseek.data));
+      assert.strictEqual(deepseek.data.model, 'deepseek-flash');
+      const cached = await call('POST', '/v1/ai/research', body, d.data.token);
+      assert.strictEqual(cached.data.cached, true);
+      assert.deepStrictEqual(sent, [
+        { path: '/v1/chat/completions', key: 'Bearer test-openai-server' },
+        { path: '/chat/completions', key: 'Bearer test-deepseek-server' },
+      ]);
+    } finally {
+      Object.assign(cfg, saved);
+      news.searchArticles = searchArticles;
+      global.fetch = fetch;
+    }
+  });
+
   console.log(`\nПройдено: ${passed}, ошибок: ${failed}`);
   server.close();
   mock.close();

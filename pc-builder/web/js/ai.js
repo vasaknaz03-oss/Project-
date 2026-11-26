@@ -80,7 +80,7 @@ function answer(r) {
       el('ul', r.more.map((s) => el('li', el('a', { href: s.url, target: '_blank', rel: 'noopener' }, s.title || s.url), el('span.dim', ' — ' + host(s.url)))))) : null,
     el('div.dim.small', { style: { marginTop: '8px' } },
       r.engine === 'local'
-        ? `Пересказ локальной модели ${r.model || ''} по ${r.searches || 0} ${plural(r.searches || 0, 'материалу', 'материалам', 'материалам')}, найденным программой`
+        ? `Пересказ ${r.cloud ? 'облачной' : 'локальной'} модели ${r.model || ''} по ${r.searches || 0} ${plural(r.searches || 0, 'материалу', 'материалам', 'материалам')}, найденным программой`
         : `Собрано ИИ по ${r.searches || 0} ${r.searches === 1 ? 'поиску' : 'поискам'} в интернете`,
       r.cached ? (r.engine === 'local' ? ' · из сохранённого (сегодня уже спрашивали)' : ' · из сохранённого (сегодня уже искали — повторно не оплачивалось)') : '',
       r.t ? ` · ${new Date(r.t).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : '',
@@ -110,20 +110,23 @@ function host(u) {
 export function researchBlock(query, { mode = 'part', title = 'Что пишут на форумах, в обзорах и статьях', autoCached = true } = {}) {
   const out = el('div.ai-out');
   const box = el('div.ai-block', el('div.ai-head', icon('sparkles'), el('b', title)), out);
-  const run = async (depth, fresh = false) => {
+  const run = async (depth, fresh = false, cachedOnly = false) => {
     const local = status && status.via && status.via.ai === 'local';
-    out.replaceChildren(el('div.row', el('div.spinner.inline'),
+    const cloud = status && status.via && status.via.ai === 'cloud';
+    if (!cachedOnly) out.replaceChildren(el('div.row', el('div.spinner.inline'),
       el('span.muted', local
         ? 'Программа собирает отзывы, статьи и обсуждения, а модель на вашем компьютере их читает — на видеокарте до минуты, на процессоре 1–5 минут…'
+        : cloud ? `Программа собирает материалы и отправляет их в ${status.providerLabel}…`
         : depth === 'deep' ? 'ИИ ищет и читает форумы, обзоры и статьи — подробно, это займёт 1–3 минуты…' : 'ИИ ищет на форумах и в обзорах — обычно до минуты…')));
     try {
-      const r = await api('/api/ai/research', { method: 'POST', body: { query, mode, depth, fresh } });
+      const r = await api('/api/ai/research', { method: 'POST', body: { query, mode, depth, fresh, cachedOnly } });
+      if (cachedOnly && !r.cached) return;
       out.replaceChildren(answer(r),
         el('div.row', { style: { gap: '8px', marginTop: '8px' } },
           depth !== 'deep' ? el('button.btn.btn-sm', { onclick: () => run('deep') }, icon('sparkles'), 'Подробнее (больше источников)') : null,
           el('button.btn.btn-sm.btn-ghost', { onclick: () => run(depth, true) }, icon('refresh'), 'Искать заново')));
     } catch (e) {
-      out.replaceChildren(el('div.notice.err', icon('error'), el('div', e.message)));
+      if (!cachedOnly) out.replaceChildren(el('div.notice.err', icon('error'), el('div', e.message)));
     }
   };
   aiStatus().then((st) => {
@@ -139,6 +142,7 @@ export function researchBlock(query, { mode = 'part', title = 'Что пишут
     const left = (k) => (lim && lim.limits[k] != null ? Math.max(0, lim.limits[k] - (lim.used[k] || 0)) : null);
     out.replaceChildren(el('p.dim.small', st.via && st.via.ai === 'local'
       ? `Программа найдёт отзывы покупателей, статьи и обсуждения, а модель ${st.model || ''} на вашем компьютере прочитает их и коротко расскажет главное — со ссылками. «Подробно» — больше материалов, дольше.`
+      : st.via?.ai === 'cloud' ? `ПодборПК найдёт источники, а ${st.providerLabel} (${st.model}) подготовит выжимку по ним.`
       : 'ИИ найдёт обсуждения и обзоры, прочитает их и коротко расскажет главное — со ссылками. «Быстро» — несколько источников, «Подробно» — больше источников и глубже.',
       lim ? ` Через сервер ПодборПК сегодня осталось: быстро — ${left('research_quick')}, подробно — ${left('research_deep')}. Вопросы, которые уже кто-то задавал, лимит не тратят.` : ''),
       el('div.row', { style: { gap: '8px' } },
@@ -147,7 +151,8 @@ export function researchBlock(query, { mode = 'part', title = 'Что пишут
     // Если сегодня уже искали — покажем сразу, бесплатно
     if (autoCached) {
       api('/api/ai/history').then((h) => {
-        if (h.items.some((x) => x.mode === mode && x.query.toLowerCase() === String(query).toLowerCase().trim() && Date.now() - x.t < 24 * 3600 * 1000)) run(h.items.find((x) => x.mode === mode && x.query.toLowerCase() === String(query).toLowerCase().trim()).depth);
+        const hit = h.items.find((x) => x.mode === mode && x.query.toLowerCase() === String(query).toLowerCase().trim() && Date.now() - x.t < 24 * 3600 * 1000);
+        if (hit) run(hit.depth, false, true);
       }).catch(() => {});
     }
   });

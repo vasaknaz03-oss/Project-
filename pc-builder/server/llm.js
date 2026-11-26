@@ -8,13 +8,16 @@
 
 const { request } = require('./http');
 const secrets = require('./secrets');
+const { PROVIDERS, identify } = require('./aiProviders');
 
-const DEFAULT_URL = 'http://127.0.0.1:11434';
+const DEFAULT_URL = PROVIDERS.ollama.url;
 
 // Откуда брать настройки: в программе — из «Настроек», на сервере ПодборПК — из переменных окружения
 let configProvider = () => {
   const s = secrets.all();
-  return s.llmModel ? { url: s.llmUrl || DEFAULT_URL, model: s.llmModel, key: s.llmKey || '', kind: s.llmKind || '' } : null;
+  const provider = s.aiProvider || secrets.legacyProvider(s);
+  if (!provider || provider === 'anthropic' || provider === 'server') return null;
+  return { ...secrets.providerProfile(provider, s), provider };
 };
 function setConfigProvider(fn) {
   configProvider = fn;
@@ -22,7 +25,11 @@ function setConfigProvider(fn) {
 
 function config() {
   const c = configProvider();
-  return c && c.model ? { ...c, url: base(c.url || DEFAULT_URL) } : null;
+  if (!c || !c.model) return null;
+  const url = base(c.url || DEFAULT_URL);
+  const provider = c.provider || identify(url, c.kind);
+  const kind = provider === 'deepseek' || provider === 'openai' ? 'openai' : c.kind;
+  return { ...c, url, provider, kind, cloud: !isLocal(url) };
 }
 
 function available() {
@@ -36,7 +43,48 @@ function base(url) {
   return u.replace(/\/v1$/i, '').replace(/\/api$/i, '');
 }
 
-const isLocal = (url) => /^https?:\/\/(localhost|127\.|0\.0\.0\.0|\[::1\]|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(url);
+function isLocal(url) {
+  try {
+    const host = new URL(url).hostname;
+    return /^(localhost|0\.0\.0\.0|\[::1\])$/i.test(host)
+      || /^(127\.|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)\d+\./.test(host) && /^[\d.]+$/.test(host);
+  } catch {
+    return false;
+  }
+}
+
+function normalizedAddress(input) {
+  if (!input || (/^[a-z][a-z\d+.-]*:\/\//i.test(input) && !/^https?:\/\//i.test(input))) throw new Error();
+  const addr = new URL(base(input));
+  if (addr.username || addr.password || addr.search || addr.hash) throw new Error();
+  return addr.href.replace(/\/$/, '');
+}
+
+function providerConfig(provider, { url, model, key } = {}) {
+  const preset = PROVIDERS[provider];
+  const saved = secrets.providerProfile(provider);
+  let root;
+  try {
+    const input = preset.fixedUrl ? preset.url : url || saved.url || preset.url;
+    root = normalizedAddress(input);
+  } catch {
+    throw new Error('Введите адрес API без логина, пароля и параметров.');
+  }
+  let secret = key || '';
+  if (!secret && saved.url && saved.key) {
+    try {
+      if (normalizedAddress(saved.url) === root) secret = saved.key;
+    } catch {
+      // Не переносим сохранённый ключ с некорректного адреса.
+    }
+  }
+  const cloud = !isLocal(root);
+  if (preset.keyRequired && !secret) throw new Error('Введите ключ API этого провайдера.');
+  if (cloud && secret && !root.startsWith('https://')) throw new Error('Для внешнего адреса с ключом API используйте HTTPS.');
+  return { url: root, model: model || saved.model || preset.model || '', kind: preset.kind, key: secret, provider, cloud };
+}
+
+const apiPath = (c, path) => c.provider === 'deepseek' ? path : '/v1' + path;
 
 function hostName(url) {
   try {
@@ -62,7 +110,7 @@ const mark = (e) => Object.assign(e, { llm: true });
 async function call(c, path, body, timeout) {
   const headers = { 'Content-Type': 'application/json' };
   if (c.key) headers.Authorization = 'Bearer ' + c.key;
-  const res = await request(c.url + path, { method: body ? 'POST' : 'GET', headers, body: body ? JSON.stringify(body) : undefined }, timeout);
+  const res = await request(c.url + path, { method: body ? 'POST' : 'GET', headers, body: body ? JSON.stringify(body) : undefined, redirect: c.key ? 'error' : 'follow' }, timeout);
   const text = await res.text();
   let data = null;
   try {
@@ -72,7 +120,7 @@ async function call(c, path, body, timeout) {
   }
   if (!res.ok) {
     const err = (data && (data.error && (data.error.message || data.error))) || text.slice(0, 200) || `HTTP ${res.status}`;
-    const e = new Error(String(err));
+    const e = new Error(c.key ? String(err).replaceAll(c.key, '[ключ API]') : String(err));
     e.status = res.status;
     throw e;
   }
@@ -83,18 +131,24 @@ async function call(c, path, body, timeout) {
  * Какая программа отвечает по адресу и какие модели в ней есть.
  * → { kind: 'ollama' | 'openai', url, models: [{ id, size }] }
  */
-async function probe(url, key = '') {
-  const c = { url: base(url || DEFAULT_URL), key };
+async function probe(url, key = '', provider) {
+  const root = base(url || DEFAULT_URL);
+  const c = { url: root, key, provider: provider || identify(root) };
+  const ollama = provider ? provider === 'ollama' : !['openai', 'deepseek'].includes(c.provider);
   try {
-    const d = await call(c, '/api/tags', null, 8000);
-    if (Array.isArray(d.models)) {
-      return { kind: 'ollama', url: c.url, models: d.models.map((m) => ({ id: m.name || m.model, size: m.size || 0 })).filter((m) => m.id) };
+    if (ollama) {
+      try {
+        const d = await call(c, '/api/tags', null, 8000);
+        if (Array.isArray(d.models)) {
+          return { kind: 'ollama', url: c.url, models: d.models.map((m) => ({ id: m.name || m.model, size: m.size || 0 })).filter((m) => m.id) };
+        }
+        if (provider === 'ollama') throw new Error('По этому адресу не найден сервер Ollama.');
+      } catch (e) {
+        if (provider === 'ollama') throw e;
+        // Для старых подключений определяем тип сервера автоматически.
+      }
     }
-  } catch {
-    // Не Ollama (или не отвечает) — пробуем OpenAI-совместимый адрес
-  }
-  try {
-    const d = await call(c, '/v1/models', null, 8000);
+    const d = await call(c, apiPath(c, '/models'), null, 8000);
     const list = Array.isArray(d.data) ? d.data : Array.isArray(d.models) ? d.models : [];
     return { kind: 'openai', url: c.url, models: list.map((m) => ({ id: m.id || m.name, size: 0 })).filter((m) => m.id) };
   } catch (e) {
@@ -149,9 +203,8 @@ function clean(text) {
  * Один запрос к модели. json — JSON-схема ответа (если нужен структурированный ответ).
  * → { text, usage: { input, output }, model }
  */
-async function chat({ system, user, json = null, maxTokens = 1500, ctx = 8192, temperature = 0.3, timeout = 15 * 60 * 1000 }) {
-  const c = config();
-  if (!c) throw mark(Object.assign(new Error('Локальная модель не настроена: «Настройки» → «ИИ-помощник».'), { code: 'NO_KEY' }));
+async function chat({ system, user, json = null, maxTokens = 1500, ctx = 8192, temperature = 0.3, timeout = 15 * 60 * 1000 }, c = config()) {
+  if (!c) throw mark(Object.assign(new Error('Модель не настроена. Откройте «Настройки» → «ИИ-помощник и YouTube».'), { code: 'NO_KEY' }));
   const messages = [{ role: 'system', content: system }, { role: 'user', content: user }];
   let kind = c.kind;
   if (!kind) {
@@ -173,16 +226,27 @@ async function chat({ system, user, json = null, maxTokens = 1500, ctx = 8192, t
       }
       return { text: clean(d.message && d.message.content), usage: { input: d.prompt_eval_count || 0, output: d.eval_count || 0 }, model: c.model };
     }
-    const body = { model: c.model, messages, temperature, max_tokens: maxTokens, stream: false };
-    if (json) body.response_format = { type: 'json_schema', json_schema: { name: 'answer', strict: true, schema: json } };
+    const body = { model: c.model, messages, stream: false };
+    if (c.provider === 'openai') {
+      body.max_completion_tokens = maxTokens;
+      body.store = false;
+      if (/^gpt-6(?:[.-]|$)/.test(c.model)) body.reasoning_effort = 'none';
+    } else {
+      body.temperature = temperature;
+      body.max_tokens = maxTokens;
+      if (c.provider === 'deepseek') body.thinking = { type: 'disabled' };
+    }
+    if (json) body.response_format = c.provider === 'deepseek' ? { type: 'json_object' }
+      : { type: 'json_schema', json_schema: { name: 'answer', strict: true, schema: json } };
+    const path = apiPath(c, '/chat/completions');
     let d;
     try {
-      d = await call(c, '/v1/chat/completions', body, timeout);
+      d = await call(c, path, body, timeout);
     } catch (e) {
       // Не все программы умеют response_format — тогда просим JSON словами
       if (json && e.status === 400) {
         delete body.response_format;
-        d = await call(c, '/v1/chat/completions', body, timeout);
+        d = await call(c, path, body, timeout);
       } else throw e;
     }
     const ch = d.choices && d.choices[0];
@@ -192,9 +256,10 @@ async function chat({ system, user, json = null, maxTokens = 1500, ctx = 8192, t
     if (e.status === 404 || /not found|no such model|model .* not/i.test(e.message || '')) {
       throw mark(new Error(kind === 'ollama'
         ? `Модель «${c.model}» не скачана. Выполните в терминале: ollama pull ${c.model}`
-        : `Модель «${c.model}» не найдена. Загрузите её в программе модели или выберите другую в «Настройках».`));
+        : `Модель «${c.model}» недоступна. Проверьте её название и доступ к ней в «Настройках».`));
     }
-    if (e.status === 401 || e.status === 403) throw mark(new Error('Сервис модели не принял ключ доступа. Проверьте его в «Настройках».'));
+    if (e.status === 403 && /country|region|territor/i.test(e.message)) throw mark(new Error('Провайдер ограничивает доступ из вашего региона.'));
+    if (e.status === 401 || e.status === 403) throw mark(new Error('Сервис модели не принял ключ доступа. Проверьте ключ и доступ к модели в «Настройках».'));
     if (e.status === 429) throw mark(new Error('Сервис модели просит подождать (лимит запросов). Повторите через минуту.'));
     if (e.status) throw mark(new Error(`Модель ответила ошибкой (${e.status}): ${String(e.message).slice(0, 200)}`));
     throw friendly(e, c);
@@ -225,4 +290,4 @@ function label() {
   return c ? c.model : null;
 }
 
-module.exports = { probe, pull, chat, parseJSON, available, config, label, setConfigProvider, base, clean, DEFAULT_URL };
+module.exports = { probe, pull, chat, parseJSON, available, config, label, setConfigProvider, base, clean, providerConfig, DEFAULT_URL };

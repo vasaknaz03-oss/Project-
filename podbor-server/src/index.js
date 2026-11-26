@@ -194,7 +194,7 @@ async function route(req, res, url) {
     const depth = b.depth === 'deep' ? 'deep' : 'quick';
     const query = text(b.query, 300);
     if (!query) throw new HttpErr(400, 'Пустой запрос');
-    const key = `research|${mode}|${depth}|${query.toLowerCase().replace(/\s+/g, ' ')}`;
+    const key = JSON.stringify(['research', ai.cacheScope(), mode, depth, query.toLowerCase().replace(/\s+/g, ' ')]);
     const hit = db.cache.get(key);
     if (hit) return send(res, 200, { ...hit.value, cached: true, t: hit.t });
     const kind = depth === 'deep' ? 'research_deep' : 'research_quick';
@@ -216,7 +216,7 @@ async function route(req, res, url) {
     const cat = /^[a-z_]{2,30}$/.test(b.cat || '') ? b.cat : '';
     const r = await reviews.forProduct(pkey, cat);
     if (!r.items.length) throw new HttpErr(404, 'У этого товара пока нет отзывов');
-    const key = `reviews|${pkey}|${r.total}`;
+    const key = JSON.stringify(['reviews', ai.cacheScope(), pkey, r.total]);
     const hit = db.cache.get(key);
     if (hit) return send(res, 200, { ...hit.value, cached: true });
     checkLimit(d, 'reviews');

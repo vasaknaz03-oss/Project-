@@ -49,7 +49,7 @@ function refreshCards(force = false) {
   const sigs = {
     srvCard: JSON.stringify([srv && srv.enabled, srv && srv.url, h && h.ok, h && h.version, f, srv && srv.me && srv.me.usedToday, state.settings.serverMode, state.settings.serverFetch, !!srv]),
     tgCard: JSON.stringify([sec && sec.telegram, !!sec, f.telegram, h && h.bot, state.settings.serverTelegram]),
-    aiCard: JSON.stringify([sec && sec.anthropic, sec && sec.youtube, sec && sec.llm, !!sec, f.ai, f.youtube]),
+    aiCard: JSON.stringify([sec && sec.ai, sec && sec.youtube, !!sec]),
   };
   const make = { srvCard: serverCard, tgCard: telegramCard, aiCard };
   for (const id of Object.keys(make)) {
@@ -230,120 +230,120 @@ function telegramCard() {
     status);
 }
 
-/** ИИ-помощник и YouTube: локальная модель (бесплатно) или ключ Anthropic; ключ YouTube для видео. */
+/** ИИ-помощник и YouTube. */
 function aiCard() {
   const head = [el('h3', icon('sparkles'), ' ИИ-помощник и YouTube'),
-    el('p', 'ИИ читает отзывы покупателей, статьи и обсуждения и пишет понятную выжимку со ссылками на источники. Бесплатный способ — модель на вашем компьютере: без оплаты, без ключей и из любой страны.')];
+    el('p', 'ИИ читает отзывы, статьи и обсуждения и пишет выжимку со ссылками на источники.')];
   if (!sec) return el('div.card.full#aiCard', head, el('div.muted', 'Загрузка…'));
-  const sf = srv && srv.health && srv.health.ok ? srv.health.features || {} : {};
-  if (sf.ai || sf.youtube) {
-    head.push(el('div.notice.ok', icon('check'), el('div', 'Работает через сервер ПодборПК — ключи не нужны', sf.ai && sf.youtube ? '' : sf.ai ? ' (ИИ)' : ' (YouTube)',
-      '. Своя модель или свой ключ ниже — если хотите без дневных лимитов сервера.')));
-  }
-  const keyRow = (label, field, info, placeholder, help) => {
-    const inp = el('input.input', { type: 'password', placeholder: info.set ? `ключ задан (${info.tail}) — вставьте новый, чтобы заменить` : placeholder, autocomplete: 'off' });
-    return el('div.field',
-      el('label', label, info.set ? el('span.chip.ok', { style: { marginLeft: '8px' } }, 'подключено') : null),
-      el('div.row', { style: { gap: '8px' } }, inp,
-        el('button.btn.btn-sm.btn-primary', {
-          onclick: async () => {
-            if (!inp.value.trim()) return toast('Вставьте ключ', 'err');
-            sec = await api('/api/secrets', { method: 'POST', body: { [field]: inp.value.trim() } });
-            toast('Ключ сохранён');
-            loadSecrets();
-          },
-        }, 'Сохранить'),
-        info.set ? el('button.btn.btn-sm.btn-ghost', { onclick: async () => { sec = await api('/api/secrets', { method: 'POST', body: { [field]: '' } }); toast('Ключ удалён'); loadSecrets(); } }, 'Удалить') : null),
-      el('div.dim.small', help));
+  const youtube = sec.youtube;
+  const keyInp = el('input.input#youtube-key', { type: 'password', placeholder: youtube.set ? `ключ задан (${youtube.tail})` : 'AIza…', autocomplete: 'off' });
+  const saveYoutube = async (key) => {
+    try {
+      sec = await api('/api/secrets', { method: 'POST', body: { youtubeKey: key } });
+      keyInp.value = '';
+      toast(key ? 'Ключ сохранён' : 'Ключ удалён');
+      document.dispatchEvent(new CustomEvent('secrets-changed'));
+      refreshCards();
+    } catch (e) {
+      toast(e.message, 'err');
+    }
   };
-  const anth = sec.anthropic || {};
   return el('div.card.full#aiCard', head,
-    localModelBlock(),
-    keyRow('Ключ YouTube Data API (необязательно, бесплатно)', 'youtubeKey', sec.youtube, 'AIza…',
-      el('span', 'Видео и комментарии зрителей; ИИ тоже их учитывает. ', el('a', { href: 'https://console.cloud.google.com/apis/library/youtube.googleapis.com', target: '_blank', rel: 'noopener' }, 'Google Cloud → YouTube Data API v3 ↗'),
-        ' → «Включить» → «Учётные данные» → «Создать ключ API».')),
-    el('details.ai-alt', anth.set ? { open: true } : {},
-      el('summary', 'Платный вариант: ключ Anthropic (Claude)', anth.set ? el('span.chip.ok', { style: { marginLeft: '8px' } }, 'подключено') : null),
-      el('p.dim.small', 'Claude сам ищет в интернете и читает больше источников, но оплачивается по факту и доступен не во всех странах (в Беларуси официально — нет). Если ключ задан, он главнее локальной модели.'),
-      keyRow('Ключ Anthropic', 'anthropicKey', anth, 'sk-ant-…',
-        el('span', 'Где взять: ', el('a', { href: 'https://console.anthropic.com/settings/keys', target: '_blank', rel: 'noopener' }, 'console.anthropic.com → API Keys ↗')))),
-    el('p.dim.small', 'Ключи и настройки хранятся только на этом компьютере.'));
+    providerBlock(),
+    el('div.field', el('label', { for: 'youtube-key' }, 'Ключ YouTube Data API (необязательно)'),
+      el('div.row.wrap', keyInp,
+        el('button.btn.btn-sm.btn-primary', { onclick: () => keyInp.value.trim() ? saveYoutube(keyInp.value.trim()) : toast('Вставьте ключ', 'err') }, 'Сохранить'),
+        youtube.set ? el('button.btn.btn-sm.btn-ghost', { onclick: () => saveYoutube('') }, 'Удалить') : null),
+      el('div.dim.small', 'Видео и комментарии зрителей. ', el('a', { href: 'https://console.cloud.google.com/apis/library/youtube.googleapis.com', target: '_blank', rel: 'noopener' }, 'Получить ключ в Google Cloud ↗'))));
 }
 
-const RECOMMENDED = (ramGb) => (ramGb && ramGb < 14 ? { id: 'qwen3:4b', size: '2,5 ГБ', why: 'для компьютера с 8 ГБ памяти' } : { id: 'qwen3:8b', size: '5,2 ГБ', why: 'хорошо пишет по-русски, нужно 16 ГБ памяти или видеокарта с 8 ГБ' });
-const gb = (b) => (b / 1e9).toFixed(1).replace('.', ','); // как на ollama.com: 1 ГБ = 10⁹ байт
+const RECOMMENDED = (ramGb) => ramGb && ramGb < 14 ? 'qwen3:4b' : 'qwen3:8b';
+const gb = (b) => (b / 1e9).toFixed(1).replace('.', ',');
 
-/** Локальная модель: Ollama или LM Studio на этом компьютере. Найти, скачать, выбрать. */
-function localModelBlock() {
-  const L = sec.llm || {};
-  const urlInp = el('input.input', { value: L.url || 'http://127.0.0.1:11434', placeholder: 'http://127.0.0.1:11434', style: { maxWidth: '280px' } });
-  const keyInp = el('input.input', { type: 'password', placeholder: L.key ? 'ключ задан — вставьте новый, чтобы заменить' : 'только для внешних сервисов', autocomplete: 'off' });
-  const out = el('div.llm-out');
-  const save = async (patch, msg) => {
-    sec = await api('/api/secrets', { method: 'POST', body: patch });
-    toast(msg);
-    loadSecrets();
-  };
-  const pollPull = (url, kind) => {
-    const line = el('div.dim.small', 'Скачивание…');
-    const bar = el('div.llm-bar', el('i'));
-    out.replaceChildren(el('div.llm-pull', line, bar));
-    const tick = async () => {
-      let st;
+function providerBlock() {
+  const { active, providers } = sec.ai;
+  const selected = providers.find((p) => p.id === active);
+  const picker = el('select.select#ai-provider', providers.map((p) => el('option', { value: p.id, selected: p.id === active }, p.label)));
+  const form = el('div');
+  const block = el('div.llm-block', el('div.field',
+    el('label', { for: 'ai-provider' }, 'Провайдер ИИ'),
+    picker,
+    el('div.dim.small', `Выбрано сейчас: ${selected.label}${selected.saved.model ? ' · ' + selected.saved.model : ''}`)), form);
+
+  const renderProvider = () => {
+    const p = providers.find((item) => item.id === picker.value);
+    const out = el('div.llm-out', { role: 'status' });
+    const status = (message, kind = '') => out.replaceChildren(el('div.notice', { class: kind }, message));
+    const url = el('input.input#ai-url', { value: p.fixedUrl ? p.url : p.saved.url || p.url || '', placeholder: 'https://адрес-сервиса/v1', readOnly: !!p.fixedUrl });
+    const model = el('input.input#ai-model', { value: p.saved.model || p.model || '', placeholder: 'Название модели в API' });
+    const key = el('input.input#ai-key', { type: 'password', placeholder: p.saved.key ? 'Ключ сохранён' : p.keyRequired ? 'Вставьте ключ API' : 'Необязательно', autocomplete: 'off' });
+    const field = (label, input) => el('div.field', el('label', { for: input.id }, label), input);
+    const request = (action) => api('/api/ai/provider', { method: 'POST', body: { provider: p.id, action, url: url.value.trim(), model: model.value.trim(), key: key.value.trim() } });
+    const run = async (job) => {
+      picker.disabled = true;
+      Array.from(form.querySelectorAll('button, input, select')).forEach((input) => { input.disabled = true; });
       try {
-        st = await api('/api/llm/pull');
-      } catch {
-        return setTimeout(tick, 2000);
+        await job();
+      } catch (e) {
+        status(e.message, 'err');
+      } finally {
+        picker.disabled = false;
+        Array.from(form.querySelectorAll('button, input, select')).forEach((input) => { input.disabled = false; });
       }
-      if (st.error) return out.replaceChildren(el('div.notice.err', icon('error'), el('div', st.error)));
-      const pct = st.total ? Math.floor((st.completed / st.total) * 100) : 0;
-      line.textContent = st.total ? `${st.model}: скачано ${gb(st.completed)} из ${gb(st.total)} ГБ (${pct}%)` : `${st.model}: ${st.status || 'подготовка'}…`;
-      bar.firstChild.style.width = pct + '%';
-      if (!st.done) return setTimeout(tick, 1000);
-      await save({ llmUrl: url, llmModel: st.model, llmKind: kind }, `Модель ${st.model} скачана и подключена`);
     };
-    tick();
+    const save = async (action) => {
+      status(action === 'remove' ? 'Удаляем подключение…' : 'Проверяем подключение…');
+      sec = await request(action);
+      key.value = '';
+      toast(action === 'remove' ? 'Подключение удалено' : `Выбран провайдер ${p.label}`);
+      document.dispatchEvent(new CustomEvent('secrets-changed'));
+      refreshCards();
+      status(action === 'remove' ? 'Подключение удалено.' : p.id === 'server' ? 'Выбран сервер ПодборПК.' : 'Подключение проверено.', 'ok');
+    };
+    const find = () => run(async () => {
+      status('Ищем доступные модели…');
+      const r = await request('models');
+      const modelList = el('select.select', { 'aria-label': 'Найденные модели', onchange: (e) => { model.value = e.target.value; } },
+        el('option', { value: '' }, 'Выберите модель из списка'),
+        r.models.map((m) => el('option', { value: m.id, selected: m.id === model.value }, m.id + (m.size ? ` (${gb(m.size)} ГБ)` : ''))));
+      out.replaceChildren(r.models.length ? modelList : el('div.dim.small', 'На сервере пока нет моделей.'),
+        p.id === 'ollama' && !r.models.some((m) => m.id.startsWith('qwen3'))
+          ? el('button.btn.btn-sm', { onclick: () => run(() => downloadOllama(url.value.trim(), RECOMMENDED(r.ramGb), model, status)) }, icon('download'), `Скачать ${RECOMMENDED(r.ramGb)}`) : null);
+    });
+
+    form.replaceChildren(
+      p.id === 'server' ? el('p.dim.small', 'Используется ключ администратора. Подключение и лимиты видны в карточке «Сервер ПодборПК».') : null,
+      p.id === 'ollama' ? el('p.dim.small', 'Запустите Ollama и выберите модель. ', el('a', { href: 'https://ollama.com/download', target: '_blank', rel: 'noopener' }, 'Скачать Ollama ↗')) : null,
+      p.id === 'lmstudio' ? el('p.dim.small', 'В LM Studio откройте вкладку Developer, запустите сервер и загрузите модель.') : null,
+      p.kind ? field('Адрес API', url) : null,
+      p.kind ? field('Модель', model) : null,
+      p.id !== 'server' ? field('Ключ API', key) : null,
+      p.keyUrl ? el('p.dim.small', el('a', { href: p.keyUrl, target: '_blank', rel: 'noopener' }, 'Получить ключ API ↗'),
+        ' · Проверка и ответы могут расходовать баланс провайдера.') : null,
+      p.fixedUrl ? el('p.dim.small', 'Программа сама ищет источники и передаёт найденные материалы выбранному сервису.') : null,
+      el('div.row.wrap',
+        el('button.btn.btn-sm.btn-primary', { onclick: () => run(() => save('connect')) }, p.id === 'server' ? 'Использовать сервер' : 'Проверить и подключить'),
+        p.kind ? el('button.btn.btn-sm', { onclick: find }, 'Найти модели') : null,
+        p.saved.key || p.saved.model ? el('button.btn.btn-sm.btn-ghost', { onclick: () => run(() => save('remove')) }, 'Удалить подключение') : null),
+      out);
   };
-  const find = async () => {
-    out.replaceChildren(el('div.row', el('div.spinner.inline'), el('span.muted', 'Ищем программу и модели…')));
-    let r;
-    try {
-      r = await api('/api/llm/probe', { method: 'POST', body: { url: urlInp.value.trim(), key: keyInp.value.trim() || undefined } });
-    } catch (e) {
-      return out.replaceChildren(el('div.notice.err', icon('error'), el('div', e.message,
-        el('div.dim.small', 'Ollama после установки работает сама (значок в трее). LM Studio: вкладка Developer → Start Server, адрес http://127.0.0.1:1234.'))));
-    }
-    const rec = RECOMMENDED(r.ramGb);
-    const prog = r.kind === 'ollama' ? 'Ollama' : 'совместимая программа';
-    if (!r.models.length) {
-      return out.replaceChildren(el('div.notice', icon('info'), el('div',
-        `Найдена ${prog}, но моделей в ней пока нет. `,
-        r.kind === 'ollama' ? el('span', 'Рекомендую ', el('b', rec.id), ` (${rec.size}, ${rec.why}).`) : 'Скачайте модель в самой программе (например Qwen3 8B) и нажмите «Найти модели» ещё раз.')),
-        r.kind === 'ollama' ? el('div.row', { style: { gap: '8px', marginTop: '8px' } },
-          el('button.btn.btn-sm.btn-primary', { onclick: async () => { try { await api('/api/llm/pull', { method: 'POST', body: { model: rec.id, url: r.url } }); pollPull(r.url, r.kind); } catch (e) { toast(e.message, 'err'); } } }, icon('download'), `Скачать ${rec.id}`)) : null);
-    }
-    const sel = el('select.select', r.models.map((m) => el('option', { value: m.id, selected: m.id === L.model }, m.id + (m.size ? ` (${gb(m.size)} ГБ)` : ''))));
-    out.replaceChildren(el('div.dim.small', `Найдена ${prog}. Выберите модель:`),
-      el('div.row', { style: { gap: '8px', marginTop: '6px' } }, sel,
-        el('button.btn.btn-sm.btn-primary', { onclick: () => save({ llmUrl: r.url, llmModel: sel.value, llmKind: r.kind, ...(keyInp.value.trim() ? { llmKey: keyInp.value.trim() } : {}) }, `Подключено: ${sel.value}`) }, 'Использовать')),
-      r.kind === 'ollama' && !r.models.some((m) => m.id.startsWith('qwen3')) ? el('div.dim.small', { style: { marginTop: '6px' } }, 'Лучше всего по-русски пишут модели Qwen3. ',
-        el('button.link-btn', { onclick: async () => { try { await api('/api/llm/pull', { method: 'POST', body: { model: rec.id, url: r.url } }); pollPull(r.url, r.kind); } catch (e) { toast(e.message, 'err'); } } }, `Скачать ${rec.id} (${rec.size})`)) : null);
-  };
-  return el('div.llm-block',
-    el('div.field',
-      el('label', 'Локальная модель (бесплатно)', L.set ? el('span.chip.ok', { style: { marginLeft: '8px' } }, `подключено: ${L.model}`) : null),
-      L.set ? null : el('ol.llm-steps',
-        el('li', 'Установите ', el('a', { href: 'https://ollama.com/download', target: '_blank', rel: 'noopener' }, 'Ollama ↗'), ' (бесплатно, Windows и macOS) — или LM Studio.'),
-        el('li', 'Нажмите «Найти модели». Если моделей нет — программа предложит скачать подходящую (одна кнопка).'),
-        el('li', 'Готово: кнопки «Быстро» и «Подробно» в карточках товаров заработают бесплатно.')),
-      el('div.row', { style: { gap: '8px', flexWrap: 'wrap' } }, urlInp,
-        el('button.btn.btn-sm' + (L.set ? '' : '.btn-primary'), { onclick: find }, icon('search'), L.set ? 'Сменить модель' : 'Найти модели'),
-        L.set ? el('button.btn.btn-sm.btn-ghost', { onclick: () => save({ llmModel: '', llmKind: '', llmKey: '' }, 'Локальная модель отключена') }, 'Отключить') : null),
-      el('details.dim.small', el('summary', 'Внешний совместимый сервис (OpenAI-совместимый адрес)'),
-        el('p', 'Вместо своей программы можно указать адрес любого сервиса с OpenAI-совместимым API (…/v1) и ключ доступа к нему — если такой сервис вам доступен.'),
-        keyInp),
-      el('div.dim.small', 'Работает на вашем компьютере: чем мощнее видеокарта, тем быстрее ответ. На процессоре «Быстро» занимает 1–3 минуты.'),
-      out));
+  picker.addEventListener('change', renderProvider);
+  renderProvider();
+  return block;
+}
+
+async function downloadOllama(url, name, model, status) {
+  await api('/api/llm/pull', { method: 'POST', body: { model: name, url } });
+  status(`Скачиваем ${name}…`);
+  for (;;) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const st = await api('/api/llm/pull');
+    if (st.error) throw new Error(st.error);
+    if (st.done) break;
+    status(st.total ? `Скачано ${gb(st.completed)} из ${gb(st.total)} ГБ` : st.status);
+  }
+  model.value = name;
+  status('Модель скачана. Нажмите «Проверить и подключить».', 'ok');
 }
 
 /** Общие предпочтения подбора и интерфейса. */

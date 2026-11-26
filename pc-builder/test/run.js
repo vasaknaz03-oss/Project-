@@ -595,6 +595,111 @@ test('локальная модель (Ollama/LM Studio): поиск модел�
   }
 });
 
+test('OpenAI и DeepSeek: проверка подключения, смена модели, отдельные ключи и кэш', async () => {
+  await Promise.all(pending.slice());
+  const store = require('../server/store');
+  const secrets = require('../server/secrets');
+  const ai = require('../server/ai');
+  const { createServer } = require('../server/server');
+  const previousDir = store.dataDir();
+  store.flush();
+  store.setDir(require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'podbor-providers-')));
+  const server = createServer();
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const fetch = global.fetch;
+  const sent = [];
+  global.fetch = async (url, init) => {
+    const { origin, pathname } = new URL(url);
+    const body = init.body ? JSON.parse(init.body) : null;
+    sent.push({ origin, pathname, body, key: init.headers.Authorization, redirect: init.redirect });
+    if (init.headers.Authorization === 'Bearer invalid') return Response.json({ error: 'bad key' }, { status: 401 });
+    if (pathname.endsWith('/models')) return Response.json({ data: [{ id: 'deepseek-flash' }] });
+    const content = body?.response_format ? '{"verdict":"Тихая","pros":[],"cons":[],"who":"","warnings":[]}' : 'OK';
+    return Response.json({ model: body?.model, choices: [{ message: { content } }] });
+  };
+  const api = async (pathname, body) => {
+    const init = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : undefined;
+    const r = await fetch(baseUrl + pathname, init);
+    return { status: r.status, data: await r.json() };
+  };
+  const provider = (id, data, action = 'connect') => api('/api/ai/provider', { provider: id, action, ...data });
+  try {
+    secrets.set({ anthropicKey: 'old-claude-key', llmUrl: 'http://localhost:1234/v1', llmModel: 'old-local-model', llmKind: 'openai' });
+    assert.strictEqual(ai.engine(), 'anthropic', 'старые настройки сохраняют приоритет Claude');
+    const connected = await provider('openai', { key: 'openai-test-key', url: 'https://ignored.example' });
+    assert.strictEqual(connected.status, 200);
+    assert.strictEqual(connected.data.ai.active, 'openai');
+    assert.ok(!JSON.stringify(connected.data).includes('openai-test-key'));
+    assert.strictEqual(secrets.get('anthropicKey'), 'old-claude-key');
+    assert.strictEqual(secrets.providerProfile('lmstudio').model, 'old-local-model');
+    const openaiReq = sent.at(-1);
+    assert.strictEqual(openaiReq.origin, 'https://api.openai.com');
+    assert.strictEqual(openaiReq.pathname, '/v1/chat/completions');
+    assert.strictEqual(openaiReq.key, 'Bearer openai-test-key');
+    assert.strictEqual(openaiReq.redirect, 'error');
+    assert.strictEqual(openaiReq.body.max_completion_tokens, 128);
+    assert.ok(!('max_tokens' in openaiReq.body) && !('temperature' in openaiReq.body));
+    const status = (await api('/api/ai/status')).data;
+    assert.strictEqual(status.via.ai, 'cloud');
+    assert.strictEqual(status.model, 'gpt-6-luna');
+    const scope = ai.cacheScope();
+    const query = 'RTX 4060';
+    const req = { query, mode: 'part', depth: 'quick', cachedOnly: true };
+    const saved = { text: 'Ответ OpenAI' };
+    store.set('aiHistory', [{ key: JSON.stringify([scope, 'part', 'quick', query.toLowerCase()]), t: Date.now(), result: saved }]);
+    assert.strictEqual((await api('/api/ai/research', req)).data.text, saved.text);
+    assert.strictEqual((await provider('deepseek', {})).status, 400, 'чужой ключ не берётся');
+    assert.strictEqual((await provider('deepseek', { key: 'invalid' })).status, 400);
+    assert.strictEqual(ai.modelLabel(), 'gpt-6-luna', 'неудачная проверка сохраняет активную модель');
+    const models = await provider('deepseek', { key: 'deepseek-test-key' }, 'models');
+    assert.deepStrictEqual(models.data.models.map((m) => m.id), ['deepseek-flash']);
+    assert.strictEqual(sent.at(-1).pathname, '/models');
+    assert.strictEqual((await provider('deepseek', { key: 'deepseek-test-key' })).status, 200);
+    assert.strictEqual(sent.at(-1).origin, 'https://api.deepseek.com');
+    assert.strictEqual(sent.at(-1).pathname, '/chat/completions');
+    assert.deepStrictEqual(sent.at(-1).body.thinking, { type: 'disabled' });
+    const requests = sent.length;
+    assert.deepStrictEqual((await api('/api/ai/research', req)).data, { cached: false });
+    assert.strictEqual(sent.length, requests, 'открытие карточки не вызывает новый запрос');
+    const summary = await ai.reviewSummary(query, [{ summary: 'Тихая' }]);
+    assert.strictEqual(summary.verdict, 'Тихая');
+    assert.strictEqual(summary.cloud, true);
+    assert.deepStrictEqual(sent.at(-1).body.response_format, { type: 'json_object' });
+    assert.strictEqual((await provider('openai', {})).status, 200);
+    assert.strictEqual(sent.at(-1).key, 'Bearer openai-test-key');
+    assert.strictEqual((await provider('server', {})).status, 200);
+    assert.strictEqual(ai.engine(), null);
+  } finally {
+    global.fetch = fetch;
+    await new Promise((resolve) => server.close(resolve));
+    store.flush();
+    store.setDir(previousDir);
+  }
+});
+
+test('совместимый адрес: сохранённый ключ используется только с тем же адресом', async () => {
+  await Promise.all(pending.slice());
+  const store = require('../server/store');
+  const secrets = require('../server/secrets');
+  const llm = require('../server/llm');
+  const previousDir = store.dataDir();
+  store.setDir(require('fs').mkdtempSync(require('path').join(require('os').tmpdir(), 'podbor-key-')));
+  try {
+    secrets.saveProvider('custom', { url: 'https://one.example', model: 'demo', key: 'custom-test-key' });
+    assert.strictEqual(llm.providerConfig('custom', { url: 'https://one.example/v1/' }).key, 'custom-test-key');
+    assert.strictEqual(llm.providerConfig('custom', { url: 'https://two.example/v1/' }).key, '');
+    assert.throws(() => llm.providerConfig('custom', { url: 'http://two.example', key: 'custom-test-key' }), /HTTPS/);
+    assert.throws(() => llm.providerConfig('custom', { url: 'https://name:pass@one.example' }), /без логина/);
+    secrets.removeProvider('custom');
+    assert.strictEqual(secrets.activeProvider(), 'server');
+    assert.deepStrictEqual(secrets.providerProfile('custom'), {});
+  } finally {
+    store.flush();
+    store.setDir(previousDir);
+  }
+});
+
 test('локальная модель: текст статьи без меню и скриптов; материалы укладываются в бюджет', () => {
   const aiLocal = require('../server/aiLocal');
   const html = '<html><nav><p>Меню сайта и ссылки на разделы, которые не нужны модели совсем</p></nav><script>var x=1</script><article><h1>t</h1>'

@@ -14,7 +14,7 @@ const BETAS = ['server-side-fallback-2026-07-01'];
 const MAX_CONTINUATIONS = 4;
 
 // Откуда брать ключ: в программе — из «Настроек», на сервере ПодборПК — из переменной окружения
-let keyProvider = () => secrets.get('anthropicKey');
+let keyProvider = () => secrets.activeProvider() === 'anthropic' ? secrets.get('anthropicKey') : '';
 function setKeyProvider(fn) {
   keyProvider = fn;
   cached = null;
@@ -49,6 +49,24 @@ function available() {
 function modelLabel() {
   const e = engine();
   return e === 'local' ? llm.label() : e === 'anthropic' ? MODEL : null;
+}
+
+function cacheScope() {
+  const e = engine();
+  if (e === 'anthropic') return MODEL;
+  if (e !== 'local') return null;
+  const { provider, url, model } = llm.config();
+  return JSON.stringify([provider, url, model]);
+}
+
+async function checkAnthropic(key) {
+  try {
+    await new Anthropic({ apiKey: key, maxRetries: 0, timeout: 20000 }).models.retrieve(MODEL);
+  } catch (e) {
+    if (e.status === 404) throw new Error('Модель Claude недоступна для этого аккаунта.');
+    if (e.status === 401 || e.status === 403) throw new Error('Anthropic не принял ключ или у него нет доступа к модели.');
+    throw new Error(e.status ? `Anthropic не подтвердил подключение (${e.status}).` : 'Нет связи с Anthropic. Проверьте интернет.');
+  }
 }
 
 /** Понятная ошибка вместо технической. */
@@ -222,4 +240,4 @@ async function reviewSummary(name, items) {
   }
 }
 
-module.exports = { research, reviewSummary, available, engine, modelLabel, setKeyProvider, MODEL, assemble, _setClientForTests: (c) => (cached = { key: keyProvider(), c }) };
+module.exports = { research, reviewSummary, available, engine, modelLabel, cacheScope, checkAnthropic, setKeyProvider, MODEL, assemble, _setClientForTests: (c) => (cached = { key: keyProvider(), c }) };

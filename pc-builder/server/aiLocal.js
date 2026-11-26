@@ -231,7 +231,7 @@ async function research(query, { mode = 'part', depth = 'quick' } = {}) {
   }
   const mats = fit(all, budget).map((s, i) => ({ ...s, n: i + 1 }));
   const user = `${(TASKS[mode] || TASKS.free)(query)}\n\nМатериалы:\n\n${mats.map((s) => `[${s.n}] ${s.title}\n${s.text}`).join('\n\n')}`;
-  const r = await llm.chat({ system: SYSTEM, user, maxTokens: ollama ? (deep ? 2200 : 1400) : 1200, ctx: deep ? 12288 : 8192 });
+  const r = await llm.chat({ system: SYSTEM, user, maxTokens: ollama ? (deep ? 2200 : 1400) : 1200, ctx: deep ? 12288 : 8192 }, c);
   const used = new Set([...r.text.matchAll(/\[(\d{1,2})\]/g)].map((m) => +m[1]).filter((n) => n >= 1 && n <= mats.length));
   // Номера оставляем как есть — в тексте они должны совпадать со списком источников
   const sources = mats.map((s) => ({ n: s.n, url: s.url, title: s.title }));
@@ -241,6 +241,7 @@ async function research(query, { mode = 'part', depth = 'quick' } = {}) {
     more: [...(used.size ? sources.filter((s) => !used.has(s.n)).map(({ url, title }) => ({ url, title })) : []), ...rv.links],
     searches: mats.length,
     engine: 'local',
+    cloud: !!c?.cloud,
     model: r.model,
     usage: { input: r.usage.input, output: r.usage.output, webSearches: 0 },
   };
@@ -274,10 +275,10 @@ async function reviewSummary(name, items) {
     user: `Товар: ${name}\n\n${list}\n\nОтветь только JSON-объектом без пояснений: {"verdict": "вывод для новичка в 1–3 предложениях", "pros": ["что хвалят, по убыванию частоты"], "cons": ["на что жалуются и насколько часто"], "who": "кому подходит и кому лучше другое", "warnings": ["брак, поломки, подделки — если есть, иначе пустой список"]}`,
     json: REVIEW_SCHEMA,
     maxTokens: 1200,
-  });
+  }, c);
   const o = llm.parseJSON(r.text);
   const arr = (v) => (Array.isArray(v) ? v.map(String).filter(Boolean).slice(0, 8) : v ? [String(v)] : []);
-  const out = { verdict: String(o.verdict || ''), pros: arr(o.pros), cons: arr(o.cons), who: String(o.who || ''), warnings: arr(o.warnings), engine: 'local', model: r.model };
+  const out = { verdict: String(o.verdict || ''), pros: arr(o.pros), cons: arr(o.cons), who: String(o.who || ''), warnings: arr(o.warnings), engine: 'local', cloud: !!c?.cloud, model: r.model };
   Object.defineProperty(out, 'usage', { value: r.usage, enumerable: false });
   return out;
 }
