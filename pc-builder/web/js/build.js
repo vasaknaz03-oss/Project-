@@ -1,5 +1,6 @@
 // Страница «Подбор по бюджету».
-import { el, icon, api, money, toast, modal, closeModal, promptText, copyText, download, thumb, plural } from './util.js';
+import { el, icon, api, money, toast, modal, closeModal, promptText, copyText, thumb, plural } from './util.js';
+import { downloadBuildTable } from './buildExport.js';
 import { reviewsPanel, reviewChip } from './reviews.js';
 import { explainPart } from './explain.js';
 import { state, SLOTS, specChips, shopLinks, linkFor, slim, saveBuilds, buildText } from './state.js';
@@ -710,7 +711,7 @@ function renderBuild(v) {
       el('button.btn', { onclick: () => saveCurrent(v) }, icon('save'), 'Сохранить'),
       el('button.btn', { title: 'В каком магазине (или паре магазинов) есть вся сборка и сколько это стоит', onclick: () => openBuyPlan(Object.values(parts).concat(Object.values(b.setup || {}))) }, icon('store'), 'Где купить всё'),
       el('button.btn', { onclick: () => copyText(buildText(textTitle(v), parts, total, '', b.setup)) }, icon('copy'), 'Копировать список'),
-      el('button.btn', { onclick: () => download(`Сборка ${new Date().toLocaleDateString('ru-RU')}.txt`, buildText(textTitle(v), parts, total, '', b.setup)) }, icon('download'), 'В файл .txt')));
+      el('button.btn', { onclick: () => downloadBuildTable(textTitle(v), parts, total, b.setup) }, icon('download'), 'Скачать таблицу')));
 
   // Анимация появления деталей — только для новой сборки, а не при каждом открытии панели
   const fresh = lastAnimated !== v;
@@ -987,6 +988,7 @@ function replacePart(slotKey, item, isSetup = false) {
   }
   panels[slotKey] = null;
   rerenderResults();
+  if (!isSetup) prefetchUsed();
   toast(item ? (isSetup ? 'Добавлено в сетап' : 'Деталь заменена') : 'Убрано из сборки');
 }
 
@@ -1117,14 +1119,20 @@ function usedQuery(it) {
   return it.name.replace(/\[[^\]]*\]|\([^)]*\)/g, '').split(/\s+/).filter((w) => !/^[A-Z0-9-]{9,}$/.test(w)).slice(0, 4).join(' ');
 }
 
-async function fetchUsed(it) {
-  if (usedCache[it.id]) return usedCache[it.id];
+function usedRequest(it, slot, b) {
+  return slot.setup ? null : { slot: slot.key, part: slimForApi(it), ctx: kufarCtx(b, slot.key) };
+}
+
+async function fetchUsed(it, slot, b) {
+  const request = usedRequest(it, slot, b);
+  const context = JSON.stringify(request);
+  if (usedCache[it.id]?.context === context) return usedCache[it.id];
   const kind = it.category === 'cpu' || it.category === 'videocard' ? it.category : 'other';
   const key = it.perf ? it.perf.key || '' : '';
   const q = usedQuery(it);
-  const r = await api(`/api/used?kind=${kind}&key=${encodeURIComponent(key)}&q=${encodeURIComponent(q)}&price=${it.price || ''}&vram=${it.specs?.vramGb || ''}`);
-  usedCache[it.id] = { items: r.items, total: r.total || r.items.length, url: r.url, market: r.market || null };
-  return usedCache[it.id];
+  const route = `/api/used?kind=${kind}&key=${encodeURIComponent(key)}&q=${encodeURIComponent(q)}&price=${it.price || ''}&vram=${it.specs?.vramGb || ''}`;
+  const r = await api(route, request ? { method: 'POST', body: request } : {});
+  return usedCache[it.id] = { context, items: r.items, total: r.total ?? r.items.length, url: r.url, market: r.market || null };
 }
 
 function kufarRow(slot, u, it, label = 'В сборку', onChange) {
@@ -1179,10 +1187,13 @@ async function takeFromKufar(slot, u, btn) {
       replacePart(slot.key, { ...u, category: slot.cat }, true);
       return true;
     }
-    const { item } = await api('/api/kufar/enrich', { method: 'POST', body: { slot: slot.key, item: u } });
+    const b = current()?.build;
+    if (!b) throw new Error('Сначала откройте сборку.');
+    const { item } = await api('/api/kufar/enrich', { method: 'POST', body: { slot: slot.key, item: { id: u.id }, ctx: kufarCtx(b, slot.key) } });
+    if (current()?.build !== b) throw new Error('Сборка изменилась. Откройте объявление снова.');
+    const issues = Compat.replacementErrors(slot.key, item, b.parts, kufarCtx(b, slot.key).have);
+    if (issues.length) throw new Error(issues[0].text);
     replacePart(slot.key, item);
-    pinPart(slot.key, item, true);
-    toast('Деталь с Kufar добавлена и закреплена. Нажмите «Пересобрать остальное», чтобы подобрать остальное под неё.');
     return true;
   } catch (e) {
     toast('Не удалось добавить: ' + e.message, 'err');
@@ -1193,14 +1204,14 @@ async function takeFromKufar(slot, u, btn) {
 
 /** Контекст совместимости для поиска на Kufar. */
 function kufarCtx(b, slotKey) {
-  const p = b.parts || {};
-  const ctx = {};
-  if (p.cpu && p.cpu.specs) ctx.socket = p.cpu.specs.socket;
-  if (p.motherboard && p.motherboard.specs) {
-    ctx.socket = ctx.socket || p.motherboard.specs.socket;
-    ctx.mem = p.motherboard.specs.mem;
-  }
-  if (slotKey === 'psu') ctx.need = Compat.psuNeed(p.cpu, p.gpu, 0).rec;
+  const parts = Object.fromEntries(SLOTS.filter((slot) => slot.key !== slotKey && b.parts?.[slot.key])
+    .map((slot) => [slot.key, slimForApi(b.parts[slot.key])]));
+  const { cpu, motherboard, ram } = parts;
+  const socket = motherboard?.specs?.socket || cpu?.specs?.socket;
+  const cpuMem = cpu?.specs?.mem || [];
+  const mem = socket === 'AM5' ? 'DDR5' : motherboard?.specs?.mem || ram?.specs?.type || (cpuMem.length === 1 ? cpuMem[0] : null);
+  const ctx = { parts, have: state.lastBuildForm?.have || form.have || {}, socket, mem };
+  if (slotKey === 'psu') ctx.need = Compat.psuNeed(cpu, parts.gpu, 0).rec;
   return ctx;
 }
 
@@ -1209,16 +1220,17 @@ async function loadUsed(panel, slot, it) {
   const b = v.build;
   panel.append(el('div.row', el('div.spinner', { style: { width: '20px', height: '20px', borderWidth: '2px' } }), el('span.muted', 'Ищем на Kufar…')));
   const q = usedQuery(it);
+  const sameLabel = (slot.key === 'cpu' || slot.key === 'gpu') && it.perf?.key ? `Та же модель «${q}»` : `По запросу «${q}»`;
   const sameBox = el('div');
   const compBox = el('div', { style: { marginTop: '14px' } });
   // 1) Та же модель б/у
-  const same = fetchUsed(it).then((r) => {
+  const same = fetchUsed(it, slot, b).then((r) => {
     if (!r.items.length) {
-      sameBox.replaceChildren(el('div.panel-title', `Та же модель «${q}»`), el('div.muted.small', 'Объявлений этой модели дешевле нового не нашлось.'));
+      sameBox.replaceChildren(el('div.panel-title', sameLabel), el('div.muted.small', 'Подходящие объявления по этому запросу не подтверждены.'));
       return;
     }
     sameBox.replaceChildren(
-      el('div.panel-title', `Та же модель «${q}» б/у: ${r.total}`, el('a.link-btn', { href: r.url, target: '_blank', rel: 'noopener', style: { marginLeft: '10px' } }, 'все на Kufar ↗')),
+      el('div.panel-title', `${sameLabel} б/у: ${r.total}`, el('a.link-btn', { href: r.url, target: '_blank', rel: 'noopener', style: { marginLeft: '10px' } }, 'поиск на Kufar ↗')),
       r.market ? el('div.market-line', icon('tag'), `Обычная цена б/у: около ${money.fmt(r.market.median)} — половина объявлений от ${money.fmt(r.market.p25)} до ${money.fmt(r.market.p75)} (по ${r.market.n} объявлениям)`) : null,
       kufarList(slot, r.items, it, 10));
   }).catch((e) => sameBox.replaceChildren(el('div.notice.err', icon('error'), el('div', e.message))));
@@ -1226,9 +1238,9 @@ async function loadUsed(panel, slot, it) {
   const comp = slot.setup ? Promise.resolve() : api('/api/kufar/compatible', { method: 'POST', body: { slot: slot.key, part: slimForApi(it), ctx: kufarCtx(b, slot.key) } }).then((r) => {
     const list = r.items.filter((u) => !(u.sameModel));
     compBox.replaceChildren(
-      el('div.panel-title', `Совместимые на Kufar${r.criteria ? ` (${r.criteria})` : ''}: ${r.total.toLocaleString('ru-RU')} объявлений`,
-        r.url ? el('a.link-btn', { href: r.url, target: '_blank', rel: 'noopener', style: { marginLeft: '10px' } }, 'все на Kufar ↗') : null),
-      kufarList(slot, list, it, 15, (n) => `Показаны 15 самых дешёвых из ${n} подходящих. Остальные — по ссылке «все на Kufar».`));
+      el('div.panel-title', `Совместимые на Kufar${r.criteria ? ` (${r.criteria})` : ''}: ${list.length.toLocaleString('ru-RU')}`,
+        r.url ? el('a.link-btn', { href: r.url, target: '_blank', rel: 'noopener', style: { marginLeft: '10px' } }, 'поиск на Kufar ↗') : null),
+      kufarList(slot, list, it, 15, (n) => `Показаны 15 самых дешёвых из ${n} проверенных в приложении.`));
   }).catch((e) => compBox.replaceChildren(el('div.notice.err', icon('error'), el('div', e.message))));
   await Promise.allSettled([same, comp]);
   panel.replaceChildren(sameBox, slot.setup ? null : compBox,
@@ -1254,8 +1266,10 @@ function renderUsedSummary(v) {
   const rows = [];
   for (const key of ['gpu', 'cpu']) {
     const it = v.build.parts[key];
-    if (!it) continue;
-    const items = usedCache[it.id] && usedCache[it.id].items;
+    if (it?.source !== 'onliner') continue;
+    const request = usedRequest(it, SLOTS.find((slot) => slot.key === key), v.build);
+    const cached = usedCache[it.id];
+    const items = cached?.context === JSON.stringify(request) ? cached.items : null;
     const label = key === 'gpu' ? 'Видеокарта' : 'Процессор';
     if (!items) rows.push(el('div.row.small', el('span.muted.grow', label), el('span.dim', 'ищем…')));
     else if (!items.some((u) => u.risk?.level === 'clear' && !isFiltered(u))) rows.push(el('div.row.small', el('span.muted.grow', label), el('span.dim', 'нет проверенных предложений')));
@@ -1269,14 +1283,19 @@ function renderUsedSummary(v) {
   }
   if (!rows.length) return null;
   card.append(el('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } }, rows));
-  card.append(el('p.dim.small', { style: { margin: '10px 0 0' } }, 'Самые дорогие детали выгоднее всего брать с рук. Цены — самые низкие объявления той же модели.'));
+  card.append(el('p.dim.small', { style: { margin: '10px 0 0' } }, 'Цены по проверенным объявлениям той же модели.'));
   return card;
 }
 
 async function prefetchUsed() {
   const v = current();
   if (!v || !v.build) return;
-  const jobs = ['gpu', 'cpu'].map((k) => v.build.parts[k]).filter((it) => it && it.source === 'onliner').map((it) => fetchUsed(it).catch(() => (usedCache[it.id] = { items: [], total: 0 })));
+  const jobs = SLOTS.filter((slot) => slot.key === 'gpu' || slot.key === 'cpu').map(async (slot) => {
+    const it = v.build.parts[slot.key];
+    if (it?.source !== 'onliner') return;
+    const context = JSON.stringify(usedRequest(it, slot, v.build));
+    try { await fetchUsed(it, slot, v.build); } catch { usedCache[it.id] = { context, items: [], total: 0 }; }
+  });
   await Promise.all(jobs);
   const old = document.getElementById('usedSummary');
   const cur = current();

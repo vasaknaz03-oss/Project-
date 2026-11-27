@@ -7,6 +7,7 @@ const kf = require('./providers/kufarFilters');
 const perf = require('./perfdb');
 const onliner = require('./providers/onliner');
 const { normSocket, capacityGb, parseSpecs } = require('./parsers');
+const Compat = require('../web/compat');
 
 // «Тип» в категории «Комплектующие» Kufar для каждого слота сборки
 const TYPE = { cpu: '10', gpu: '11', motherboard: '7', ram: '9', ssd: '15', hdd: '13', psu: '5', case: '1', cooler: '3' };
@@ -63,7 +64,7 @@ function webUrl(params, query) {
 }
 
 /**
- * Совместимые предложения Kufar для слота. part — текущая деталь, ctx — {socket, mem, need, gpuScore}.
+ * Совместимые предложения Kufar для слота. part — текущая деталь, ctx — остальные детали и параметры сборки.
  * Возвращает { items, total, url, criteria }.
  */
 async function compatible(slot, part, ctx = {}, { limit = 40, pages = 2 } = {}) {
@@ -74,7 +75,7 @@ async function compatible(slot, part, ctx = {}, { limit = 40, pages = 2 } = {}) 
   const s = (part && part.specs) || {};
 
   if (slot === 'cpu' || slot === 'motherboard') {
-    const socket = s.socket || ctx.socket;
+    const socket = ctx.socket || s.socket;
     // LGA1151 на Kufar разделён на «LGA1151» и «LGA1151 v2» — берём оба, совместимость проверит подбор
     const id = socket === 'LGA1151'
       ? (await valuesOf(slot, 'ccsct')).filter((v) => norm(v.name).startsWith('LGA1151')).map((v) => v.id).join(',')
@@ -83,15 +84,16 @@ async function compatible(slot, part, ctx = {}, { limit = 40, pages = 2 } = {}) 
     else if (socket) query = socket;
     if (socket) crit.push('сокет ' + socket);
     if (slot === 'motherboard') {
-      const mem = s.mem || ctx.mem;
+      const mem = ctx.mem || s.mem;
       const mid = await memIds(slot, mem);
       if (mid) params.ccrt = mid;
       if (mem) crit.push(mem);
     }
   } else if (slot === 'ram') {
-    const ids = await memIds(slot, s.type);
+    const mem = ctx.mem || s.type || (MEM_BY_SOCKET[ctx.socket] || [])[0];
+    const ids = await memIds(slot, mem);
     if (ids) params.ccrt = ids;
-    if (s.type) crit.push(s.type);
+    if (mem) crit.push(mem);
     if (s.totalGb) {
       const vid = await valueId(slot, 'cdr', `${s.totalGb} ГБ`);
       if (vid) params.cdr = vid;
@@ -122,7 +124,7 @@ async function compatible(slot, part, ctx = {}, { limit = 40, pages = 2 } = {}) 
   let total = 0;
   let cursor;
   for (let page = 0; page < pages; page++) {
-    const r = await kufar.search({ cat: 16010, params, query, size: 50, cursor });
+    const r = await kufar.search({ cat: 16010, params, query, size: 50, cursor, condition: 'used' });
     total = r.total;
     all.push(...r.items);
     if (!r.next) break;
@@ -150,9 +152,9 @@ async function compatible(slot, part, ctx = {}, { limit = 40, pages = 2 } = {}) 
     }
   }
   items.sort((a, b) => a.price - b.price);
-  const shown = items.slice(0, limit);
-  await kufar.inspect(shown);
-  return { items: kufar.prioritize(shown), total, url: webUrl(params, query), criteria: crit.join(', ') };
+  const expected = { ...ctx, socket: ctx.socket || s.socket, mem: ctx.mem || (slot === 'ram' ? s.type : s.mem) };
+  const shown = await verifiedOffers(slot, items, expected, limit);
+  return { items: shown, total, url: webUrl({ ...params, cnd: '1' }, query), criteria: crit.join(', ') };
 }
 
 // ---------------------------------------------------------------- объявление → деталь сборки
@@ -185,6 +187,16 @@ function findChipset(text) {
 
 const pv = (it, pu) => (it.params && it.params[pu] ? String(it.params[pu].vl) : '');
 
+function socketsIn(text) {
+  return [...String(text || '').matchAll(/(?<![\p{L}\p{N}])(?:AM[1-5]\+?|FM[12]\+?|LGA\s*\d{3,4})(?![\p{L}\p{N}])/giu)].map((m) => normSocket(m[0]));
+}
+
+function memoryTypes(text) {
+  return [...String(text || '').matchAll(/(?<![\p{L}\p{N}])DDR\s*([2-5])(?!\d)/giu)].map((m) => 'DDR' + m[1]);
+}
+
+const unique = (values) => [...new Set(values.filter(Boolean))];
+
 /** Ищем ту же модель в каталоге Onliner, чтобы взять точные характеристики. */
 async function onlinerTwin(schema, query, keyFn, key) {
   try {
@@ -199,17 +211,20 @@ async function enrich(slot, item) {
   const { description, ...fields } = item;
   const out = { ...fields, source: 'kufar', category: SCHEMA[slot], specs: {}, offers: 0, fromKufar: true };
   const name = item.name || '';
+  const text = [name, description].filter(Boolean).join('\n');
   const notes = [];
 
   if (slot === 'cpu') {
     const key = perf.cpuKey(name);
     const twin = key ? await onlinerTwin('cpu', name.replace(/процессор/i, ''), perf.cpuKey, key) : null;
-    if (twin) out.specs = { ...twin.specs, withCooler: /box|кулер/i.test(name) && twin.specs.withCooler };
-    else {
-      const socket = normSocket(pv(item, 'ccsct')) || null;
-      out.specs = { socket, mem: MEM_BY_SOCKET[socket] || [], tdp: 65, hasIgpu: /\d{4}g\b|\d{5}\b(?!f)/i.test(name) };
-      notes.push('характеристики процессора взяты из объявления');
-    }
+    const declared = unique([...socketsIn(pv(item, 'ccsct')), ...socketsIn(name), twin?.specs.socket]);
+    const sockets = declared.length ? declared : unique(socketsIn(description));
+    const socket = sockets.length === 1 ? sockets[0] : null;
+    const identified = parseSpecs('cpu', [socket && `сокет ${socket}`, description].filter(Boolean).join(', '), name);
+    const hasNoGpu = /\d{3,5}\s*(?:x?f|kf)\b/i.test(name);
+    out.specs = { ...(twin?.specs || identified), socket, mem: twin?.specs.mem || MEM_BY_SOCKET[socket] || identified.mem,
+      hasIgpu: !hasNoGpu && (identified.hasIgpu || twin?.specs.hasIgpu || false), withCooler: /with cooler|с кулером/i.test(text) && !/без кулера/i.test(text) };
+    if (!twin) notes.push('характеристики процессора взяты из объявления');
     out.perf = perf.cpuPerf(twin ? twin.name : name, out.specs);
   } else if (slot === 'gpu') {
     const gpu = kufar.adGpuInfo(item);
@@ -219,21 +234,27 @@ async function enrich(slot, item) {
     if (gpu.key) out.perf = { key: gpu.key, ...perf.gpuPerf(gpu.key, gpu.vramGb) };
     else notes.push('модель видеокарты не распознана');
   } else if (slot === 'motherboard') {
-    const chipset = findChipset(pv(item, 'ccch')) || findChipset(name);
-    let socket = normSocket(pv(item, 'ccsct')) || null;
-    if (!socket && chipset) socket = CHIPSET_SOCKET.get(chipset);
-    let mem = (pv(item, 'ccrt').match(/DDR\d/) || [])[0];
-    if (!mem) mem = /ddr5|d5\b/i.test(name) ? 'DDR5' : /ddr4|d4\b/i.test(name) ? 'DDR4' : (MEM_BY_SOCKET[socket] || [])[0];
-    const ffRaw = pv(item, 'ccff') || name;
-    const form = /itx/i.test(ffRaw) ? 'ITX' : /m-?atx|micro/i.test(ffRaw) || /\d{3}M\b|M-/i.test(name) ? 'mATX' : 'ATX';
-    out.specs = { socket, mem, form, chipset, memSlots: Number(pv(item, 'ccns')) || 2, m2: 1 };
-    if (!pv(item, 'ccsct')) notes.push('сокет определён по названию');
+    const chipsets = unique([findChipset(pv(item, 'ccch')), findChipset(name)]);
+    const chipset = chipsets[0] || findChipset(description);
+    const sockets = unique([...socketsIn(pv(item, 'ccsct')), ...socketsIn(name), ...chipsets.map((c) => CHIPSET_SOCKET.get(c))]);
+    const statedSockets = sockets.length ? sockets : unique([...socketsIn(description), CHIPSET_SOCKET.get(chipset)]);
+    const socket = statedSockets.length === 1 ? statedSockets[0] : null;
+    const supported = MEM_BY_SOCKET[socket] || [];
+    const types = unique([...memoryTypes(pv(item, 'ccrt')), ...memoryTypes(text), ...memoryTypes(name.replace(/\bD([45])\b/ig, 'DDR$1'))]);
+    const mem = !types.length && supported.length === 1 ? supported[0] : types.length === 1 && (!supported.length || supported.includes(types[0])) ? types[0] : null;
+    const ffRaw = pv(item, 'ccff') || text;
+    const form = /itx/i.test(ffRaw) ? 'ITX' : /m-?atx|micro/i.test(ffRaw) || /\d{3}M\b|M-/i.test(name) ? 'mATX' : /e-?atx/i.test(ffRaw) ? 'E-ATX' : /\batx\b/i.test(ffRaw) ? 'ATX' : null;
+    out.specs = { socket, mem, form, chipset, memSlots: Number(pv(item, 'ccns')) || null };
+    if (!pv(item, 'ccsct') && socket) notes.push('сокет определён по модели или описанию');
   } else if (slot === 'ram') {
-    const type = (pv(item, 'ccrt').match(/DDR\d/) || name.toUpperCase().match(/DDR\d/) || [])[0] || null;
+    const memory = `${text}\n${pv(item, 'ccrt')}`;
+    const types = unique(memoryTypes(memory));
+    const type = types.length === 1 ? types[0] : null;
     const total = parseFloat(pv(item, 'cdr')) || capacityGb(name) || null;
     const kit = name.match(/(\d)\s*[xх×]\s*(\d{1,2})\s*(gb|гб)?/i);
     out.specs = {
-      type, form: /so-?dimm/i.test(name + pv(item, 'ccrt')) ? 'SO-DIMM' : 'DIMM', totalGb: kit ? Number(kit[1]) * Number(kit[2]) : total,
+      type, form: /so[\s-]?dimm|ноутбук/i.test(memory) ? 'SO-DIMM' : /cudimm/i.test(memory) ? 'CUDIMM' : /dimm|настольн|для\s+пк/i.test(memory) ? 'DIMM' : null,
+      registered: /\b(?:rdimm|lrdimm|registered)\b|серверн/i.test(memory), totalGb: kit ? Number(kit[1]) * Number(kit[2]) : total,
       modules: kit ? Number(kit[1]) : /комплект|kit/i.test(name) ? 2 : 1, mhz: Number((name.match(/(\d{4})\s*(mhz|мгц)/i) || [])[1]) || null,
     };
   } else if (slot === 'ssd' || slot === 'hdd') {
@@ -255,4 +276,52 @@ async function enrich(slot, item) {
   return out;
 }
 
-module.exports = { compatible, enrich, findChipset, TYPE, SCHEMA };
+function compatibilityIssue(slot, item, ctx = {}) {
+  const specs = item.specs || {};
+  if (slot === 'ram') {
+    const mem = ctx.socket === 'AM5' ? 'DDR5' : ctx.mem;
+    if (!specs.type) return 'Не удалось однозначно определить тип памяти в объявлении.';
+    if (mem && specs.type !== mem) return `Для этой сборки нужна ${mem}, а в объявлении ${specs.type}.`;
+    if (!specs.form) return 'В объявлении не подтверждён формат модуля памяти DIMM.';
+    if (specs.form === 'SO-DIMM' || specs.registered) return 'Эта память не подходит для обычной настольной платы.';
+  }
+  if (slot === 'cpu' || slot === 'motherboard') {
+    if (!specs.socket) return 'Не удалось однозначно определить сокет детали в объявлении.';
+    if (ctx.socket && specs.socket !== ctx.socket) return `Для сборки нужен сокет ${ctx.socket}, а в объявлении ${specs.socket}.`;
+    if (slot === 'motherboard' && !specs.mem) return 'Не удалось подтвердить, какую память поддерживает плата.';
+    if (slot === 'motherboard' && ctx.mem && specs.mem !== ctx.mem) return `Плата рассчитана на ${specs.mem}, а сборке нужна ${ctx.mem}.`;
+    if (slot === 'cpu' && ctx.mem && !specs.mem?.includes(ctx.mem)) return `Поддержка ${ctx.mem} этим процессором не подтверждена.`;
+  }
+  return Compat.replacementErrors(slot, item, ctx.parts || {}, ctx.have)[0]?.text || null;
+}
+
+async function verifiedPart(slot, ad, ctx) {
+  kufar.requireVerified(ad);
+  const evidence = kufar.forCompatibility(ad);
+  const type = evidence.params?.cct?.v;
+  if (type && String(type) !== TYPE[slot]) throw new Error('На Kufar указан другой тип комплектующего.');
+  const item = await enrich(slot, evidence);
+  const issue = compatibilityIssue(slot, item, ctx);
+  if (issue) throw new Error(issue);
+  return item;
+}
+
+async function verifiedOffers(slot, ads, ctx, limit = 30) {
+  const candidates = [...new Map(ads.map((ad) => [ad.id, ad])).values()];
+  const mem = ctx?.socket === 'AM5' ? 'DDR5' : ctx?.mem;
+  const shortlisted = slot === 'ram' && mem ? candidates.filter((ad) =>
+    memoryTypes(`${ad.name || ''}\n${pv(ad, 'ccrt')}`).every((type) => type === mem)) : candidates;
+  const queue = shortlisted.slice(0, Math.max(30, limit * 2));
+  await kufar.inspect(queue, { limit: 48, timeout: 5500 });
+  const verified = await Promise.all(queue.filter(kufar.verified).map(async (ad) => {
+    try {
+      const part = await verifiedPart(slot, ad, ctx);
+      return { ...ad, specs: part.specs, perf: part.perf || ad.perf };
+    } catch {
+      return null;
+    }
+  }));
+  return verified.filter(Boolean).slice(0, limit);
+}
+
+module.exports = { compatible, enrich, findChipset, verifiedPart, verifiedOffers, TYPE, SCHEMA };

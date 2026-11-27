@@ -7,6 +7,7 @@ const { parseSpecs } = require('../parsers');
 const condition = require('../kufarCondition');
 
 const API = 'https://api.kufar.by/search-api/v2/search/rendered-paginated';
+const fullDescriptions = new WeakMap();
 const CAT_COMPONENTS = 16010; // Компьютерная техника → Комплектующие
 const CAT_COMPUTERS = 16020; // Компьютеры / системные блоки
 
@@ -61,6 +62,7 @@ function normalize(ad, detail = false) {
     result.gpu = classifyGpu(result, excerpt);
     result.risk = gpuRisk(result.risk, result.gpu);
   }
+  if (fullText) fullDescriptions.set(result, fullText);
   return result;
 }
 
@@ -216,8 +218,10 @@ const offTopic = (name) => OTHER.test(name || '') || isMulti(name);
 const isJunk = (name) => offTopic(name) || condition.assess(name).level === 'blocked';
 
 /** Одно объявление по номеру (для ссылок вида kufar.by/item/123). */
-async function item(id) {
-  const data = await getJSON('https://api.kufar.by/search-api/v2/item/' + encodeURIComponent(id) + '/rendered', { ttl: 10 * 60 * 1000, timeout: 5000, retries: 0 });
+async function item(id, { fresh = false } = {}) {
+  const data = await getJSON('https://api.kufar.by/search-api/v2/item/' + encodeURIComponent(id) + '/rendered', {
+    ttl: fresh ? 0 : 10 * 60 * 1000, useRemote: !fresh, timeout: 5000, retries: 0,
+  });
   return data && data.result ? normalize(data.result, true) : null;
 }
 
@@ -232,8 +236,15 @@ function cachedDetail(ad) {
 
 function risk(ad, gpu = ad.gpu) {
   const entry = cachedDetail(ad);
-  const base = entry?.risk || (ad.risk && (!ad.risk.until || ad.risk.until > Date.now()) ? ad.risk : condition.assess(ad.name));
-  return gpuRisk(base, entry?.gpu || gpu);
+  const direct = Object.hasOwn(ad, 'description');
+  const assessment = ad.risk && (!ad.risk.until || ad.risk.until > Date.now()) ? ad.risk : condition.assess(ad.name);
+  return gpuRisk(direct ? assessment : entry?.risk || assessment, direct ? gpu : entry?.gpu || gpu);
+}
+
+function forCompatibility(ad) {
+  if (Object.hasOwn(ad, 'description')) return ad;
+  const found = cachedDetail(ad)?.evidence;
+  return { ...ad, description: found?.description || fullDescriptions.get(ad) || '', params: { ...ad.params, ...found?.params } };
 }
 
 function gpuRisk(base, gpu) {
@@ -259,7 +270,7 @@ function detailRisk(ad) {
   const query = item(ad.id).catch(() => null).then((found) => {
     const until = Date.now() + (found?.risk.full ? 10 * 60 * 1000 : 90 * 1000);
     const assessment = found && (found.risk.full || found.risk.level !== 'unknown') ? { ...found.risk, until } : null;
-    details.set(key, { until, risk: assessment, gpu: found?.gpu });
+    details.set(key, { until, risk: assessment, gpu: found?.gpu, evidence: found && { description: found.description, params: found.params } });
     if (details.size > 1200) details.delete(details.keys().next().value);
   }).finally(() => pendingDetails.delete(key));
   pendingDetails.set(key, query);
@@ -301,4 +312,14 @@ function rejectBroken(ad) {
   if (assessment.level === 'blocked') throw new Error(assessment.reasons[0]);
 }
 
-module.exports = { adGpuInfo, adGpuKey, search, count, usedFor, ratesFromAds, isJunk, offTopic, isMulti, item, normalize, inspect, risk, prioritize, rejectBroken, CAT_COMPONENTS, CAT_COMPUTERS };
+function verified(ad) {
+  const state = risk(ad);
+  return state.full && state.level === 'clear';
+}
+
+function requireVerified(ad) {
+  rejectBroken(ad);
+  if (!verified(ad)) throw new Error(risk(ad).reasons[0] || 'Работоспособность детали по описанию не подтверждена.');
+}
+
+module.exports = { adGpuInfo, adGpuKey, search, count, usedFor, ratesFromAds, isJunk, offTopic, isMulti, item, normalize, inspect, risk, prioritize, rejectBroken, forCompatibility, verified, requireVerified, CAT_COMPONENTS, CAT_COMPUTERS };

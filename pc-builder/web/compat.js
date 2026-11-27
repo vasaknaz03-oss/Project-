@@ -170,10 +170,12 @@
     const cs = (cpu && cpu.specs) || {};
     const ms = (mb && mb.specs) || {};
     const rs = (ram && ram.specs) || {};
+    const boardMem = ms.socket === 'AM5' || (!ms.socket && cs.socket === 'AM5') ? 'DDR5' : ms.mem;
 
     if (cpu && mb) {
       if (cs.socket && ms.socket && cs.socket !== ms.socket) err(`Сокет процессора ${cs.socket} не подходит к плате с сокетом ${ms.socket}`);
-      else if (cs.socket) ok(`Сокет ${cs.socket}: процессор и плата совместимы`);
+      else if (cs.socket && ms.socket) ok(`Сокет ${cs.socket}: процессор и плата совместимы`);
+      else warn('Уточните сокет процессора и платы.');
       if (cs.mem && cs.mem.length && ms.mem && !cs.mem.includes(ms.mem)) err(`Процессор не поддерживает ${ms.mem}, которую использует плата`);
       if (ms.socket === 'AM4' && OLD_AM4.test(ms.chipset || '') && /ryzen\s*\d\s*(pro\s*)?5\d{3}/i.test(cpu.name)) {
         warn(`Плата на чипсете ${ms.chipset} может потребовать обновления BIOS для Ryzen 5000`);
@@ -199,8 +201,9 @@
     if (ram) {
       if (rs.form && rs.form !== 'DIMM' && rs.form !== 'CUDIMM') err('Выбрана память SO-DIMM (для ноутбуков): в настольную плату не встанет');
       if (rs.registered) err('Серверная (Registered/ECC) память не подойдёт для обычной платы');
-      if (mb && ms.mem && rs.type && ms.mem !== rs.type) err(`Плата рассчитана на ${ms.mem}, а память ${rs.type}`);
-      else if (mb && rs.type) ok(`Память ${rs.type} подходит к плате`);
+      if (boardMem && rs.type && boardMem !== rs.type) err(`Для этой сборки нужна ${boardMem}, а выбрана ${rs.type}`);
+      else if (mb && boardMem && rs.type) ok(`Память ${rs.type} подходит к плате`);
+      else if (mb) warn('Уточните тип памяти и какую память поддерживает плата.');
       if (mb && ms.memSlots && rs.modules > ms.memSlots) err(`Модулей памяти (${rs.modules}) больше, чем слотов на плате (${ms.memSlots})`);
       if (rs.modules === 1) warn('Один модуль памяти работает в одноканальном режиме: для игр лучше комплект из двух');
       // Подсказка новичку: без профиля в BIOS память работает на базовой частоте
@@ -268,6 +271,13 @@
     return out;
   }
 
+  function replacementErrors(slot, item, parts = {}, have = {}) {
+    if (!item) return [];
+    // Повторно не показываем ошибки, которые уже были между другими деталями сборки.
+    const existing = new Set(check({ ...parts, [slot]: null }, have).filter((x) => x.level === 'error').map((x) => x.text));
+    return check({ ...parts, [slot]: item }, have).filter((x) => x.level === 'error' && !existing.has(x.text));
+  }
+
   function gamingTier(s) {
     if (s < 12) return 'Офис, браузер, видео';
     if (s < 40) return 'Лёгкие и старые игры';
@@ -303,5 +313,5 @@
     return { gaming, work, tier: eff == null ? 'Зависит от вашей видеокарты' : gamingTier(eff) };
   }
 
-  return { cpuPower, gpuPower, psuNeed, coolerNeed, coolerClass, coolerLabels, boardFitsCase, gpuCaseErrors, checkGpuPower, check, indices, gamingTier };
+  return { cpuPower, gpuPower, psuNeed, coolerNeed, coolerClass, coolerLabels, boardFitsCase, gpuCaseErrors, checkGpuPower, check, replacementErrors, indices, gamingTier };
 });

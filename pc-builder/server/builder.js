@@ -720,13 +720,6 @@ async function verifyHardware(best, pools, opts, budget) {
   return null;
 }
 
-/** Минимально возможная стоимость сборки (для подсказки, если бюджета не хватает). */
-/** Есть ли у процессора встроенная графика — по названию (для объявлений Kufar). */
-function igpuByName(name) {
-  if (/ryzen/i.test(name)) return /\d{4}g/i.test(name) || /\b[789]\d{3}(?!f)\b/i.test(name);
-  return !/\d{3,5}[a-z]*f\b/i.test(name);
-}
-
 /**
  * Закреплена плата или процессор под сокет, которого уже нет в новых товарах (LGA1151 и т. п.):
  * вторую деталь пары подбираем из объявлений Kufar.
@@ -746,12 +739,8 @@ async function kufarForPinnedSocket(pools, warnings) {
     try {
       // Все объявления с процессорами под сокет (до 4 страниц), дешёвые Celeron отсекает порог цены
       const r = await KC.compatible('cpu', { specs: { socket: sock }, price: 300 }, {}, { limit: 200, pages: 4 });
-      found = r.items.map((it) => {
-        const specs = { socket: sock, mem: [mb.specs.mem], tdp: 95, hasIgpu: igpuByName(it.name), withCooler: false };
-        const p = perf.cpuPerf(it.name, specs);
-        if (!p || !p.gaming || SERVER_CPU.test(it.name)) return null;
-        return { ...it, category: 'cpu', slot: 'cpu', specs, perf: { ...p, name: it.name }, fromKufar: true, offers: 0, kufarNote: 'процессор с Kufar под закреплённую плату' };
-      }).filter(Boolean);
+      found = r.items.filter((it) => it.perf?.gaming && !SERVER_CPU.test(it.name) && boardSuitable(it, mb))
+        .map((it) => ({ ...it, category: 'cpu', slot: 'cpu', fromKufar: true, offers: 0, kufarNote: 'процессор с Kufar под закреплённую плату' }));
     } catch {}
     if (found.length) {
       pools.cpus = pools.cpus.concat(cheapestBy(found, (x) => x.perf.key));
@@ -766,10 +755,8 @@ async function kufarForPinnedSocket(pools, warnings) {
     try {
       const mem = (cpu.specs.mem || []).find((m) => /^DDR[45]$/.test(m));
       const r = await KC.compatible('motherboard', { specs: { socket: sock, mem }, price: 300 }, {}, { limit: 60, pages: 2 });
-      found = (await Promise.all(r.items.slice(0, 30).map((it) => KC.enrich('motherboard', it).catch(() => null))))
-        // Только объявления с понятной моделью (чипсет распознан) и подходящие к процессору
-        .filter((m) => m && m.specs.socket === sock && m.specs.chipset && /^DDR[45]$/.test(m.specs.mem || '') && boardSuitable(cpu, m))
-        .map((m) => ({ ...m, slot: 'motherboard', kufarNote: [m.kufarNote, 'плата с Kufar под закреплённый процессор'].filter(Boolean).join('; ') }));
+      found = r.items.filter((m) => m.specs.chipset && boardSuitable(cpu, m)).slice(0, 30)
+        .map((m) => ({ ...m, category: 'motherboard', slot: 'motherboard', fromKufar: true, offers: 0, kufarNote: 'плата с Kufar под закреплённый процессор' }));
     } catch {}
     if (found.length) {
       pools.boardAll = pools.boardAll.concat(found);
@@ -1070,7 +1057,7 @@ async function kufarUsedParts(kind, pools, opts, budget) {
   }
   const candidates = matches.map(({ ad }) => ad);
   await kufar.inspect(candidates, { limit: 28, timeout: 5500 });
-  const verified = candidates.filter((ad) => kufar.risk(ad, kind === 'gpu' ? kufar.adGpuInfo(ad) : undefined).level === 'clear');
+  const verified = candidates.filter((ad) => kufar.verified(ad));
   await market.annotate(verified, kind);
   const accepted = new Set(verified);
   const out = [];

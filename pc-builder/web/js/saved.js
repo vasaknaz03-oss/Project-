@@ -1,5 +1,6 @@
 // Страница «Мои сборки».
-import { el, icon, api, money, copyText, download, toast, promptText } from './util.js';
+import { el, icon, api, money, copyText, toast, promptText } from './util.js';
+import { downloadBuildTable } from './buildExport.js';
 import { state, SLOTS, saveBuilds, buildText, slim } from './state.js';
 import { openSaved } from './build.js';
 
@@ -38,7 +39,7 @@ function card(b) {
       el('button.btn.btn-sm', { onclick: () => { openSaved(b); document.dispatchEvent(new CustomEvent('goto-page', { detail: 'build' })); } }, icon('open'), 'Открыть'),
       el('button.btn.btn-sm', { onclick: (e) => refresh(b, e.currentTarget) }, icon('refresh'), 'Обновить цены'),
       el('button.btn.btn-sm', { onclick: () => copyText(buildText(b.name, b.parts, b.total, '', b.setup)) }, icon('copy'), 'Копировать'),
-      el('button.btn.btn-sm', { onclick: () => download(`${b.name}.txt`, buildText(b.name, b.parts, b.total, '', b.setup)) }, icon('download'), '.txt'),
+      el('button.btn.btn-sm', { onclick: () => downloadBuildTable(b.name, b.parts, b.total, b.setup) }, icon('download'), 'Скачать таблицу'),
       el('button.btn.btn-sm.btn-ghost', {
         onclick: async () => {
           const name = await promptText('Переименовать', 'Название', b.name);

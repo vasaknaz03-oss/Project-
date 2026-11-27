@@ -879,7 +879,7 @@ async function route(req, res, url) {
   // Совместимые б/у на Kufar: тот же сокет / тип памяти / видеокарты близкой мощности
   if (pathname === '/api/kufar/compatible' && req.method === 'POST') {
     const body = await readBody(req);
-    if (!kufarCompat.TYPE[body.slot]) throw new Error('Неизвестный слот');
+    if (!Object.hasOwn(kufarCompat.TYPE, body.slot)) throw new Error('Неизвестный слот');
     const r = await kufarCompat.compatible(body.slot, body.part || null, body.ctx || {});
     await market.annotate(r.items, body.slot);
     // Сначала выгодные: мощность за рубль, цена к рынку, бренд, безопасная сделка — а не просто самые дешёвые
@@ -937,11 +937,10 @@ async function route(req, res, url) {
   // Объявление Kufar → деталь сборки (характеристики для проверки совместимости)
   if (pathname === '/api/kufar/enrich' && req.method === 'POST') {
     const body = await readBody(req);
-    if (!kufarCompat.TYPE[body.slot] || !body.item || !body.item.name) throw new Error('Нечего добавлять');
-    const latest = /^\d{1,16}$/.test(body.item.id) ? await kufar.item(body.item.id).catch(() => null) : null;
-    const item = latest || body.item;
-    kufar.rejectBroken(item);
-    return send(res, 200, { item: await kufarCompat.enrich(body.slot, item) });
+    if (!Object.hasOwn(kufarCompat.TYPE, body.slot) || !/^\d{1,16}$/.test(body.item?.id)) throw new Error('Нечего добавлять');
+    const ad = await kufar.item(body.item.id, { fresh: true }).catch(() => null);
+    if (!ad) throw new Error('Не удалось получить карточку Kufar и проверить деталь.');
+    return send(res, 200, { item: await kufarCompat.verifiedPart(body.slot, ad, body.ctx || {}) });
   }
 
   if (pathname === '/api/kufar/check' && req.method === 'POST') {
@@ -963,22 +962,32 @@ async function route(req, res, url) {
   }
 
   if (pathname === '/api/used') {
+    const body = req.method === 'POST' ? await readBody(req) : {};
+    const slot = Object.hasOwn(kufarCompat.TYPE, body.slot) ? body.slot : null;
+    const ctx = { ...body.ctx };
+    if (slot === 'ram') ctx.mem ||= body.part?.specs?.type;
     const kind = p.get('kind');
     const key = p.get('key');
     const q = (p.get('q') || '').slice(0, 120);
     const price = num(p.get('price'));
-    const url = 'https://www.kufar.by/l/r~belarus?' + new URLSearchParams({ query: q, cnd: '1' });
+    const params = slot ? { cct: kufarCompat.TYPE[slot] } : {};
+    const url = 'https://www.kufar.by/l/r~belarus?' + new URLSearchParams({ query: q, cnd: '1', ...(slot ? { cat: '16010', ...params } : {}) });
     if ((kind === 'cpu' || kind === 'videocard') && key) {
       const vram = num(p.get('vram'));
       const all = await kufar.usedFor(kind, key, q, price, vram);
       // Цены той же модели: медиана и оценка каждого объявления относительно неё
-      const stats = market.annotateSame(all);
-      const items = kind === 'videocard' ? market.rankByValue(all, kind, false) : all;
-      return send(res, 200, { items: items.slice(0, 30), total: all.length, url, market: stats });
+      const checked = slot ? await kufarCompat.verifiedOffers(slot, all, ctx) : all;
+      const stats = market.annotateSame(checked);
+      const items = kind === 'videocard' ? market.rankByValue(checked, kind, false) : checked;
+      return send(res, 200, { items: items.slice(0, 30), total: checked.length, url, market: stats });
     }
     // Для остальных деталей — просто поиск б/у по названию модели
-    const r = await kufar.search({ query: q, condition: 'used', size: 30 });
+    const r = await kufar.search({ query: q, ...(slot ? { cat: kufar.CAT_COMPONENTS, params } : {}), condition: 'used', size: 30 });
     const items = r.items.filter((it) => it.price > 0 && (!price || it.price < price * 1.05)).sort((a, b) => a.price - b.price);
+    if (slot) {
+      const shown = await kufarCompat.verifiedOffers(slot, items, ctx);
+      return send(res, 200, { items: shown, total: shown.length, url });
+    }
     await kufar.inspect(items);
     return send(res, 200, { items: kufar.prioritize(items), total: items.length, url });
   }

@@ -69,13 +69,13 @@ function setRemoteFetch(fn) {
   remoteFetch = fn;
 }
 
-async function getJSON(url, { ttl = 15 * 60 * 1000, timeout = 15000, headers = {}, retries = 2 } = {}) {
+async function getJSON(url, { ttl = 15 * 60 * 1000, timeout = 15000, headers = {}, retries = 2, useRemote = true } = {}) {
   const hit = cache.get(url);
   if (hit && Date.now() - hit.t < ttl) return hit.data;
 
   await acquire();
   try {
-    if (remoteFetch && REMOTE_RE.test(url)) {
+    if (useRemote && remoteFetch && REMOTE_RE.test(url)) {
       try {
         const data = await remoteFetch(url);
         if (data !== undefined) {

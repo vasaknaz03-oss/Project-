@@ -1016,6 +1016,10 @@ test('Kufar: явные дефекты, опечатки, отрицания и 
     ['RTX 3060', 'Рабочая. Иногда глючит подсветка.', 'caution'],
     ['RTX 4060', 'HDMI не работает. Через DisplayPort всё хорошо.', 'caution'],
     ['Материнская плата', 'Не работает с DDR4, стабильно работает с DDR5.', 'clear'],
+    ['Материнская плата', 'Контакты не погнуты. Оба канала памяти проверены.', 'clear'],
+    ['Материнская плата', 'Не запускалась в двух канале.', 'blocked'],
+    ['Материнская плата', 'Погнутые контакты. Плата включается.', 'blocked'],
+    ['Материнская плата', 'Отдал на перепайку. Перепайка не помогла.', 'blocked'],
     // Kufar item/1095071027: продавец готов принять неисправные детали покупателя.
     ['Colorful Battle-AX B650M-Plus V1', 'Всё рабочее. Возможен обмен на ваши комплектующие (можно с дефектами или не исправные) с/без доплатой.', 'clear'],
     ['Материнская плата', 'Обмен на вашу неисправную плату или продажа. Свою проверили, работает.', 'clear'],
@@ -1029,6 +1033,132 @@ test('Kufar: явные дефекты, опечатки, отрицания и 
   assert.deepStrictEqual(assess('RTX 4060', '', true).level, 'unknown');
   assert.strictEqual(assess('RTX 4060', '', false).confidence, 'low');
   assert.strictEqual(assess('RTX 4060 на запчасти').confidence, 'high');
+});
+
+test('б/у для сборки: AM5, три карточки DDR4, плата после перепайки и повторная проверка перед добавлением', async () => {
+  await Promise.all(pending.slice());
+  const kufar = require('../server/providers/kufar');
+  const facets = require('../server/providers/kufarFilters');
+  const http = require('../server/http');
+  const { createServer } = require('../server/server');
+  const server = createServer();
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const make = (id, title, description, type, metadata = {}) => ({
+    ad_id: id, subject: title, price_byn: '15000', body: description,
+    ad_parameters: Object.entries({ cct: type, ...metadata }).map(([pu, vl]) => ({ pu, v: vl, vl })),
+  });
+  const boards = [
+    make('1096991608', 'MSI x670-e gaming plus Wi-Fi (торг)', 'Купил б/у не запускалась в двух канале, увидел что ножки погнуты и после этого отдал на перепайку и ситуацию не изменило, может быть не там перепаяли.', '7', { ccsct: 'AM5', ccch: 'AMD X670E' }),
+    make('95076501', 'Raphael B650M AM5 DDR5', 'Оба канала памяти проверены, сокет без погнутых контактов.', '7'),
+    make('95076502', 'Gigabyte B550 AM5', 'Состояние рабочее, проверена.', '7', { ccsct: 'AM5' }),
+    make('95076503', 'Материнская плата', 'Всё работает.', '7'),
+  ];
+  const ram = [
+    make('1095685494', 'Планка 16Gb ddr4 Patriot premium Обмен', 'Рабочая, стоит в компе без разгона, любые тесты.', '9', { ccrt: 'DDR4 DIMM' }),
+    make('1094307806', 'DDR4 16GB (2x8GB) Patriot Signature 2666MHz', 'Отличный комплект памяти DDR4 DIMM.', '9', { ccrt: 'DDR4 DIMM' }),
+    make('1042676523', 'DDR4 2х8GB, 2х16GB, Transcend, G.Skill, Samsung', 'Продаются четыре плашки DDR4 DIMM.', '9'),
+    make('95076504', 'Комплект Kingston 2x16GB', 'DDR5 DIMM для настольного ПК. Проверен, рабочий.', '9'),
+    make('95076505', 'DDR5 SO-DIMM для ноутбука', 'Рабочая, проверена.', '9', { ccrt: 'DDR5 SO-DIMM' }),
+    make('95076506', 'Память DDR4 DIMM', 'Подходит к моей плате. Рабочая.', '9', { ccrt: 'DDR5 DIMM' }),
+    make('95076507', 'Комплект DDR5 DIMM 2x16GB', '', '9'),
+    make('95076508', 'Комплект DDR5 DIMM 2x16GB', 'Проверен, рабочий.', '9'),
+  ];
+  const byId = new Map([...boards, ...ram].map((item) => [item.ad_id, item]));
+  const originalFetch = global.fetch;
+  const originalFacets = facets.facets;
+  const searches = [];
+  facets.facets = async () => ({ groups: [{ items: [
+    { id: 'ccrt', values: [{ id: 'ddr5', name: 'DDR5 DIMM' }] },
+    { id: 'ccsct', values: [{ id: '7', name: 'AM5' }] },
+  ] }] });
+  global.fetch = async (url, options) => {
+    const u = new URL(url);
+    if (u.origin === origin) return originalFetch(url, options);
+    if (u.hostname !== 'api.kufar.by') return Response.json({}, { status: 404 });
+    const id = u.pathname.match(/\/item\/(\d+)\/rendered$/)?.[1];
+    if (id === '95076508') return Response.json({}, { status: 404 });
+    if (id) return Response.json({ result: byId.get(id) });
+    searches.push(u.searchParams);
+    const ads = u.searchParams.get('cct') === '7' ? boards : ram;
+    return Response.json({ total: ads.length, ads: ads.map((item) => ({ ...item, body: '' })) });
+  };
+  const post = async (path, body) => {
+    const r = await originalFetch(origin + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    return { status: r.status, data: await r.json() };
+  };
+  const ctx = { socket: 'AM5', mem: 'DDR5', parts: { motherboard: { specs: { socket: 'AM5', mem: 'DDR5', memSlots: 4 } } } };
+  const part = { name: 'DDR5 DIMM', price: 300, specs: { type: 'DDR5', totalGb: 32 } };
+  try {
+    assert.strictEqual(kufar.normalize(boards[0]).risk.level, 'blocked');
+    assert.strictEqual(kufar.verified(kufar.normalize(ram[6])), false);
+    const alt = await post('/api/kufar/compatible', { slot: 'ram', part, ctx });
+    assert.strictEqual(alt.status, 200);
+    assert.deepStrictEqual(alt.data.items.map((item) => item.id), ['95076504']);
+    assert.strictEqual(alt.data.items[0].specs.type, 'DDR5');
+    assert.strictEqual(alt.data.items[0].description, undefined);
+    assert.strictEqual(searches[0].get('ccrt'), 'ddr5');
+
+    const same = await post('/api/used?kind=other&q=kingston&price=300', { slot: 'ram', part, ctx });
+    assert.strictEqual(same.status, 200);
+    assert.deepStrictEqual(same.data.items.map((item) => item.id), ['95076504']);
+    const mb = await post('/api/kufar/compatible', { slot: 'motherboard', ctx: { socket: 'AM5', mem: 'DDR5' } });
+    assert.strictEqual(mb.status, 200);
+    assert.deepStrictEqual(mb.data.items.map((item) => item.id), ['95076501']);
+
+    const updated = await post('/api/kufar/enrich', { slot: 'ram', item: { id: '95076504' }, ctx });
+    assert.strictEqual(updated.status, 200);
+    assert.strictEqual(updated.data.item.specs.type, 'DDR5');
+    byId.set('95076504', { ...byId.get('95076504'), body: '' });
+    const changed = await post('/api/kufar/enrich', { slot: 'ram', item: { id: '95076504' }, ctx });
+    assert.strictEqual(changed.status, 400);
+    assert.match(changed.data.error, /описание/i);
+    for (const ad of ram.slice(0, 3)) {
+      const reply = await post('/api/kufar/enrich', { slot: 'ram', item: { id: ad.ad_id }, ctx });
+      assert.strictEqual(reply.status, 400);
+      assert.match(reply.data.error, /DDR5.*DDR4/);
+    }
+    const missing = await post('/api/kufar/enrich', { slot: 'ram', item: { id: '95076508', risk: { full: true, level: 'clear' } }, ctx });
+    assert.strictEqual(missing.status, 400);
+    const broken = await post('/api/kufar/enrich', { slot: 'motherboard', item: { id: boards[0].ad_id }, ctx });
+    assert.strictEqual(broken.status, 400);
+    assert.match(broken.data.error, /каналом|контакты|ремонт/);
+  } finally {
+    global.fetch = originalFetch;
+    facets.facets = originalFacets;
+    http.clearCache();
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('экспорт сборки: таблица с итогом и прямыми ссылками для ПК и сетапа', async () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const source = (file) => fs.readFileSync(path.join(__dirname, '../web/js', file), 'utf8');
+  const asModule = (code) => 'data:text/javascript;base64,' + Buffer.from(code).toString('base64');
+  const util = asModule('class Element {}\n' + source('util.js'));
+  const { SECTIONS, SETUP } = require('../web/catalog');
+  const windowStub = `const window = { Catalog: ${JSON.stringify({ SECTIONS, SETUP })} };\n`;
+  const state = asModule(windowStub + source('state.js').replace('./util.js', util));
+  const { buildTable } = await import(asModule(windowStub + source('buildExport.js').replace('./state.js', state).replace('./util.js', util)));
+  const html = buildTable('Игровая <сборка>', {
+    cpu: { name: 'AMD Ryzen 5', source: 'onliner', price: 410, url: 'https://catalog.onliner.by/cpu/amd/ryzen5?offer=1&shop=2' },
+    motherboard: { id: 'kufar-123456', name: 'Плата & крепёж', source: 'kufar', price: 270, url: 'https://www.kufar.by/l/r~belarus' },
+    ram: { name: '<img src=x onerror=alert(1)>', source: 'custom', url: 'javascript:alert(1)' },
+    gpu: { id: '123457', name: 'Деталь из сохранённой сборки', fromKufar: true, price: 500 },
+    ssd: { name: 'Накопитель', source: 'kufar', url: 'https://www.kufar.by/l/r~belarus' },
+  }, 1280, {
+    display: { name: 'Монитор', source: 'onliner', price: 100, url: 'https://catalog.onliner.by/display/example' },
+  });
+  assert.match(html, /<h1>Игровая &lt;сборка&gt;<\/h1>/);
+  assert.match(html, /<table>[\s\S]*Деталь[\s\S]*Модель[\s\S]*Цена[\s\S]*Источник[\s\S]*Ссылка/);
+  assert.match(html, /href="https:\/\/www\.kufar\.by\/item\/123456"[^>]+>Открыть объявление/);
+  assert.match(html, /href="https:\/\/www\.kufar\.by\/item\/123457"[^>]+>Открыть объявление/);
+  assert.match(html, /href="https:\/\/catalog\.onliner\.by\/cpu\/amd\/ryzen5\?offer=1&amp;shop=2"[^>]+>Открыть товар/);
+  assert.match(html, /Сетап[\s\S]+href="https:\/\/catalog\.onliner\.by\/display\/example"/);
+  assert.match(html, /<tfoot>[\s\S]+Итого[\s\S]+1\s280/);
+  assert.ok(html.includes('Плата &amp; крепёж'));
+  assert.ok(!/href="javascript:|<img\s|href="[^" ]+\/l\/r~belarus/.test(html));
 });
 
 test('Kufar: полные описания, кэш, выдача, сборка и добровольная проверка ИИ', async () => {
@@ -1104,7 +1234,7 @@ test('Kufar: полные описания, кэш, выдача, сборка �
     assert.strictEqual(review.data.review.verdict, 'seller_reports_working');
     assert.strictEqual(prompts.length, 1);
     assert.ok(!/375|example/.test(prompts[0]));
-    assert.ok(fixtures.every(([id]) => fetched.get(id) === 1));
+    assert.ok(fixtures.every(([id], i) => fetched.get(id) === (i === 0 ? 2 : 1)));
     const sorted = market.rankByValue(searched.data.items, 'gpu');
     assert.strictEqual(sorted.at(-1).risk.level, 'blocked');
     assert.ok(sorted.slice(-2).every((ad) => !ad.best));
