@@ -3,6 +3,7 @@
 
 const { getJSON, qs } = require('../http');
 const perf = require('../perfdb');
+const { parseSpecs } = require('../parsers');
 const condition = require('../kufarCondition');
 
 const API = 'https://api.kufar.by/search-api/v2/search/rendered-paginated';
@@ -29,7 +30,7 @@ function normalize(ad, detail = false) {
   const region = param(ad, 'region');
   const fullText = condition.plain(ad.body || ad.ad_body || ad.description);
   const excerpt = fullText || condition.plain(ad.body_short);
-  return {
+  const result = {
     source: 'kufar',
     id: String(ad.ad_id),
     name: ad.subject,
@@ -54,6 +55,13 @@ function normalize(ad, detail = false) {
     guarantee: flag(ad, 'shop_guarantee'),
     installment: flag(ad, 'installment_pro') || !!(ad.paid_services && ad.paid_services.halva),
   };
+  const model = perf.gpuModel(result.name);
+  if (String(result.params.cct?.v) === '11' || /видеокарт/i.test(result.componentType)
+      || ((model.model || model.kind === 'mining') && !offTopic(result.name))) {
+    result.gpu = classifyGpu(result, excerpt);
+    result.risk = gpuRisk(result.risk, result.gpu);
+  }
+  return result;
 }
 
 /**
@@ -61,17 +69,44 @@ function normalize(ad, detail = false) {
  * с чипом «RTX 4070»), поэтому ему верим, только если номер модели из поля есть в названии
  * или в названии вообще нет номера модели.
  */
-function adGpuKey(it) {
-  const byName = perf.gpuKey(it.name || '');
-  if (byName) return byName;
-  const p = it.params && it.params.ccvc;
-  const chip = p ? String(p.vl || '') : '';
-  const key = chip && perf.gpuKey(chip);
-  if (!key) return null;
+function classifyGpu(it, description) {
+  const name = it.name || '';
+  const title = perf.gpuModel(name);
+  const chip = it.params?.ccvc?.vl || '';
+  const field = perf.gpuModel(chip);
+  const text = String(description || '');
+  const modified = /(?<!без )(?<!не )(?<!не на )мобильн\p{L}*\s+(?:чип|gpu)|(?:чип|передел\p{L}*)\s+из\s+ноутбука/iu.test(text);
+  const bad = { mobile: 'Мобильная видеокарта или переделка из ноутбука', mining: 'Специализированная карта для майнинга', fake: 'В объявлении указана подделка или переделка видеокарты' };
+  const altered = /(?:^|[.!?\n])\s*(?:(?:это|видеокарта)\s+)?(?:фейк|подделка|реплика|франкенштейн)(?!\p{L})/iu.test(text);
+  const invalid = bad[title.kind] ? title.kind : bad[field.kind] ? field.kind : modified ? 'mobile' : altered ? 'fake' : null;
+  if (invalid) return { key: null, variant: null, issue: { level: 'blocked', reason: bad[invalid] }, specs: {} };
+  if (title.kind === 'professional') return { key: null, variant: null, specs: {} };
+
+  const nameKey = perf.gpuKey(name);
+  const fieldKey = perf.gpuKey(chip);
   const num = (chip.match(/\d{3,4}/) || [])[0];
-  const nums = String(it.name || '').match(/\d{3,4}/g) || [];
-  if (num && nums.length && !nums.includes(num)) return null;
-  return key;
+  const nums = name.match(/\d{3,4}/g) || [];
+  const fallback = !title.model && (!num || !nums.length || nums.includes(num));
+  const key = nameKey || (fallback ? fieldKey : null);
+  const specs = parseSpecs('videocard', text, name);
+  const titleRam = perf.gpuVram(name);
+  const fieldRam = perf.gpuVram(String(it.params?.cdr?.vl || ''));
+  const sizes = new Set([titleRam, fieldRam, specs.vramGb].filter(Boolean));
+  const vramGb = sizes.size === 1 ? [...sizes][0] : null;
+  const variant = perf.gpuVariantKey(key, vramGb);
+  let reason;
+  if (nameKey && field.model && title.model !== field.model) reason = 'Модель в заголовке и в характеристиках различается';
+  else if (sizes.size > 1 || /\d\s*[/／]\s*\d{1,2}\s*(?:GB|ГБ|G)(?![\p{L}\d])/iu.test(name)) reason = 'В объявлении указан разный объём видеопамяти';
+  else if (key && !variant) reason = 'Нужно уточнить объём видеопамяти этой версии';
+  return { key, vramGb, variant, specs: { ...specs, vramGb }, issue: reason && { level: 'caution', reason } };
+}
+
+function adGpuInfo(it) {
+  return cachedDetail(it)?.gpu || it.gpu || classifyGpu(it, it.description);
+}
+
+function adGpuKey(it) {
+  return adGpuInfo(it).key;
 }
 
 /** Курс из калькулятора цен Kufar (BYN за 1 единицу валюты). */
@@ -138,7 +173,7 @@ const OTHER = /куплю|сборк|(?:^|[^а-яё])пк(?:$|[^а-яё])|ком
  * Б/у предложения конкретной модели (для альтернатив в сборке).
  * kind: 'cpu' | 'videocard'; key — ключ из perfdb; newPrice — цена нового в BYN.
  */
-async function usedFor(kind, key, query, newPrice) {
+async function usedFor(kind, key, query, newPrice, vramGb) {
   // Две страницы по 50 объявлений, чтобы не терять предложения
   const first = await search({ query, condition: 'used', size: 50 });
   let pool = first.items;
@@ -147,17 +182,22 @@ async function usedFor(kind, key, query, newPrice) {
       pool = pool.concat((await search({ query, condition: 'used', size: 50, cursor: first.next })).items);
     } catch {}
   }
-  const matcher = kind === 'cpu' ? perf.cpuKey : perf.gpuKey;
+  const variant = perf.gpuVariantKey(key, vramGb);
+  const matches = (it) => {
+    if (kind === 'cpu') return perf.cpuKey(it.name) === key;
+    const gpu = adGpuInfo(it);
+    return gpu.key === key && (!variant || gpu.variant === variant);
+  };
   const floor = newPrice ? newPrice * 0.2 : 1;
   const items = pool.filter((it) => {
     if (!it.price || it.price < floor) return false;
     if (newPrice && it.price > newPrice * 1.05) return false;
     if (offTopic(it.name)) return false;
-    return matcher(it.name) === key;
+    return matches(it);
   });
   items.sort((a, b) => a.price - b.price);
   await inspect(items, { limit: 20 });
-  return prioritize(items);
+  return prioritize(items.filter(matches));
 }
 
 // Объявление сразу с несколькими моделями («Ryzen 5 5600, 3600, 2600», «RTX 3060 Ti и RTX 3060»):
@@ -190,14 +230,21 @@ function cachedDetail(ad) {
   return entry && entry.until > Date.now() ? entry : null;
 }
 
-function risk(ad) {
+function risk(ad, gpu = ad.gpu) {
   const entry = cachedDetail(ad);
-  if (entry?.risk) return entry.risk;
-  if (ad.risk && (!ad.risk.until || ad.risk.until > Date.now())) return ad.risk;
-  return condition.assess(ad.name);
+  const base = entry?.risk || (ad.risk && (!ad.risk.until || ad.risk.until > Date.now()) ? ad.risk : condition.assess(ad.name));
+  return gpuRisk(base, entry?.gpu || gpu);
+}
+
+function gpuRisk(base, gpu) {
+  const issue = gpu?.issue;
+  if (!issue || base.reasons.includes(issue.reason) || base.level === 'blocked') return base;
+  return { ...base, level: issue.level, confidence: issue.level === 'blocked' ? 'high' : 'medium', reasons: [issue.reason, ...base.reasons] };
 }
 
 function enrichRisk(ad) {
+  const gpu = cachedDetail(ad)?.gpu;
+  if (gpu) ad.gpu = gpu;
   ad.risk = risk(ad);
   if (ad.risk.level !== 'clear') {
     ad.best = false;
@@ -212,7 +259,7 @@ function detailRisk(ad) {
   const query = item(ad.id).catch(() => null).then((found) => {
     const until = Date.now() + (found?.risk.full ? 10 * 60 * 1000 : 90 * 1000);
     const assessment = found && (found.risk.full || found.risk.level !== 'unknown') ? { ...found.risk, until } : null;
-    details.set(key, { until, risk: assessment });
+    details.set(key, { until, risk: assessment, gpu: found?.gpu });
     if (details.size > 1200) details.delete(details.keys().next().value);
   }).finally(() => pendingDetails.delete(key));
   pendingDetails.set(key, query);
@@ -245,7 +292,8 @@ async function inspect(ads, { limit = 16, timeout = 4000 } = {}) {
 }
 
 function prioritize(ads) {
-  return ads.map(enrichRisk).sort((a, b) => condition.order(a.risk) - condition.order(b.risk));
+  const rank = (ad) => condition.order(ad.risk) + (ad.gpuPriceRisk && ad.risk.level === 'clear' ? 1.5 : 0);
+  return ads.map(enrichRisk).sort((a, b) => rank(a) - rank(b));
 }
 
 function rejectBroken(ad) {
@@ -253,4 +301,4 @@ function rejectBroken(ad) {
   if (assessment.level === 'blocked') throw new Error(assessment.reasons[0]);
 }
 
-module.exports = { adGpuKey, search, count, usedFor, ratesFromAds, isJunk, offTopic, isMulti, item, normalize, inspect, risk, prioritize, rejectBroken, CAT_COMPONENTS, CAT_COMPUTERS };
+module.exports = { adGpuInfo, adGpuKey, search, count, usedFor, ratesFromAds, isJunk, offTopic, isMulti, item, normalize, inspect, risk, prioritize, rejectBroken, CAT_COMPONENTS, CAT_COMPUTERS };

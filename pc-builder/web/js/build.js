@@ -658,10 +658,30 @@ function renderVariants() {
       el('button.btn.btn-ghost.btn-sm', { onclick: compareVariants }, icon('scale'), 'Сравнить варианты')));
 }
 
+const hardwareRequests = new WeakSet();
+
+function refreshBuildHardware(parts) {
+  const items = [parts.gpu, parts.psu, parts.case].filter((it) => it?.source === 'onliner'
+    && !it.specs?.catalogHardware && !hardwareRequests.has(it));
+  if (!items.length) return;
+  items.forEach((it) => hardwareRequests.add(it));
+  api('/api/build/hardware', { method: 'POST', body: { items: items.map(({ id, category }) => ({ id: String(id), category })) } })
+    .then((data) => {
+      for (const result of data.items) {
+        const it = items.find((item) => String(item.id) === result.id && item.category === result.category);
+        if (!it) continue;
+        it.specs = { ...it.specs, ...Object.fromEntries(Object.entries(result.specs || {}).filter(([, value]) => value != null)) };
+        if (result.perf) it.perf = result.perf;
+      }
+      if (data.items.length && document.getElementById('results')) rerenderResults();
+    }).catch(() => {});
+}
+
 function renderBuild(v) {
   const b = v.build;
   const have = (state.lastBuildForm && state.lastBuildForm.have) || form.have || {};
   const parts = b.parts;
+  refreshBuildHardware(parts);
   const total = fullTotal(b);
   const pcTotal = totalOf(parts);
   const setupTotal = totalOf(b.setup);
@@ -1095,7 +1115,7 @@ async function fetchUsed(it) {
   const kind = it.category === 'cpu' || it.category === 'videocard' ? it.category : 'other';
   const key = it.perf ? it.perf.key || '' : '';
   const q = usedQuery(it);
-  const r = await api(`/api/used?kind=${kind}&key=${encodeURIComponent(key)}&q=${encodeURIComponent(q)}&price=${it.price || ''}`);
+  const r = await api(`/api/used?kind=${kind}&key=${encodeURIComponent(key)}&q=${encodeURIComponent(q)}&price=${it.price || ''}&vram=${it.specs?.vramGb || ''}`);
   usedCache[it.id] = { items: r.items, total: r.total || r.items.length, url: r.url, market: r.market || null };
   return usedCache[it.id];
 }

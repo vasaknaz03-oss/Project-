@@ -329,7 +329,7 @@ async function partsFromLinks(text) {
           throw e;
         });
         const slot = SLOT_OF_SCHEMA[schema] || (Catalog.setupById[schema] ? schema : null);
-        if (it && slot) items.push({ slot, setup: !SLOT_OF_SCHEMA[schema], item: it, from: 'onliner' });
+        if (it && slot) items.push({ slot, setup: !SLOT_OF_SCHEMA[schema], item: await onliner.enrichHardware(it), from: 'onliner' });
         else unknown.push({ line, guess: it ? it.name : '', reason: 'Этот товар Onliner не из комплектующих ПК' });
         continue;
       }
@@ -881,6 +881,21 @@ async function route(req, res, url) {
     return send(res, 200, r);
   }
 
+  if (pathname === '/api/build/hardware' && req.method === 'POST') {
+    const body = await readBody(req);
+    const requested = Array.isArray(body.items) ? body.items.slice(0, 3) : [];
+    const allowed = new Set(['videocard', 'powersupply', 'chassis']);
+    const items = await Promise.all(requested.map(async (part) => {
+      const { id, category } = part || {};
+      if (typeof id !== 'string' || !/^[\w.-]{1,120}$/.test(id) || !allowed.has(category)) return null;
+      const it = await onliner.product(id, category).catch(() => null);
+      if (!it || String(it.id) !== id || it.category !== category) return null;
+      await onliner.enrichHardware(it);
+      return { id, category, specs: it.specs, perf: it.perf };
+    }));
+    return send(res, 200, { items: items.filter(Boolean) });
+  }
+
   // Своя деталь из любого магазина: название, цена, ссылка → характеристики для проверки совместимости.
   // Ссылка на каталог Onliner — берём точные данные товара.
   if (pathname === '/api/part/custom' && req.method === 'POST') {
@@ -894,6 +909,7 @@ async function route(req, res, url) {
       try {
         const it = await onliner.product(m[1], schema);
         if (it && it.category === schema) {
+          await onliner.enrichHardware(it);
           if (Number(body.price) > 0) it.price = Number(body.price);
           return send(res, 200, { item: it, exact: true });
         }
@@ -928,7 +944,7 @@ async function route(req, res, url) {
     if (!/^\d{1,16}$/.test(id)) throw new Error('Неверный номер объявления Kufar.');
     const ad = await kufar.item(id).catch((e) => { if (e.status !== 404) throw e; return null; });
     if (!ad) return send(res, 404, { error: 'Объявление Kufar удалено или недоступно.' });
-    const risk = ad.risk;
+    const risk = kufar.risk(ad);
     if (body.ai !== true || risk.level !== 'caution' || !risk.full) return send(res, 200, { risk });
     let review;
     if (ai.available()) review = await ai.reviewKufar(ad.name, ad.description);
@@ -947,10 +963,12 @@ async function route(req, res, url) {
     const price = num(p.get('price'));
     const url = 'https://www.kufar.by/l/r~belarus?' + new URLSearchParams({ query: q, cnd: '1' });
     if ((kind === 'cpu' || kind === 'videocard') && key) {
-      const all = await kufar.usedFor(kind, key, q, price);
+      const vram = num(p.get('vram'));
+      const all = await kufar.usedFor(kind, key, q, price, vram);
       // Цены той же модели: медиана и оценка каждого объявления относительно неё
       const stats = market.annotateSame(all);
-      return send(res, 200, { items: all.slice(0, 30), total: all.length, url, market: stats });
+      const items = kind === 'videocard' ? market.rankByValue(all, kind, false) : all;
+      return send(res, 200, { items: items.slice(0, 30), total: all.length, url, market: stats });
     }
     // Для остальных деталей — просто поиск б/у по названию модели
     const r = await kufar.search({ query: q, condition: 'used', size: 30 });

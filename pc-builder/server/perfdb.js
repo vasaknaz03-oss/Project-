@@ -45,29 +45,66 @@ for (const k of Object.keys(GPU)) {
   GPU_NAMES[k] = n;
 }
 
-/** Определяет ключ GPU по названию товара. Возвращает null для профессиональных/неизвестных. */
+const MEMORY_VARIANTS = {
+  rtx5060ti: [8, 16], rtx4060ti: [8, 16], rx9060xt: [8, 16], arca770: [8, 16],
+  rtx3060: [8, 12], rtx3050: [6, 8], rtx3080: [10, 12], gtx1060: [3, 6], rx580: [4, 8],
+};
+
+function gpuFake(text) {
+  const s = String(text || '').toLowerCase().replace(/ё/g, 'е');
+  return [...s.matchAll(/(?<!\p{L})(?:fakes?|фейк\p{L}*|подделк\p{L}*|реплик\p{L}*|frankenstein|франкенштейн\p{L}*)(?!\p{L})/gu)]
+    .some((m) => !/(?:^|[^\p{L}])(?:не|без)\s*(?:\p{L}+\s+){0,2}$/u.test(s.slice(Math.max(0, m.index - 36), m.index))
+      && !/^\s*(?:нет|не является)/u.test(s.slice(m.index + m[0].length)));
+}
+
+/** Точная маркировка модели. Неизвестный суффикс не сводим к базовой карте. */
+function gpuModel(name) {
+  const s = String(name || '').normalize('NFKC').toLowerCase().replace(/[‐-―−]/g, '-');
+  if (gpuFake(s)) return { kind: 'fake', model: null };
+  if (/(?<!\p{L})(?:cmp|смр)(?=$|[\s-]|\d)|\bp(?:102|104|106)[ -]*-?[ -]*(?:90|100)\b/u.test(s)) return { kind: 'mining', model: null };
+  if (/\bquadro\b|\brtx\s*a\d|\btesla\b|\bradeon\s+pro\b|\bfirepro\b/.test(s)) return { kind: 'professional', model: null };
+  const nvidia = s.match(/\b(rtx|gtx|gt)[\s-]*(\d{3,4})(?!\d)(?:[\s-]*([mм])(?![a-z\d]))?(?:[\s-]*(tis(?:uper)?|ti(?:[\s-]*super)?|super|d(?:[\s-]*v[\s-]*2)?)(?![a-z\d]))?(?![a-z\d])/u);
+  const amd = s.match(/\brx[\s-]*(\d{3,4})(?!\d)(?:[\s-]*([msм])(?![a-z\d]))?(?:[\s-]*(xtx|xt|gre)(?![a-z\d]))?(?![a-z\d])/u);
+  const intel = s.match(/\barc[\s-]*([ab])[\s-]*(\d{3})(?:[\s-]*([mм])(?![a-z\d]))?(?![a-z\d])/u);
+  const mobileText = s.replace(/(?:^|[^\p{L}])(?:не|без)\s+(?:на\s+)?(?:мобильн|ноутбучн)\p{L}*/gu, ' ');
+  const mobile = /\b(?:laptop|mobile|max[\s-]?[qp]|mxm)\b|ноутбучн|мобильн|из ноутбук/.test(mobileText);
+  if (!nvidia && !amd && !intel) return { kind: mobile ? 'mobile' : 'unknown', model: null };
+
+  if (nvidia) {
+    const suffix = (nvidia[4] || '').replace(/[\s-]+/g, '').replace(/^tis$/, 'tisuper');
+    return { kind: mobile || nvidia[3] ? 'mobile' : 'desktop', model: nvidia[1] + nvidia[2] + suffix };
+  }
+  if (amd) {
+    const model = 'rx' + amd[1] + (amd[3] || '');
+    const suffix = model === 'rx9060xt' && /(?:xt)[\s-]+lp\b/.test(s) ? 'lp'
+      : model === 'rx580' && /580[\s-]*2048[\s-]*sp\b/.test(s) ? '2048sp' : '';
+    return { kind: mobile || amd[2] ? 'mobile' : 'desktop', model: model + suffix };
+  }
+  return { kind: mobile || intel[3] ? 'mobile' : 'desktop', model: 'arc' + intel[1] + intel[2] };
+}
+
 function gpuKey(name) {
-  const s = String(name || '').toLowerCase().replace(/[‐-―]/g, '-');
-  if (/\bquadro\b|\brtx\s*a\d|\btesla\b|\bradeon\s+pro\b|\bfirepro\b/.test(s)) return null;
-  let m = s.match(/\b(rtx|gtx|gt)\s*-?\s*(\d{3,4})\s*(ti\s*super|ti|super)?\b/);
-  if (m) {
-    const k = m[1] + m[2] + (m[3] ? m[3].replace(/\s+/g, '') : '');
-    if (GPU[k]) return k;
-    const base = m[1] + m[2];
-    return GPU[base] ? base : null;
-  }
-  m = s.match(/\brx\s*-?\s*(\d{3,4})\s*(xtx|xt|gre)?\b/);
-  if (m) {
-    const k = 'rx' + m[1] + (m[2] || '');
-    if (GPU[k]) return k;
-    return GPU['rx' + m[1]] ? 'rx' + m[1] : null;
-  }
-  m = s.match(/\barc\s*-?\s*([ab])\s*(\d{3})\b/);
-  if (m) {
-    const k = 'arc' + m[1] + m[2];
-    return GPU[k] ? k : null;
-  }
-  return null;
+  const { kind, model } = gpuModel(name);
+  return kind === 'desktop' && Object.hasOwn(GPU, model) ? model : null;
+}
+
+// Для старой приблизительной оценки ноутбуков используем настольный аналог только как ориентир.
+function laptopGpuKey(name) {
+  const { kind, model } = gpuModel(name);
+  return (kind === 'desktop' || kind === 'mobile') && Object.hasOwn(GPU, model) ? model : null;
+}
+
+function gpuVram(text) {
+  const s = String(text || '');
+  if (/\d{1,2}\s*[/／]\s*\d{1,2}\s*(?:GB|ГБ|G)(?![\p{L}\d])/iu.test(s)) return null;
+  const sizes = new Set([...s.matchAll(/(?<![\p{L}\d])(\d{1,2})\s*(?:GB|ГБ|G)(?![\p{L}\d])/giu)].map((m) => Number(m[1])));
+  return sizes.size === 1 ? [...sizes][0] || null : null;
+}
+
+function gpuVariantKey(key, vramGb) {
+  if (!key) return null;
+  const sizes = MEMORY_VARIANTS[key];
+  return sizes ? (sizes.includes(vramGb) ? key + ':' + vramGb : null) : key;
 }
 
 /** Производительность и энергопотребление видеокарты с поправкой на объём памяти. */
@@ -75,13 +112,15 @@ function gpuPerf(key, vramGb) {
   const row = GPU[key];
   if (!row) return null;
   let [score, watts] = row;
+  // Референсные значения AMD: RX 9060 XT 8 ГБ и 16 ГБ имеют разный TBP.
+  if (key === 'rx9060xt' && vramGb === 8) watts = 150;
   if (vramGb) {
     if (key === 'rtx3060' && vramGb <= 8) score *= 0.88;
     else if (key === 'rtx3050' && vramGb <= 6) score *= 0.78;
     else if (vramGb <= 8 && score >= 105) score *= 0.95; // 8 ГБ мало для современных игр в 1440p
     else if (vramGb >= 16 && (key === 'rtx5060ti' || key === 'rx9060xt' || key === 'rtx4060ti')) score *= 1.02;
   }
-  return { score: Math.round(score), watts, name: GPU_NAMES[key] };
+  return { score: Math.round(score), watts, name: GPU_NAMES[key], variantKey: gpuVariantKey(key, vramGb) };
 }
 
 // ---------------------------------------------------------------- CPU
@@ -213,4 +252,4 @@ function cpuPerf(name, spec) {
   return { key, gaming: row[0], multi: row[1], igpu: igpuScore(key, name, spec), known };
 }
 
-module.exports = { GPU, CPU, gpuKey, gpuPerf, cpuKey, cpuPerf, GPU_NAMES };
+module.exports = { GPU, CPU, gpuKey, gpuModel, gpuVram, gpuVariantKey, laptopGpuKey, gpuPerf, cpuKey, cpuPerf, GPU_NAMES };

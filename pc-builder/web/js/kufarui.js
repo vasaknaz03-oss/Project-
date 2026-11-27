@@ -86,6 +86,7 @@ export function adChips(u) {
   if (u.guarantee) chip('гарантия', 'ok');
   if (u.installment) chip('рассрочка', 'ok');
   if (u.exchange) chip('обмен');
+  if (u.gpuPriceRisk && u.market?.deal !== 'suspicious') chip(u.gpuPriceRisk, 'warn');
   const deal = dealChip(u);
   if (deal) out.push(deal);
   return out;

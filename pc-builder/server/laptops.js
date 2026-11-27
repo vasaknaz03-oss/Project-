@@ -90,7 +90,7 @@ function cpuScore(name) {
 /** Видеокарта ноутбука: мощность от настольной той же модели с поправкой на мобильную версию и TGP. */
 function gpuScore(s, cpu) {
   if (!s.gpu) return { score: cpu.igpu, discrete: false };
-  const key = perf.gpuKey(s.gpu.replace(/Laptop|Mobile/gi, ''));
+  const key = perf.laptopGpuKey(s.gpu);
   const p = key && perf.gpuPerf(key);
   let score = p ? p.score * 0.75 : 50;
   if (s.tgp) score *= s.tgp >= 115 ? 1.05 : s.tgp <= 60 ? 0.75 : s.tgp <= 85 ? 0.88 : 1;

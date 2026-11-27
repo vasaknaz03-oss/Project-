@@ -42,8 +42,10 @@ function gpuWhy(it, parts) {
   if (/rtx/i.test(it.name)) out.push('NVIDIA RTX: есть DLSS (повышает FPS почти без потери картинки) и хорошая трассировка лучей.');
   else if (/rx\s?9\d{3}/i.test(it.name)) out.push('Radeon RX 9000: FSR 4, хорошая трассировка для AMD, обычно выгоднее NVIDIA по цене за кадр.');
   else if (/\brx\b/i.test(it.name)) out.push('Radeon: часто больше кадров за те же деньги, чем у NVIDIA, но слабее в трассировке лучей.');
-  const w = Compat.gpuPower(it);
-  if (w) out.push(`Потребляет около ${w} Вт — блок питания подобран с учётом этого.`);
+  if (s.boardWatts) out.push(`Потребление по характеристикам карты — ${s.boardWatts} Вт.`);
+  else if (it.perf?.watts) out.push(`Для расчёта мощности блока питания использована оценка около ${it.perf.watts} Вт.`);
+  if (s.lengthMm) out.push(`Длина карты — ${s.lengthMm} мм.`);
+  if (s.thicknessMm) out.push(`Толщина карты — ${s.thicknessMm} мм.`);
   return out;
 }
 
@@ -117,7 +119,7 @@ function caseWhy(it, parts) {
   const s = it.specs || {};
   const out = [];
   if (s.boards && s.boards.length) out.push(`Поддерживает платы ${s.boards.join(', ')} — выбранная влезает.`);
-  if (s.gpuMaxMm) out.push(`Видеокарта до ${s.gpuMaxMm} мм${s.gpuMaxMm >= 330 ? ' — поместится почти любая' : ''}.`);
+  if (s.gpuMaxMm) out.push(`Корпус поддерживает видеокарты длиной до ${s.gpuMaxMm} мм.`);
   if (s.coolerMaxMm) out.push(`Кулер процессора до ${s.coolerMaxMm} мм.`);
   if (s.fans) out.push(`${s.fans} вентилятор(а) в комплекте — ${s.fans >= 3 ? 'хороший обдув из коробки' : 'для мощной сборки стоит докупить 1–2'}.`);
   else out.push('Вентиляторов в комплекте нет — для нормального обдува стоит докупить 2–3 штуки.');

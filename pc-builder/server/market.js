@@ -30,11 +30,7 @@ function ssdKey(it) {
 }
 
 function gpuKeyOf(it) {
-  const key = kufar.adGpuKey(it);
-  if (!key) return null;
-  // У некоторых моделей несколько объёмов памяти с разной ценой (RTX 3060 8/12 ГБ, RX 580 4/8 ГБ)
-  const vram = parseFloat(pv(it, 'cdr')) || Number((it.name.match(/(\d{1,2})\s*(?:gb|гб)/i) || [])[1]) || 0;
-  return vram ? `${key}-${vram}` : key;
+  return kufar.adGpuInfo(it).variant;
 }
 
 // pages — сколько страниц свежих объявлений берём для оценки (по 50)
@@ -128,7 +124,7 @@ async function annotate(items, kindOrCat) {
   try {
     map = await index(kind);
   } catch {
-    return items;
+    map = {};
   }
   for (const it of items) {
     if (it.source !== 'kufar') continue;
@@ -139,17 +135,29 @@ async function annotate(items, kindOrCat) {
     const k = KINDS[kind].key(it);
     const v = k && verdict(it.price, map[k]);
     if (v) it.market = v;
+    if (kind === 'gpu') it.gpuPriceRisk = gpuPriceRisk(it);
   }
   return items;
 }
 
 /** Рынок по готовому списку объявлений одной модели (панель «Та же модель»). */
 function annotateSame(items) {
+  if (new Set(items.map((it) => it.gpu?.variant).filter(Boolean)).size > 1) return null;
   const usable = items.filter((it) => kufar.risk(it).level === 'clear');
   const s = stats(usable.map((it) => it.price));
   if (!s) return null;
   for (const it of usable) it.market = verdict(it.price, s);
   return s;
+}
+
+function gpuPriceRisk(it, newPrice) {
+  if (!it.price) return null;
+  if (it.market?.deal === 'suspicious') return 'Цена заметно ниже рынка для этой версии';
+  if (newPrice && it.price < newPrice * 0.2) return 'Цена заметно ниже цены такой же новой версии';
+  const { key, vramGb } = kufar.adGpuInfo(it);
+  const score = key && perf.gpuPerf(key, vramGb).score;
+  if (!it.market && score && it.price < score * 2.5) return 'Цена необычно низкая для этой модели';
+  return null;
 }
 
 const KNOWN_BRAND = /asus|msi|gigabyte|aorus|palit|gainward|zotac|sapphire|powercolor|asrock|xfx|inno3d|pny|evga|kingston|corsair|g\.?skill|crucial|samsung|adata|xpg|patriot|team|western digital|\bwd\b|seagate|be quiet|seasonic|deepcool|thermalright|noctua|arctic|lian li|nzxt|fractal|cooler master|chieftec|amd|intel|ryzen|core i\d|geforce|radeon|zalman|aerocool|1stplayer|thermaltake|phanteks|montech|fsp|cougar|silverstone|super ?flower|antec|enermax|xilence|hyperx|logitech|razer|steelseries|aoc|philips|benq|iiyama|\blg\b|dell|lenovo|acer|xiaomi|id-cooling|jonsbo|sharkoon|ardor/i;
@@ -161,10 +169,12 @@ const KNOWN_BRAND = /asus|msi|gigabyte|aorus|palit|gainward|zotac|sapphire|power
  * цена относительно рынка, понятный бренд, безопасная сделка.
  */
 function valueScore(it, kind) {
-  const state = kufar.risk(it).level;
+  kind = KIND_OF[kind] || VALUE_KIND[kind] || kind;
+  const gpu = kind === 'gpu' ? kufar.adGpuInfo(it) : null;
+  if (gpu) it.gpuPriceRisk = gpuPriceRisk(it, null) || it.gpuPriceRisk;
+  const state = kufar.risk(it, gpu || undefined).level;
   if (state === 'blocked' || state === 'caution') return { tier: 0, v: state === 'blocked' ? -2 : -1 };
   if (!it.price) return { tier: 0, v: 0 };
-  kind = KIND_OF[kind] || VALUE_KIND[kind] || kind;
   const name = String(it.name || '');
   // Объявление-список нескольких моделей («600W, 650W, 750W, Ginzzu 600W») — цена непонятна
   const wattsList = name.match(/\d{3,4}\s*(?:w|вт)(?![a-zа-яё])/gi) || [];
@@ -190,10 +200,8 @@ function valueScore(it, kind) {
     if (it.safedeal) f *= 1.04;
     return { tier: listing ? 1 : KNOWN_BRAND.test(name) ? 2 : 1, v: f / Math.sqrt(it.price) };
   }
-  if (!it.perf && kind === 'gpu') {
-    const key = kufar.adGpuKey(it);
-    const p = key && perf.gpuPerf(key, parseFloat(pv(it, 'cdr')) || 0);
-    if (p) it.perf = { key, ...p };
+  if (gpu?.key) {
+    it.perf = { key: gpu.key, ...perf.gpuPerf(gpu.key, gpu.vramGb) };
   }
   if (!it.perf && kind === 'cpu' && perf.cpuKey(it.name)) it.perf = perf.cpuPerf(it.name, {});
   let base = null;
@@ -217,16 +225,16 @@ function valueScore(it, kind) {
   const gbOf = rk ? Number(rk.split('-')[1]) : 0;
   const m = it.market;
   // Нереально дёшево для такой мощности (б/у RTX 4060 не стоит 100 р.): «корпус для RTX 5090», запчасти, приманки
-  const tooCheap = (kind === 'gpu' && it.perf && it.perf.score && it.price < it.perf.score * 2.5)
+  const tooCheap = it.gpuPriceRisk
     || (kind === 'cpu' && it.perf && it.perf.gaming && it.price < it.perf.gaming * 0.7)
     // и за гигабайт памяти (объём в объявлении часто указан неверно)
     || (rk && it.price < gbOf * ({ DDR3: 1, DDR4: 3, DDR5: 6 }[rk.split('-')[0]] || 0));
   // Объявление не из своего раздела (видеокарта в разделе памяти, мобильная видеокарта ноутбука)
-  const foreign = ((kind === 'ram' || kind === 'ssd') && (perf.gpuKey(it.name || '') || /видеокарт|процессор/i.test(it.name || '')))
-    || (kind === 'gpu' && /ноутбук|ноутбучн|mobile|max-?q|\d{4}\s?[mм](?![a-zа-я])/i.test(it.name || ''));
+  const foreign = (kind === 'ram' || kind === 'ssd') && (perf.gpuKey(it.name || '') || /видеокарт|процессор/i.test(it.name || ''));
   const bad = tooCheap || foreign || (m && m.deal === 'suspicious')
     || ((kind === 'gpu' || kind === 'cpu') && kufar.offTopic(it.name))
-    || /куплю|бронь|брониров|fake|фейк|подделк|locked/i.test(it.name || '');
+    || /куплю|бронь|брониров|locked/i.test(it.name || '')
+    || (kind !== 'gpu' && /fake|фейк|подделк/i.test(it.name || ''));
   let f = 1;
   if (m && typeof m.pct === 'number') f *= Math.max(0.75, Math.min(1.3, 1 - m.pct / 100));
   if (KNOWN_BRAND.test(it.name || '')) f *= 1.08;
@@ -257,4 +265,4 @@ function rankByValue(items, kind, markBest = true) {
   return scored.map((x) => x.it);
 }
 
-module.exports = { annotate, annotateSame, stats, verdict, index, KIND_OF, ramKey, ssdKey, valueScore, rankByValue };
+module.exports = { annotate, annotateSame, stats, verdict, index, KIND_OF, ramKey, ssdKey, gpuPriceRisk, valueScore, rankByValue };

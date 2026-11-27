@@ -2,6 +2,30 @@
 // Разбор кратких описаний товаров Onliner в структурированные характеристики.
 
 const num = (s) => (s == null ? null : parseFloat(String(s).replace(',', '.')));
+const { gpuVram } = require('./perfdb');
+
+const units = (text, unit) => {
+  const m = String(text || '').match(new RegExp('([\\d]+(?:[.,]\\d+)?)\\s*' + unit, 'i'));
+  return m ? num(m[1]) : null;
+};
+
+function gpuConnectors(text) {
+  let s = String(text || '').trim().toLowerCase().replace(/[‐–—−]/g, '-').replace(/[×х]/g, 'x');
+  if (/^(?:нет|без (?:доп(?:олнительного)?\.?\s*)?питания|не требуется|отсутствует)$/i.test(s)) return { six: 0, eight: 0, sixteen: 0 };
+  s = s.replace(/\(?(?:12v[-\s]*2x6|12vhpwr)\)?/g, (m, i) => /16[\s-]*pin\s*\(?\s*$/.test(s.slice(0, i)) ? '' : '16 pin');
+  s = s.replace(/(?<!\d)([68](?:\s*\+\s*[68])+)(?=\s*[- ]?(?:pin|пин|контакт))/g, (m) => m.split(/\s*\+\s*/).join(' pin + '));
+  const out = { six: 0, eight: 0, sixteen: 0 };
+  const matches = [...s.matchAll(/(?<![\d+])(?:(\d+)\s*x\s*)?(6\s*\+\s*2|16|8|6)\s*[- ]?\s*(?:pin|пин|контакт\p{L}*)(?!\p{L})/gu)];
+  for (const m of matches) {
+    const type = m[2] === '16' ? 'sixteen' : m[2] === '6' ? 'six' : 'eight';
+    out[type] += Number(m[1] || 1);
+  }
+  return matches.length ? out : null;
+}
+
+function mm(text) {
+  return units(text, '(?:мм|mm)');
+}
 
 function normSocket(raw) {
   if (!raw) return null;
@@ -147,6 +171,8 @@ function powersupply(desc) {
   spec.certName = CERT_NAMES[spec.cert];
   spec.modular = /полумодульный/.test(d) ? 'semi' : /модульный/.test(d) ? 'full' : null;
   spec.pcie5 = /PCIe Gen5|12V-2x6|12VHPWR/i.test(d);
+  const gen = d.match(/(\d+)\s*[xх×]\s*PCIe\s*Gen\s*5/i);
+  if (gen) spec.gpuOutputs = { sixteen: Number(gen[1]) };
   return spec;
 }
 
@@ -166,7 +192,7 @@ function chassis(desc) {
   if (/micro-ATX|mATX/i.test(list)) spec.boards.push('mATX');
   if (/mini-ITX/i.test(list)) spec.boards.push('ITX');
   if (!boards) spec.boards = ['ATX', 'mATX', 'ITX']; // не указано — обычно стандартный ATX-корпус
-  spec.gpuMaxMm = num((d.match(/видеокарта до\s+(\d+)\s*мм/) || [])[1]);
+  spec.gpuMaxMm = mm((d.match(/видеокарта до\s+([\d.,]+\s*(?:мм|mm))/i) || [])[1]);
   spec.coolerMaxMm = num((d.match(/охлаждение ЦП до\s+(\d+)\s*мм/) || [])[1]);
   const fans = d.match(/с\s+(\d+)\s+вентилятор/);
   spec.fans = fans ? num(fans[1]) : 0;
@@ -194,17 +220,23 @@ function cooler(desc, name) {
   };
 }
 
-function videocard(desc) {
+function videocard(desc, name) {
   const d = desc || '';
   const spec = {};
-  const v = d.match(/^([\d.,]+)\s*ГБ\s+(\S+)/);
+  const v = d.match(/(?:^|[^\p{L}\d])(\d{1,2})\s*(?:ГБ|GB)\s+(GDDR\dX?|HBM\d?)/iu);
+  spec.vramGb = v ? num(v[1]) : gpuVram(name);
   if (v) {
     spec.vramGb = num(v[1]);
     spec.vramType = v[2].replace(/,$/, '');
   }
-  const pw = d.match(/питание\s+([^,]+)/);
+  const pw = d.match(/(?:разъ[её]мы питания|питание)\s*[:–-]?\s*(?:\n\s*)?([^,;\n]+)/i);
   spec.power = pw ? pw[1].trim() : null;
-  spec.slots = num((d.match(/([\d.,]+)\s+слот/) || [])[1]);
+  if (/без\s+(?:доп(?:\.|олнительного)?\s+)питания/i.test(d)) spec.power = 'без питания';
+  spec.gpuInputs = gpuConnectors(spec.power);
+  spec.slots = units(d, '(?:слот|slots?)');
+  spec.lengthMm = mm((d.match(/(?:длина(?: видеокарты)?|length)\s*[:–-]?\s*([\d.,]+\s*(?:мм|mm))/i) || [])[1]);
+  spec.thicknessMm = mm((d.match(/(?:толщина(?: видеокарты)?|thickness)\s*[:–-]?\s*([\d.,]+\s*(?:мм|mm))/i) || [])[1]);
+  spec.boardWatts = units((d.match(/(?:потребление видеокарты|энергопотребление|TBP|TGP)\s*[:–-]?\s*([\d.,]+\s*(?:Вт|W))/i) || [])[1], '(?:Вт|W)');
   spec.rt = /трассировка/.test(d);
   return spec;
 }
@@ -235,4 +267,51 @@ function parseSpecs(schema, desc, name) {
   }
 }
 
-module.exports = { parseSpecs, normSocket, capacityGb, CERT_NAMES };
+function hardwareRows(html) {
+  const clean = (cell) => cell.replace(/<[^>]*>/g, ' ').replace(/&nbsp;|&#160;/gi, ' ').replace(/&times;|&#215;/gi, '×')
+    .replace(/\s+/g, ' ').trim().toLowerCase().replace(/ё/g, 'е');
+  const rows = new Map();
+  for (const [, row] of String(html || '').matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)) {
+    const cells = [...row.matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)];
+    if (cells.length < 2) continue;
+    const raw = cells[1][1];
+    const value = clean(raw) || (/\bclass=["'][^"']*\bi-x\b/i.test(raw) ? 'нет' : '');
+    rows.set(clean(cells[0][1]), value);
+  }
+  return rows;
+}
+
+/** Читаем только подписанные поля полной карточки Onliner. */
+function parseHardware(schema, html) {
+  const rows = hardwareRows(html);
+  const get = (...names) => names.map((name) => rows.get(name)).find(Boolean) || '';
+  let spec = {};
+  if (schema === 'videocard') {
+    const power = get('разъемы питания', 'дополнительное питание');
+    const adapter = get('комплектация').match(/(?:переходник|разветвитель)[^;\n]{0,45}?(\d+)\s*[xх×]\s*8[\s-]*pin\s*(?:[-–—→]|на)\s*(?:1\s*[xх×]\s*)?(?:16[\s-]*pin|12v(?:hpwr|-2x6))/i);
+    spec = {
+      vramGb: units(get('видеопамять'), '(?:ГБ|GB)'), lengthMm: mm(get('длина видеокарты')),
+      thicknessMm: mm(get('толщина видеокарты')), slots: units(get('толщина системы охлаждения'), '(?:слот|slots?)'),
+      recommendedPsuWatts: units(get('рекомендуемый блок питания'), '(?:Вт|W)'),
+      boardWatts: units(get('потребляемая мощность', 'энергопотребление', 'потребление видеокарты'), '(?:Вт|W)'),
+      power: power || null, gpuInputs: gpuConnectors(power), adapter8: adapter ? Number(adapter[1]) : null,
+    };
+  } else if (schema === 'chassis') {
+    spec = {
+      gpuMaxMm: mm(get('максимальная длина видеокарты', 'длина видеокарты')),
+      gpuMaxThicknessMm: mm(get('максимальная толщина видеокарты')),
+      expansionSlots: units(get('слоты расширения', 'количество слотов расширения'), '(?:слот)?'),
+    };
+  } else if (schema === 'powersupply') {
+    const gpuOutputs = {};
+    for (const [key, label] of Object.entries({ six: 'pcie 6 pin', flex: 'pcie 6+2 pin', eight: 'pcie 8 pin', sixteen: 'pcie gen5' })) {
+      const text = get(label);
+      if (text === 'нет') gpuOutputs[key] = 0;
+      else if (/^\d+$/.test(text)) gpuOutputs[key] = Number(text);
+    }
+    spec = { gpuOutputs: Object.keys(gpuOutputs).length ? gpuOutputs : null, gpu16Type: get('тип разъема pcie gen5') || null };
+  }
+  return Object.fromEntries(Object.entries(spec).filter(([, v]) => v !== null));
+}
+
+module.exports = { parseSpecs, parseHardware, gpuConnectors, normSocket, capacityGb, CERT_NAMES };

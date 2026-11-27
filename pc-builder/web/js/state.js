@@ -100,7 +100,11 @@ export function specChips(cat, it) {
       if (it.perf) add(it.perf.name, 'accent');
       if (s.vramGb) add(`${s.vramGb} ГБ ${s.vramType || ''}`);
       if (s.power) add(`питание ${s.power}`);
-      if (it.perf && it.perf.watts) add(`~${it.perf.watts} Вт`);
+      if (s.boardWatts) add(`${s.boardWatts} Вт по характеристикам`);
+      else if (it.perf && it.perf.watts) add(`~${it.perf.watts} Вт`);
+      if (s.lengthMm) add(`длина ${s.lengthMm} мм`);
+      if (s.thicknessMm) add(`толщина ${s.thicknessMm} мм`);
+      if (s.slots) add(`${s.slots} слота`);
       break;
     case 'ssd':
       if (s.capacityGb) add(s.capacityGb >= 1000 ? `${s.capacityGb / 1000} ТБ` : `${s.capacityGb} ГБ`, 'accent');

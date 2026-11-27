@@ -9,7 +9,8 @@ const LABELS = { cpu: 'процессор', motherboard: 'материнская
 const SLOTS = Object.keys(LABELS);
 const CORE = ['cpu', 'motherboard', 'ram', 'psu'];
 const PURPOSES = { gaming: 'Игры', universal: 'Универсальный', work: 'Работа', office: 'Офис и учёба' };
-const SPEC_FIELDS = ['socket', 'mem', 'chipset', 'form', 'type', 'totalGb', 'modules', 'capacityGb', 'iface', 'vramGb', 'power', 'watts', 'boards', 'gpuMaxMm', 'coolerMaxMm', 'lengthMm', 'heightMm', 'hasIgpu', 'withCooler', 'cores', 'tdp', 'registered', 'memSlots', 'm2', 'mhz', 'pcie5', 'fans', 'aio', 'radMm', 'psuIncluded'];
+const SPEC_FIELDS = ['socket', 'mem', 'chipset', 'form', 'type', 'totalGb', 'modules', 'capacityGb', 'iface', 'vramGb', 'power', 'watts', 'boards', 'gpuMaxMm', 'gpuMaxThicknessMm', 'expansionSlots', 'coolerMaxMm', 'lengthMm', 'thicknessMm', 'slots', 'boardWatts', 'recommendedPsuWatts', 'adapter8', 'heightMm', 'hasIgpu', 'withCooler', 'cores', 'tdp', 'registered', 'memSlots', 'm2', 'mhz', 'pcie5', 'fans', 'aio', 'radMm', 'psuIncluded'];
+const CONNECTOR_FIELDS = ['six', 'eight', 'sixteen', 'flex'];
 const PERF_FIELDS = ['key', 'score', 'watts', 'gaming', 'multi', 'igpu'];
 
 const money = (value) => Number.isFinite(+value) && +value > 0 ? Math.round(+value * 100) : 0;
@@ -33,6 +34,11 @@ function currentParts(input) {
     const part = input?.[slot];
     if (!modelText(part?.name)) return [];
     const specs = facts(part.specs, SPEC_FIELDS);
+    for (const field of ['gpuInputs', 'gpuOutputs']) {
+      const counts = Object.fromEntries(CONNECTOR_FIELDS.filter((k) => Number.isInteger(part.specs?.[field]?.[k]) && part.specs[field][k] >= 0)
+        .map((k) => [k, part.specs[field][k]]));
+      if (Object.keys(counts).length) specs[field] = counts;
+    }
     const perf = facts(part.perf, PERF_FIELDS);
     return [[slot, { id: sku(part.id) ? part.id : null, name: modelText(part.name), price: money(part.price) / 100,
       specs, ...(Object.keys(perf).length ? { perf } : {}) }]];
@@ -47,7 +53,7 @@ function gaps(parts, have) {
   if (ram && board && (!ram.specs.type || !board.specs.mem)) unknown.push('Не указан тип памяти или её поддержка платой.');
   if (have.psu || (psu && !psu.specs.watts)) unknown.push('Уточните мощность и модель блока питания.');
   if (gpu && (!gpu.specs.lengthMm || !chassis?.specs.gpuMaxMm)) unknown.push('Уточните длину видеокарты и свободное место в корпусе.');
-  if (gpu && (!gpu.specs.power || !psu || /16[\s-]*pin|12v/i.test(gpu.specs.power))) unknown.push('Проверьте, какие кабели питания нужны видеокарте и есть ли они у блока питания.');
+  if (gpu && !psu) unknown.push('Нужна модель блока питания для проверки кабелей видеокарты.');
   if (have.gpu && !gpu) unknown.push('Модель вашей видеокарты не указана. Баланс и питание можно оценить только приблизительно.');
   if (cooler && (cooler.specs.aio || !cooler.specs.heightMm || !chassis?.specs.coolerMaxMm)) unknown.push('Проверьте, поместится ли охлаждение в корпус.');
   return unknown;
@@ -111,9 +117,10 @@ async function choicesFor(slot, ids, build) {
   const allowance = build.limit - build.total + money(build.parts[slot]?.price);
   if (allowance <= 0) return [];
   const check = (items) => items.map((it) => checkReplacement(slot, it, build)).filter(Boolean);
+  const physical = ['gpu', 'psu', 'case'].includes(slot);
   if (slot !== 'cooler') {
     const items = await Promise.all([...new Set((Array.isArray(ids) ? ids : []).slice(0, 8).filter(sku))].slice(0, 5)
-      .map((id) => onliner.product(id, schema).catch(() => null)));
+      .map((id) => onliner.product(id, schema).then(onliner.enrichHardware).catch(() => null)));
     const choices = check(items);
     if (choices.length) return choices.slice(0, 4);
   }
@@ -129,7 +136,8 @@ async function choicesFor(slot, ids, build) {
   const mem = build.parts.motherboard?.specs.mem;
   if (slot === 'ram' && /^DDR[345]$/.test(mem)) params.dramkit = [mem.toLowerCase() + 'dimm'];
   const r = await onliner.categoryPage(schema, params, 1).catch(() => ({ items: [] }));
-  return check(r.items).slice(0, 3);
+  const items = physical ? await Promise.all(r.items.slice(0, 8).map(onliner.enrichHardware)) : r.items;
+  return check(items).slice(0, 3);
 }
 
 async function prepare(body) {

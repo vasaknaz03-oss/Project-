@@ -462,12 +462,17 @@ function applyPins(pools, opts) {
 
 function makePickers(pools, opts, B) {
   const psuMemo = new Map();
-  function pickPsu(need) {
+  function pickPsu(need, gpu) {
     if (opts.have && opts.have.psu) return null;
-    if (pools.psuPinned) return pools.psuPinned;
-    const key = need.rec;
+    if (pools.psuPinned) {
+      const pin = pools.psuPinned;
+      if ((pin.specs.watts && pin.specs.watts < need.min) || Compat.checkGpuPower(gpu, pin)?.level === 'error') return undefined;
+      return pin;
+    }
+    const inputs = gpu?.specs?.gpuInputs;
+    const key = [need.rec, inputs?.six, inputs?.eight, inputs?.sixteen, gpu?.specs?.adapter8].join(':');
     if (psuMemo.has(key)) return psuMemo.get(key);
-    let list = pools.psuAll;
+    let list = inputs ? pools.psuAll.filter((p) => Compat.checkGpuPower(gpu, p)?.level !== 'error') : pools.psuAll;
     if (B > 1500 && !pools.psuUserBrand) {
       const good = list.filter((p) => GOOD_PSU.test(p.name));
       if (good.some((p) => p.specs.watts >= need.rec)) list = good;
@@ -529,7 +534,10 @@ function makePickers(pools, opts, B) {
   function caseOptions(form) {
     if (opts.have && opts.have.case) return [null];
     const list = pools.caseOpts[form] && pools.caseOpts[form].length ? pools.caseOpts[form] : pools.caseOpts.ATX || [];
-    return list;
+    if (pools.pins?.case || !pools.checkedHardware) return list;
+    const extra = pools.caseAll.filter((c) => !list.includes(c) && Compat.boardFitsCase(form, c))
+      .sort((a, b) => (b.specs.gpuMaxMm || 0) - (a.specs.gpuMaxMm || 0) || a.price - b.price).slice(0, 3);
+    return list.concat(extra);
   }
 
   const boardMemo = new Map();
@@ -676,8 +684,9 @@ function optimize(pools, opts, budget) {
             if (gpu) break; // видеокарты отсортированы по цене
             continue;
           }
+          if (Compat.gpuCaseErrors(gpu, kase).length) continue;
           const need = Compat.psuNeed(cpu, gpu, have.gpu ? 250 : 0);
-          const psu = P.pickPsu(need);
+          const psu = P.pickPsu(need, gpu);
           if (psu === undefined) continue;
           const base = plat + gp + (psu ? psu.price : 0);
           if (base > budget) continue;
@@ -695,6 +704,23 @@ function optimize(pools, opts, budget) {
     }
   }
   return best;
+}
+
+async function verifyHardware(best, pools, opts, budget) {
+  for (let attempt = 0; best && attempt < 5; attempt++) {
+    const { gpu, psu, case: kase, cpu } = best.parts;
+    await Promise.all([gpu, psu, kase].map(onliner.enrichHardware));
+    const need = Compat.psuNeed(cpu, gpu, opts.have?.gpu ? 250 : 0);
+    const fit = !Compat.gpuCaseErrors(gpu, kase).length && Compat.checkGpuPower(gpu, psu)?.level !== 'error';
+    const watts = psu?.specs.watts;
+    const requiredWatts = psu?.pinned || pools.psuPinned ? need.min : need.rec;
+    const adequate = !watts || watts >= requiredWatts;
+    if (fit && adequate) return { ...best, need };
+    if (attempt === 4) break;
+    await tick();
+    best = optimize({ ...pools, checkedHardware: true }, opts, budget);
+  }
+  return null;
 }
 
 /** Минимально возможная стоимость сборки (для подсказки, если бюджета не хватает). */
@@ -771,7 +797,8 @@ function minimalCost(pools, opts) {
       if (!ram || kase === undefined) continue;
       const gpu = cpu.specs.hasIgpu || (opts.have && opts.have.gpu) ? null : pools.gpus[0];
       if (gpu === undefined) continue;
-      const psu = P.pickPsu(Compat.psuNeed(cpu, gpu, 0));
+      if (Compat.gpuCaseErrors(gpu, kase).length) continue;
+      const psu = P.pickPsu(Compat.psuNeed(cpu, gpu, 0), gpu);
       if (psu === undefined) continue;
       const ssd = opts.have && opts.have.ssd ? null : pools.ssd[0];
       const t = cpu.price + mb.price + ram.price + (cooler ? cooler.price : 0) + (kase ? kase.price : 0) +
@@ -808,15 +835,18 @@ function alternatives(build, pools, opts) {
       perf: `игры ${fmtPct(pct(c.perf.gaming, p.cpu.perf.gaming))}, многопоток ${fmtPct(pct(c.perf.multi, p.cpu.perf.multi))}`,
     }));
   }
+  const gpuFits = (g) => !Compat.gpuCaseErrors(g, p.case).length && Compat.checkGpuPower(g, p.psu)?.level !== 'error'
+    && (!p.psu?.specs.watts || p.psu.specs.watts >= Compat.psuNeed(p.cpu, g, 0).min);
   if (p.gpu) {
-    alt.gpu = around(pools.gpus, p.gpu).map((g) => wrap(g, p.gpu, { perf: `производительность ${fmtPct(pct(g.perf.score, p.gpu.perf.score))}` }));
+    alt.gpu = around(pools.gpus.filter(gpuFits), p.gpu).map((g) => wrap(g, p.gpu, { perf: `производительность ${fmtPct(pct(g.perf.score, p.gpu.perf.score))}` }));
+    const variant = perf.gpuVariantKey(p.gpu.perf.key, p.gpu.specs.vramGb);
     alt.gpuSame = pools.gpuAll
-      .filter((g) => g.perf.key === p.gpu.perf.key && g.id !== p.gpu.id)
+      .filter((g) => variant && perf.gpuVariantKey(g.perf.key, g.specs.vramGb) === variant && g.id !== p.gpu.id && gpuFits(g))
       .sort((a, b) => a.price - b.price)
       .slice(0, 6)
       .map((g) => wrap(g, p.gpu, { perf: 'тот же чип, другой производитель' }));
   } else if (!(opts.have && opts.have.gpu) && pools.gpus.length) {
-    alt.gpu = pools.gpus.slice(0, 6).map((g) => ({ item: g, diff: g.price, perf: `${g.perf.name}: вместо встроенной графики` }));
+    alt.gpu = pools.gpus.filter(gpuFits).slice(0, 6).map((g) => ({ item: g, diff: g.price, perf: `${g.perf.name}: вместо встроенной графики` }));
   }
   if (p.motherboard) {
     const list = pools.boardAll.filter((m) => p.cpu && boardSuitable(p.cpu, m) && (!p.ram || m.specs.mem === p.ram.specs.type));
@@ -839,7 +869,8 @@ function alternatives(build, pools, opts) {
   }
   if (p.psu) {
     const need = build.need ? build.need.rec : 0;
-    const list = pools.psuAll.filter((x) => x.specs.watts >= need && x.id !== p.psu.id).sort((a, b) => a.price - b.price);
+    const list = pools.psuAll.filter((x) => x.specs.watts >= need && x.id !== p.psu.id && Compat.checkGpuPower(p.gpu, x)?.level !== 'error')
+      .sort((a, b) => a.price - b.price);
     const picks = list.slice(0, 5);
     const gold = list.find((x) => x.specs.cert >= 4);
     if (gold && !picks.includes(gold)) picks.push(gold);
@@ -847,7 +878,7 @@ function alternatives(build, pools, opts) {
   }
   if (p.case) {
     const form = p.motherboard ? p.motherboard.specs.form : 'ATX';
-    const list = pools.caseAll.filter((c) => Compat.boardFitsCase(form, c));
+    const list = pools.caseAll.filter((c) => Compat.boardFitsCase(form, c) && !Compat.gpuCaseErrors(p.gpu, c).length);
     alt.case = around(list, p.case, 3, 4).map((c) => wrap(c, p.case, { perf: [c.specs.class, c.specs.fans ? c.specs.fans + ' вент.' : 'без вентиляторов', c.specs.gpuMaxMm ? 'GPU до ' + c.specs.gpuMaxMm + ' мм' : null].filter(Boolean).join(', ') }));
   }
   if (p.cooler) {
@@ -931,16 +962,16 @@ async function build(opts) {
       const first = optimize(pools, opts, b - Setup.reserve(setupIds, b));
       const idx = first ? Compat.indices(first.parts, opts.have && opts.have.gpu) : { gaming: 0 };
       setup = Setup.choose(setupIds, setupPools, b, opts.purpose, idx.gaming);
-      best = optimize(pools, opts, b - setup.total);
+      best = await verifyHardware(optimize(pools, opts, b - setup.total), pools, opts, b - setup.total);
       // Сетап съел бюджет: берём периферию попроще, чтобы осталось на компьютер
       for (const k of [0.6, 0.3, 0]) {
         if (best) break;
         const cheaper = Setup.choose(setupIds, setupPools, Math.round(b * k), opts.purpose, idx.gaming);
-        const pc = optimize(pools, opts, b - cheaper.total);
+        const pc = await verifyHardware(optimize(pools, opts, b - cheaper.total), pools, opts, b - cheaper.total);
         if (pc) { setup = cheaper; best = pc; }
       }
     } else {
-      best = optimize(pools, opts, b);
+      best = await verifyHardware(optimize(pools, opts, b), pools, opts, b);
     }
     if (!best) {
       variants.push({ id: v.id, label: v.label, hint: v.hint, budget: b, build: null });
@@ -1022,13 +1053,13 @@ async function kufarUsedParts(kind, pools, opts, budget) {
     if (!r.next) break;
     cursor = r.next;
   }
-  const twins = kind === 'gpu' ? pools.gpus : pools.cpus;
+  const twins = kind === 'gpu' ? (pools.gpuAll || pools.gpus) : pools.cpus;
   const matches = [];
   for (const ad of all) {
     if (!ad.price || kufar.offTopic(ad.name) || kufar.risk(ad).level === 'blocked') continue;
     const key = kind === 'gpu' ? kufar.adGpuKey(ad) : perf.cpuKey(ad.name);
     if (!key) continue;
-    // Характеристики берём у той же модели из каталога (сокет, память, питание)
+    // Карточка каталога нужна для сравнения цены и для параметров той же модели процессора.
     const twin = twins.find((t) => t.perf && t.perf.key === key);
     if (!twin) continue;
     if (kind === 'gpu') {
@@ -1039,24 +1070,29 @@ async function kufarUsedParts(kind, pools, opts, budget) {
   }
   const candidates = matches.map(({ ad }) => ad);
   await kufar.inspect(candidates, { limit: 28, timeout: 5500 });
-  const verified = candidates.filter((ad) => kufar.risk(ad).level === 'clear');
+  const verified = candidates.filter((ad) => kufar.risk(ad, kind === 'gpu' ? kufar.adGpuInfo(ad) : undefined).level === 'clear');
   await market.annotate(verified, kind);
   const accepted = new Set(verified);
   const out = [];
-  for (const { ad, twin } of matches) {
+  for (const { ad, twin: original } of matches) {
     if (!accepted.has(ad) || ad.market?.deal === 'suspicious') continue;
+    const gpu = kind === 'gpu' ? kufar.adGpuInfo(ad) : null;
+    const twin = gpu ? twins.find((t) => t.perf && gpu.variant && perf.gpuVariantKey(t.perf.key, t.specs?.vramGb) === gpu.variant) : original;
+    if (!twin || (gpu && market.gpuPriceRisk(ad, twin.price))) continue;
     out.push({
       ...twin, id: 'kufar-' + ad.id, source: 'kufar', name: ad.name, price: ad.price, url: ad.url, image: ad.image,
       offers: 0, fromKufar: true, noname: false, market: ad.market || null, location: ad.location, date: ad.date,
+      ...(gpu ? { description: '', brand: '', pricesUrl: null, usedUrl: null } : {}),
       delivery: ad.delivery, safedeal: ad.safedeal, company: ad.company, risk: ad.risk,
-      specs: kind === 'cpu' ? { ...twin.specs, withCooler: false } : twin.specs,
+      specs: gpu ? gpu.specs : { ...twin.specs, withCooler: false },
+      perf: gpu ? { key: gpu.key, ...perf.gpuPerf(gpu.key, gpu.vramGb) } : twin.perf,
       kufarNote: 'б/у с Kufar — проверьте перед покупкой',
     });
   }
   // По каждой модели — два самых дешёвых нормальных объявления
   const byKey = {};
   for (const it of out.sort((a, b) => a.price - b.price)) {
-    const k = it.perf.key;
+    const k = it.perf.variantKey || it.perf.key;
     byKey[k] = byKey[k] || [];
     if (byKey[k].length < 2) byKey[k].push(it);
   }
@@ -1074,7 +1110,7 @@ async function hybrid(opts) {
   const { raw, F } = await gather(o, budget * 1.15);
   const pools = preparePools(raw, o, budget * 1.15, F);
   if (!pools.cpus.length) throw new Error('Нет данных о процессорах');
-  const base = optimize(pools, o, budget);
+  const base = await verifyHardware(optimize(pools, o, budget), pools, o, budget);
   const pins = pools.pins || {};
   const [gpus, cpus] = await Promise.all([
     o.have && o.have.gpu || pins.gpu ? [] : kufarUsedParts('gpu', pools, o, budget).catch(() => []),
@@ -1083,7 +1119,7 @@ async function hybrid(opts) {
   if (!gpus.length && !cpus.length) return { none: true, reason: 'Среди проверенных описаний Kufar не нашлось подходящих б/у процессоров и видеокарт.' };
   const mixed = { ...pools, gpus: pools.gpus.concat(gpus), cpus: pools.cpus.concat(cpus) };
   await tick();
-  const best = optimize(mixed, o, budget);
+  const best = await verifyHardware(optimize(mixed, o, budget), mixed, o, budget);
   if (!best) return { none: true, reason: 'Совместимую сборку с б/у деталями собрать не получилось.' };
   const used = Object.entries(best.parts).filter(([, x]) => x && x.fromKufar).map(([k]) => k);
   if (!used.length) return { none: true, reason: 'Б/у варианты на Kufar сейчас не выгоднее новых — полностью новая сборка лучше.' };
@@ -1193,7 +1229,7 @@ async function upgrade(opts) {
     if (!pools.cpus.length) continue;
     // Видеокарты нет и вариант её не меняет — подбор не должен «тайком» её добавлять
     if (!owned.gpu && !sc.replace.includes('gpu')) pools.gpus = [];
-    const best = optimize(pools, so, budget);
+    const best = await verifyHardware(optimize(pools, so, budget), pools, so, budget);
     if (!best) continue;
     const parts = { ...best.parts };
     const checks = Compat.check(parts, so.have);

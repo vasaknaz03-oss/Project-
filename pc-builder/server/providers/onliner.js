@@ -1,8 +1,8 @@
 'use strict';
 // Каталог Onliner: публичный JSON API каталога и предложений магазинов.
 
-const { getJSON, qs } = require('../http');
-const { parseSpecs } = require('../parsers');
+const { getJSON, request, qs } = require('../http');
+const { parseSpecs, parseHardware } = require('../parsers');
 const perf = require('../perfdb');
 
 const API = 'https://catalog.onliner.by/sdapi/catalog.api';
@@ -110,6 +110,36 @@ async function product(key, category) {
   return normalize({ ...data, schema: data.schema || { key: category, name: CATEGORIES[category] || '' } });
 }
 
+const HARDWARE_CATEGORIES = new Set(['videocard', 'chassis', 'powersupply']);
+const hardwareCache = new Map();
+
+async function enrichHardware(item) {
+  if (item?.source !== 'onliner' || !HARDWARE_CATEGORIES.has(item.category) || item.specs?.catalogHardware) return item;
+  let url;
+  try { url = new URL(item.url); } catch { return item; }
+  const route = url.pathname.split('/').filter(Boolean);
+  if (url.origin !== 'https://catalog.onliner.by' || url.username || url.password || route[0] !== item.category || route.at(-1) !== String(item.id)) return item;
+  const key = url.origin + url.pathname;
+  let entry = hardwareCache.get(key);
+  if (!entry || entry.until < Date.now()) {
+    entry = { until: Infinity };
+    entry.pending = request(key, { headers: { Accept: 'text/html' }, redirect: 'error' }, 4000)
+      .then(async (r) => r.ok ? parseHardware(item.category, await r.text()) : {})
+      .catch(() => ({})).then((specs) => {
+        entry.until = Date.now() + (Object.keys(specs).length ? 12 * 60 * 60 * 1000 : 3 * 60 * 1000);
+        return specs;
+      });
+    hardwareCache.set(key, entry);
+    if (hardwareCache.size > 250) hardwareCache.delete(hardwareCache.keys().next().value);
+  }
+  const specs = await entry.pending;
+  if (Object.keys(specs).length) {
+    item.specs = { ...item.specs, ...specs, catalogHardware: true };
+    if (item.category === 'videocard') enrich(item);
+  }
+  return item;
+}
+
 /** Доставка из предложения магазина: курьер и самовывоз (стоимость и срок в днях). */
 function deliveryOf(d) {
   if (!d) return null;
@@ -184,4 +214,4 @@ async function offers(productKey) {
   return list;
 }
 
-module.exports = { CATEGORIES, category, categoryPage, search, offers, product, priceHistory, reviews, normalize, enrich };
+module.exports = { CATEGORIES, category, categoryPage, search, offers, product, enrichHardware, priceHistory, reviews, normalize, enrich };

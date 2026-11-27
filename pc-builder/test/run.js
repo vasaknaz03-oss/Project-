@@ -3,7 +3,7 @@
 // Запуск: npm test        (добавьте --live, чтобы прогнать подбор на живых данных Onliner)
 
 const assert = require('assert');
-const { parseSpecs } = require('../server/parsers');
+const { parseSpecs, parseHardware, gpuConnectors } = require('../server/parsers');
 const perf = require('../server/perfdb');
 const Compat = require('../web/compat');
 
@@ -344,8 +344,106 @@ test('выбор пунктов сетапа: монитор под видеок
   assert.ok(strong.total === 700);
 });
 
+console.log('Видеокарты');
+test('типы, суффиксы и объёмы видеопамяти', () => {
+  const models = [
+    ['ASUS RTX 4070-Ti-SUPER 16GB', 'rtx4070tisuper'], ['RTX4070TiS', 'rtx4070tisuper'],
+    ['MSI RTX 4070 Super', 'rtx4070super'], ['RX 7900-XT', 'rx7900xt'], ['RX 7900-XTX', 'rx7900xtx'],
+    ['RX 7900-GRE', 'rx7900gre'], ['RTX 4060, не фейк, не мобильная', 'rtx4060'],
+  ];
+  for (const [name, key] of models) assert.strictEqual(perf.gpuKey(name), key, name);
+  for (const name of ['RTX 4080 Ti', 'RTX 5090 D V2', 'RX 9060 XT LP', 'RX 580 2048SP']) {
+    assert.strictEqual(perf.gpuKey(name), null, name);
+  }
+  for (const name of ['RTX 4090 Laptop GPU', 'RTX 3080M', 'RX 7600M XT', 'Arc A770M', 'RTX 4060 MXM']) {
+    assert.strictEqual(perf.gpuModel(name).kind, 'mobile', name);
+    assert.strictEqual(perf.gpuKey(name), null, name);
+  }
+  assert.strictEqual(perf.laptopGpuKey('GeForce RTX 4090 Laptop GPU'), 'rtx4090');
+  assert.strictEqual(perf.gpuModel('NVIDIA CMP 30HX').kind, 'mining');
+  assert.strictEqual(perf.gpuVram('RTX 4060 Ti 8/16 ГБ'), null);
+  for (const key of ['rtx4060ti', 'rtx5060ti', 'rx9060xt', 'arca770']) {
+    assert.notStrictEqual(perf.gpuPerf(key, 8).variantKey, perf.gpuPerf(key, 16).variantKey);
+    assert.strictEqual(perf.gpuPerf(key).variantKey, null);
+  }
+});
+
+test('Onliner: точные размеры, разъёмы, комплектация и характеристики БП', () => {
+  const row = (k, v) => `<tr><td>${k}<!----></td><td>${v}</td></tr>`;
+  const gpu = parseHardware('videocard', [
+    row('Видеопамять', '16&nbsp;ГБ'), row('Длина видеокарты', '340&nbsp;мм'),
+    row('Толщина видеокарты', '70 мм'), row('Толщина системы охлаждения', '3 слота'),
+    row('Разъёмы питания', '16 pin (12V-2x6)'), row('Рекомендуемый блок питания', '850 Вт'),
+    row('Комплектация', 'разветвитель 3 x 8-pin - 1 x 16-pin'),
+  ].join(''));
+  assert.deepStrictEqual(gpu, {
+    vramGb: 16, lengthMm: 340, thicknessMm: 70, slots: 3, recommendedPsuWatts: 850,
+    power: '16 pin (12v-2x6)', gpuInputs: { six: 0, eight: 0, sixteen: 1 }, adapter8: 3,
+  });
+  const psu = parseHardware('powersupply', [
+    row('CPU 8 pin', '2'), row('PCIe 6 pin', '<span class="i-x"></span>'), row('PCIe 6+2 pin', '4'),
+    row('PCIe 8 pin', '<span class="i-x"></span>'), row('PCIe Gen5', '1'),
+  ].join(''));
+  assert.deepStrictEqual(psu.gpuOutputs, { six: 0, flex: 4, eight: 0, sixteen: 1 });
+  assert.deepStrictEqual(parseHardware('powersupply', row('CPU 8 pin', '2')), {});
+  assert.deepStrictEqual(gpuConnectors('2 × 8-pin + 6 pin'), { six: 1, eight: 2, sixteen: 0 });
+  assert.deepStrictEqual(gpuConnectors('6+2 pin'), { six: 0, eight: 1, sixteen: 0 });
+  assert.deepStrictEqual(gpuConnectors('нет'), { six: 0, eight: 0, sixteen: 0 });
+  const kase = parseHardware('chassis', [
+    row('Максимальная длина видеокарты', '345 мм'), row('Максимальная толщина видеокарты', '55,5 мм'),
+    row('Слоты расширения', '3'),
+  ].join(''));
+  assert.deepStrictEqual(kase, { gpuMaxMm: 345, gpuMaxThicknessMm: 55.5, expansionSlots: 3 });
+});
+
+test('совместимость: размеры, округление слотов и разъёмы важны даже при достаточной мощности', () => {
+  const gpu = { specs: { lengthMm: 340, thicknessMm: 70, slots: 3.5, boardWatts: 310, recommendedPsuWatts: 850, gpuInputs: gpuConnectors('16-pin') } };
+  const psu = { specs: { watts: 1000, gpuOutputs: { six: 0, eight: 0, flex: 2, sixteen: 0 } } };
+  const kase = { specs: { gpuMaxMm: 320, gpuMaxThicknessMm: 65, expansionSlots: 3 } };
+  const problems = Compat.check({ gpu, psu, case: kase }, {});
+  assert.strictEqual(problems.filter((x) => x.level === 'error').length, 4);
+  assert.strictEqual(Compat.psuNeed(null, gpu, 0).rec, 850);
+  assert.strictEqual(Compat.gpuPower(gpu), 310);
+  gpu.specs.adapter8 = 3;
+  assert.strictEqual(Compat.checkGpuPower(gpu, psu).level, 'error');
+  psu.specs.gpuOutputs.flex = 3;
+  assert.strictEqual(Compat.checkGpuPower(gpu, psu).level, 'warn');
+  psu.specs.gpuOutputs.sixteen = 1;
+  assert.strictEqual(Compat.checkGpuPower(gpu, psu).level, 'ok');
+  assert.strictEqual(Compat.checkGpuPower(gpu, { specs: { watts: 1000 } }).level, 'warn');
+  assert.strictEqual(Compat.checkGpuPower({ specs: { gpuInputs: gpuConnectors('8+6 pin') } }, {
+    specs: { gpuOutputs: { six: 0, eight: 0, flex: 1 } },
+  }).level, 'error');
+});
+
+test('Kufar: мобильные карты, CMP, подделки, разные версии и слишком низкая цена', () => {
+  const kufar = require('../server/providers/kufar');
+  const market = require('../server/market');
+  const make = (subject, body = 'Рабочая, проверена.', price = 900, vram = '8 ГБ') => kufar.normalize({
+    subject, ad_id: 71, body, price_byn: String(price * 100),
+    ad_parameters: [{ p: 'type', pu: 'cct', v: '11' }, { p: 'memory', pu: 'cdr', v: 1, vl: vram }],
+  });
+  for (const ad of [make('RTX 4090 Laptop'), make('CMP 30HX'), make('RTX 4060 фейк'),
+    make('RTX 4060', 'Исправна, мобильный чип.'), make('RTX 4060', 'Это подделка.')]) {
+    assert.strictEqual(kufar.risk(ad).level, 'blocked', ad.name);
+    assert.strictEqual(kufar.adGpuKey(ad), null, ad.name);
+  }
+  assert.strictEqual(kufar.risk(make('RTX 4060, не фейк')).level, 'clear');
+  assert.strictEqual(kufar.risk(make('RTX 4060', 'Рабочая, не на мобильном чипе.')).level, 'clear');
+  assert.strictEqual(kufar.risk(make('RTX 4060 Ti 16GB')).level, 'caution');
+  assert.strictEqual(kufar.risk(make('RTX 4060 Ti 8/16 ГБ')).level, 'caution');
+  const clean = make('RTX 4060 Ti 16GB', 'Рабочая, проверена.', 900, '16 ГБ');
+  const cheap = make('RTX 4060 Ti 8GB', 'Рабочая, проверена.', 80);
+  const ranked = market.rankByValue([cheap, clean], 'videocard');
+  assert.strictEqual(ranked[0], clean);
+  assert.ok(cheap.gpuPriceRisk);
+  assert.strictEqual(cheap.best, false);
+  assert.notStrictEqual(cheap.perf.variantKey, clean.perf.variantKey);
+  assert.strictEqual(market.annotateSame(ranked), null);
+});
+
 console.log('Оптимизатор (подставные данные)');
-test('подбирает совместимую сборку в рамках бюджета', () => {
+test('подбирает совместимую сборку и меняет БП после проверки разъёмов', async () => {
   const onliner = require('../server/providers/onliner');
   const mk = (category, name, price, description, extra = {}) => onliner.normalize({
     key: name.toLowerCase().replace(/\W+/g, '-'), full_name: name, schema: { key: category, name: category }, description,
@@ -378,9 +476,19 @@ test('подбирает совместимую сборку в рамках б�
     fan: [mk('fan', 'ID-Cooling SE-224-XTS', 60, 'рассеивание до 220 Вт, высота 154 мм, вентилятор 120 мм')],
   };
   // Подменяем загрузку из сети на подставные данные
+  const originalHardware = onliner.enrichHardware;
   onliner.category = async (schema) => ({ items: fixtures[schema] || [], total: (fixtures[schema] || []).length });
+  const checked = new Set();
+  onliner.enrichHardware = async (it) => {
+    if (it?.category === 'powersupply') {
+      checked.add(it.specs.watts);
+      it.specs.gpuOutputs = { six: 0, eight: 0, flex: it.specs.watts === 550 ? 0 : 2, sixteen: 0 };
+    }
+    return it;
+  };
   const builder = require('../server/builder');
-  return builder.build({ budgetByn: 3000, purpose: 'gaming' }).then((r) => {
+  try {
+    const r = await builder.build({ budgetByn: 3000, purpose: 'gaming' });
     const v = r.variants.find((x) => x.id === 'optimal');
     assert.ok(v.build, 'сборка найдена');
     const p = v.build.parts;
@@ -388,10 +496,14 @@ test('подбирает совместимую сборку в рамках б�
     assert.strictEqual(p.cpu.specs.socket, p.motherboard.specs.socket);
     assert.strictEqual(p.ram.specs.type, p.motherboard.specs.mem);
     assert.ok(p.gpu, 'для игр есть видеокарта');
+    assert.strictEqual(p.psu.specs.watts, 750);
+    assert.deepStrictEqual([...checked].sort(), [550, 750]);
     assert.ok(p.cooler, 'OEM-процессору нужен кулер');
     assert.ok(!v.build.checks.some((c) => c.level === 'error'), 'без ошибок совместимости');
     console.log(`    → ${p.cpu.name} + ${p.gpu.name}, итого ${v.build.total} р.`);
-  });
+  } finally {
+    onliner.enrichHardware = originalHardware;
+  }
 });
 
 test('отзывы: плюсы, минусы, отрицания и пересказ чужих слов', () => {

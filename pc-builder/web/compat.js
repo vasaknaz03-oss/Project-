@@ -30,6 +30,7 @@
   /** Потребление видеокарты, Вт. */
   function gpuPower(gpu) {
     if (!gpu) return 0;
+    if (gpu.specs?.boardWatts > 0) return gpu.specs.boardWatts;
     if (gpu.perf && gpu.perf.watts) return gpu.perf.watts;
     const p = ((gpu.specs && gpu.specs.power) || '').toLowerCase();
     if (/16 pin|12v/.test(p)) return 350;
@@ -43,7 +44,7 @@
   /** Рекомендуемая мощность БП: нагрузка × запас на пики и старение, округление до 50 Вт. */
   function psuNeed(cpu, gpu, assumedGpuWatts) {
     const load = cpuPower(cpu) + (gpu ? gpuPower(gpu) : assumedGpuWatts || 0) + 80;
-    const rec = Math.max(450, Math.ceil((load * 1.4) / 50) * 50);
+    const rec = Math.max(450, Math.ceil((load * 1.4) / 50) * 50, gpu?.specs?.recommendedPsuWatts || 0);
     const min = Math.ceil(load * 1.1);
     return { load, rec, min };
   }
@@ -99,6 +100,59 @@
     if (mbForm === 'mATX') return boards.includes('mATX') || boards.includes('ATX');
     if (mbForm === 'EATX') return boards.includes('EATX');
     return boards.includes('ATX') || boards.includes('EATX');
+  }
+
+  function gpuCaseErrors(gpu, kase) {
+    if (!gpu || !kase) return [];
+    const s = gpu.specs || {};
+    const c = kase.specs || {};
+    const messages = [];
+    if (s.lengthMm > 0 && c.gpuMaxMm > 0 && s.lengthMm > c.gpuMaxMm) {
+      messages.push(`Видеокарта длиной ${s.lengthMm} мм не помещается: корпус поддерживает до ${c.gpuMaxMm} мм.`);
+    }
+    if (s.thicknessMm > 0 && c.gpuMaxThicknessMm > 0 && s.thicknessMm > c.gpuMaxThicknessMm) {
+      messages.push(`Видеокарта толщиной ${s.thicknessMm} мм не помещается: корпус поддерживает до ${c.gpuMaxThicknessMm} мм.`);
+    }
+    if (s.slots > 0 && c.expansionSlots > 0 && Math.ceil(s.slots) > c.expansionSlots) {
+      messages.push(`Видеокарта займёт ${Math.ceil(s.slots)} слота, у корпуса всего ${c.expansionSlots}.`);
+    }
+    return messages;
+  }
+
+  function checkGpuPower(gpu, psu) {
+    if (!gpu || !psu) return null;
+    const need = gpu.specs?.gpuInputs;
+    if (!need) return { level: 'warn', text: 'Уточните, нужны ли видеокарте кабели дополнительного питания.' };
+    const { six = 0, eight = 0, sixteen = 0 } = need;
+    if (!six && !eight && !sixteen) return null;
+    const available = psu.specs?.gpuOutputs || {};
+    const issue = (level, text) => ({ level, text });
+    let eightNeeded = eight;
+    let usingAdapter = false;
+    if (sixteen && (available.sixteen ?? 0) < sixteen) {
+      const adapter8 = gpu.specs.adapter8;
+      if (adapter8 > 0 && sixteen === 1) {
+        eightNeeded += adapter8;
+        usingAdapter = true;
+      } else if (available.sixteen == null) {
+        return issue('warn', 'Проверьте, есть ли у блока питания подходящий кабель 16-pin для видеокарты.');
+      } else {
+        return issue('error', 'Видеокарте нужен 16-pin, в указанных разъёмах блока питания его не хватает.');
+      }
+    }
+    const lack6 = Math.max(0, six - (available.six ?? 0));
+    const lack8 = Math.max(0, eightNeeded - (available.eight ?? 0));
+    if (lack6 + lack8 > (available.flex ?? 0)) {
+      if (usingAdapter && available.sixteen == null) {
+        return issue('warn', 'Уточните, есть ли родной кабель 16-pin или нужное число кабелей PCIe для указанного переходника.');
+      }
+      if (available.flex == null || (lack6 && available.six == null) || (lack8 && available.eight == null)) {
+        return issue('warn', 'Уточните число кабелей питания PCIe для видеокарты у выбранного блока питания.');
+      }
+      return issue('error', 'У блока питания не хватает указанных разъёмов PCIe 6/8-pin для этой видеокарты.');
+    }
+    if (usingAdapter) return issue('warn', 'В комплектации указан переходник на 16-pin. Сверьте по руководству, какие отдельные кабели БП нужны для подключения.');
+    return issue('ok', 'Указанные разъёмы питания видеокарты и блока питания совпадают.');
   }
 
   const OLD_AM4 = /^(A320|B350|X370)$/;
@@ -173,9 +227,8 @@
       else if (w && w < need.rec) warn(`Блок питания ${w} Вт впритык: рекомендуется от ${need.rec} Вт`);
       else if (w) ok(`Блок питания ${w} Вт с запасом (нагрузка около ${need.load} Вт)`);
       else warn(`Мощность блока питания не указана — уточните у продавца: нужно от ${need.rec} Вт (нагрузка около ${need.load} Вт)`);
-      if (gpu && /16 pin|12v/i.test((gpu.specs && gpu.specs.power) || '') && psu.specs && !psu.specs.pcie5) {
-        info('Видеокарте нужен разъём 16-pin: переходник обычно лежит в коробке с картой');
-      }
+      const power = checkGpuPower(gpu, psu);
+      if (power) out.push(power);
       if (kase && kase.specs && kase.specs.psuIncluded) info('В корпусе уже есть свой блок питания: отдельный БП можно не брать');
     }
 
@@ -189,8 +242,16 @@
     if (kase && cooler && kase.specs.coolerMaxMm && cooler.specs.heightMm) {
       if (cooler.specs.heightMm > kase.specs.coolerMaxMm) err(`Кулер высотой ${cooler.specs.heightMm} мм не влезет: в корпусе до ${kase.specs.coolerMaxMm} мм`);
     }
-    if (kase && gpu && kase.specs.gpuMaxMm && kase.specs.gpuMaxMm < 280 && gpu.perf && gpu.perf.watts >= 200) {
-      warn(`В корпус влезают видеокарты до ${kase.specs.gpuMaxMm} мм: проверьте длину выбранной карты`);
+    if (kase && gpu) {
+      gpuCaseErrors(gpu, kase).forEach(err);
+      const g = gpu.specs || {};
+      const c = kase.specs || {};
+      if (!g.lengthMm || !c.gpuMaxMm) warn('Уточните длину видеокарты и допустимую длину в корпусе.');
+      else if (g.lengthMm <= c.gpuMaxMm) ok(`Длина видеокарты ${g.lengthMm} мм при лимите корпуса ${c.gpuMaxMm} мм.`);
+      if (g.thicknessMm > 0 && c.gpuMaxThicknessMm > 0 && g.thicknessMm <= c.gpuMaxThicknessMm) ok('Толщина видеокарты укладывается в указанный предел корпуса.');
+      else if (!(g.thicknessMm > 0 && c.gpuMaxThicknessMm > 0) && !(g.slots > 0 && c.expansionSlots > 0 && Math.ceil(g.slots) > c.expansionSlots)) {
+        warn('Проверьте свободные слоты и место по толщине видеокарты в корпусе.');
+      }
     }
 
     if (cpu && !have.cooler) {
@@ -242,5 +303,5 @@
     return { gaming, work, tier: eff == null ? 'Зависит от вашей видеокарты' : gamingTier(eff) };
   }
 
-  return { cpuPower, gpuPower, psuNeed, coolerNeed, coolerCapacity, coolerClass, boardFitsCase, check, indices, gamingTier };
+  return { cpuPower, gpuPower, psuNeed, coolerNeed, coolerCapacity, coolerClass, boardFitsCase, gpuCaseErrors, checkGpuPower, check, indices, gamingTier };
 });

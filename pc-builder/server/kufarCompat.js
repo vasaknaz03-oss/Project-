@@ -11,7 +11,7 @@ const { normSocket, capacityGb } = require('./parsers');
 // «Тип» в категории «Комплектующие» Kufar для каждого слота сборки
 const TYPE = { cpu: '10', gpu: '11', motherboard: '7', ram: '9', ssd: '15', hdd: '13', psu: '5', case: '1', cooler: '3' };
 const SCHEMA = { cpu: 'cpu', gpu: 'videocard', motherboard: 'motherboard', ram: 'dram', ssd: 'ssd', hdd: 'hdd', psu: 'powersupply', case: 'chassis', cooler: 'fan' };
-const OTHER = /куплю|коробк|только\s*обмен|заброниров|продан[оа]?(?![а-яё])|(?:^|[^а-яёa-z])(cmp|смр)\s*\d|frankenstein|франкен|\d{4}\s*m\b|mobile|мобильн/i;
+const OTHER = /куплю|коробк|только\s*обмен|заброниров|продан[оа]?(?![а-яё])/i;
 
 const norm = (s) => String(s || '').toUpperCase().replace(/[\s_-]+/g, '');
 
@@ -130,17 +130,24 @@ async function compatible(slot, part, ctx = {}, { limit = 40, pages = 2 } = {}) 
   }
   // Исключаем объявления с ценой-приманкой и товары другого типа.
   const floor = Math.max(20, ((part && part.price) || 0) * 0.15);
-  const items = all.filter((it) => it.price >= floor && !OTHER.test(it.name));
+  const items = all.filter((it) => it.price >= (slot === 'gpu' ? 1 : floor) && !OTHER.test(it.name));
   // Производительность для процессоров и видеокарт
   for (const it of items) {
     if (slot === 'cpu') {
       const key = perf.cpuKey(it.name);
       if (key) it.perf = perf.cpuPerf(it.name, {});
     } else if (slot === 'gpu') {
-      const key = kufar.adGpuKey(it);
-      if (key) it.perf = { key, ...perf.gpuPerf(key) };
+      const gpu = kufar.adGpuInfo(it);
+      if (gpu.key) it.perf = { key: gpu.key, ...perf.gpuPerf(gpu.key, gpu.vramGb) };
     }
-    if (part && part.perf && it.perf && part.perf.key && it.perf.key === part.perf.key) it.sameModel = true;
+    if (part?.perf && it.perf) {
+      it.sameModel = slot === 'gpu'
+        ? Boolean(it.perf.variantKey && it.perf.variantKey === perf.gpuVariantKey(part.perf.key, part.specs?.vramGb))
+        : it.perf.key === part.perf.key;
+      if (slot === 'gpu' && it.sameModel && part.price && it.price < part.price * 0.2) {
+        it.gpuPriceRisk = 'Цена заметно ниже цены такой же новой версии';
+      }
+    }
   }
   items.sort((a, b) => a.price - b.price);
   const shown = items.slice(0, limit);
@@ -205,10 +212,11 @@ async function enrich(slot, item) {
     }
     out.perf = perf.cpuPerf(twin ? twin.name : name, out.specs);
   } else if (slot === 'gpu') {
-    const key = perf.gpuKey(name) || perf.gpuKey(pv(item, 'ccvc'));
-    const vram = parseFloat(pv(item, 'cdr')) || (name.match(/(\d{1,2})\s*(gb|гб)/i) || [])[1];
-    out.specs = { vramGb: vram ? Number(vram) : null };
-    if (key) out.perf = { key, ...perf.gpuPerf(key, out.specs.vramGb) };
+    const gpu = kufar.adGpuInfo(item);
+    out.specs = gpu.specs;
+    if (gpu.issue?.level === 'blocked') throw new Error(gpu.issue.reason);
+    if (gpu.issue) notes.push(gpu.issue.reason);
+    if (gpu.key) out.perf = { key: gpu.key, ...perf.gpuPerf(gpu.key, gpu.vramGb) };
     else notes.push('модель видеокарты не распознана');
   } else if (slot === 'motherboard') {
     const chipset = findChipset(pv(item, 'ccch')) || findChipset(name);
