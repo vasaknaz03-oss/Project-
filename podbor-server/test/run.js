@@ -9,6 +9,7 @@ const path = require('path');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'podbor-srv-'));
 // Поддельные Telegram и YouTube
 const tgSent = [];
+let rejectNextAd = false;
 let pendingStart = null;
 const mock = http.createServer((req, res) => {
   let b = '';
@@ -37,7 +38,15 @@ const mock = http.createServer((req, res) => {
       if (pendingStart) { const u = [{ update_id: 1, message: { chat: { id: 777, type: 'private' }, text: '/start ' + pendingStart } }]; pendingStart = null; return ok(u); }
       return setTimeout(() => ok([]), 200);
     }
-    if (m[1] === 'sendMessage') { tgSent.push(body); return ok({ message_id: 1 }); }
+    if (m[1] === 'sendMessage') {
+      if (rejectNextAd && body.reply_markup) {
+        rejectNextAd = false;
+        res.writeHead(429, { 'content-type': 'application/json' });
+        return res.end(JSON.stringify({ ok: false, description: 'Повторите позже' }));
+      }
+      tgSent.push(body);
+      return ok({ message_id: 1 });
+    }
     ok(true);
   });
 }).listen(0);
@@ -143,6 +152,23 @@ async function test(name, fn) {
     const n = await call('POST', '/v1/notify', { title: 'Цена снизилась', body: 'RTX 5070: 2300 → 2100', url: 'https://catalog.onliner.by/x' }, tok);
     assert.strictEqual(n.status, 200);
     assert.ok(tgSent.some((m) => m.chat_id === '777' && /Цена снизилась/.test(m.text)));
+  });
+
+  await test('Telegram: кнопка на Kufar, повтор после явного отказа, успешная отправка один раз', async () => {
+    const ad = { id: '792019', name: 'B650E без цены', price: 0, url: 'https://example.org/wrong' };
+    const notify = () => call('POST', '/v1/notify', { kufarAd: ad }, tok);
+    rejectNextAd = true;
+    const rejected = await notify();
+    assert.strictEqual(rejected.data.ok, false);
+    assert.match(rejected.data.error, /Повторите позже/);
+    const attempts = await Promise.all([notify(), notify()]);
+    assert.ok(attempts.some((response) => response.data.ok));
+    const delivered = await notify();
+    assert.deepStrictEqual(delivered.data, { ok: true, duplicate: true });
+    const messages = tgSent.filter((m) => m.text.includes('B650E без цены'));
+    assert.strictEqual(messages.length, 1);
+    assert.deepStrictEqual(messages[0].reply_markup.inline_keyboard[0][0], { text: 'Открыть объявление', url: 'https://www.kufar.by/item/792019' });
+    assert.doesNotMatch(messages[0].text, /0 р\.|example.org/);
   });
 
   await test('админка: статистика только с токеном', async () => {

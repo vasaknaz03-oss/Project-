@@ -105,7 +105,20 @@ function render() {
     renderEvents(),
     el('div.layout-2',
       el('div', renderItems(), renderSearches()),
-      el('div.side', renderSettings())));
+      el('div.side', renderTelegram(), renderSettings())));
+}
+
+function renderTelegram() {
+  if (!W.searches.length || !W.telegram) return null;
+  const tg = W.telegram;
+  const label = { own: 'Подключён личный бот.', shared: 'Подключён общий бот.', disabled: 'Уведомления выключены.', unlinked: 'Telegram не подключён.' };
+  return el('div.card', el('h3', 'Telegram для Kufar'),
+    el('p.dim.small', label[tg.mode] || label.unlinked),
+    tg.pending ? el('p.small', `В очереди — ${tg.pending}.`) : null,
+    tg.error ? el('p.small.err-text', tg.error) : null,
+    tg.uncertain ? el('p.dim.small', `Уведомления без подтверждения — ${tg.uncertain}. Автоматический повтор отключён, чтобы исключить дубли.`) : null,
+    tg.mode === 'disabled' || tg.mode === 'unlinked' ? el('button.btn.btn-sm', { type: 'button',
+      onclick: () => document.dispatchEvent(new CustomEvent('goto-page', { detail: 'settings' })) }, 'Открыть настройки') : null);
 }
 
 async function checkNow(e) {
@@ -148,7 +161,7 @@ function adRow(a) {
   return el('div.alt',
     thumb(a.image, 'recycle'),
     el('div', el('div.alt-name', adLink(a)), el('div.row.wrap.ad-chips', adChips(a)), adRisk(a, rerenderWatch)),
-    el('div.alt-price', el('b', money.fmt(a.price))));
+    el('div.alt-price', el('b', a.price > 0 ? money.fmt(a.price) : 'Цена не указана')));
 }
 
 function sparkline(history) {
@@ -213,7 +226,8 @@ function renderSearches() {
   }
   for (const s of W.searches) {
     const sec = s.cat ? window.Catalog.byId[s.cat] : null;
-    const crit = [sec ? sec.name : 'все разделы', s.q ? `«${s.q}»` : null, s.priceMax ? `до ${money.fmt(s.priceMax)}` : null,
+    const crit = [sec ? sec.name : 'все разделы', s.q ? `«${s.q}»` : null,
+      s.priceMin ? `от ${money.fmt(s.priceMin)}` : null, s.priceMax ? `до ${money.fmt(s.priceMax)}` : null,
       s.cond === 'used' ? 'б/у' : s.cond === 'new' ? 'новое' : null, Object.keys(s.filters || {}).length ? `фильтров: ${Object.keys(s.filters).length}` : null].filter(Boolean).join(' · ');
     const open = { v: false };
     const list = el('div.alt-list.compact', { hidden: true }, (s.latest || []).map(adRow));

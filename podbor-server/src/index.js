@@ -23,6 +23,7 @@ const llm = require(path.join(APP, 'server', 'llm'));
 const youtube = require(path.join(APP, 'server', 'youtube'));
 const reviews = require(path.join(APP, 'server', 'reviews'));
 const kufarIndex = require(path.join(APP, 'server', 'kufarIndex'));
+const { kufarNotification } = require(path.join(APP, 'server', 'telegram'));
 const VERSION = require('../package.json').version;
 
 ai.setKeyProvider(() => cfg.anthropicKey);
@@ -144,7 +145,7 @@ async function route(req, res, url) {
   if (pth === '/v1/health') {
     return send(res, 200, {
       ok: true, version: VERSION,
-      features: { ai: ai.available(), aiBuild: ai.available(), aiKufar: ai.available(), youtube: !!cfg.youtubeKey, telegram: bot.enabled(), kufar: true, fetch: true },
+      features: { ai: ai.available(), aiBuild: ai.available(), aiKufar: ai.available(), youtube: !!cfg.youtubeKey, telegram: bot.enabled(), telegramAds: bot.enabled(), kufar: true, fetch: true },
       bot: bot.botName() || null,
     });
   }
@@ -291,7 +292,8 @@ async function route(req, res, url) {
     const ix = kufarIndex.ensure(opts);
     if (!ix.items.size && ix.scanning) await Promise.race([ix.scanning, new Promise((r) => setTimeout(r, 8000))]);
     const page = Math.max(1, Math.min(200, Math.floor(+b.page) || 1));
-    return send(res, 200, await kufarIndex.pageOf(ix, sectionId, page));
+    if (b.view != null && (typeof b.view !== 'string' || !/^[a-f0-9]{24}$/.test(b.view))) return send(res, 200, { restart: true });
+    return send(res, 200, await kufarIndex.pageOf(ix, sectionId, page, b.view));
   }
 
   // ---------------- общий Telegram-бот
@@ -307,6 +309,31 @@ async function route(req, res, url) {
   if (pth === '/v1/notify' && req.method === 'POST') {
     if (!d.tg_chat) throw new HttpErr(409, 'Telegram не подключён');
     const b = await readBody(req);
+    if (b.kufarAd) {
+      const message = kufarNotification(b.kufarAd);
+      if (!message) throw new HttpErr(400, 'Нужна корректная карточка Kufar.');
+      const chat = sha(d.tg_chat);
+      const state = db.telegramAds.get(chat, message.id);
+      if (state === 'sent') return send(res, 200, { ok: true, duplicate: true });
+      if (state || !bot.enabled()) {
+        return send(res, 200, state ? { ok: false, uncertain: true, error: 'Нет подтверждения от Telegram.' }
+          : { ok: false, error: 'Общий Telegram-бот не настроен.' });
+      }
+      checkLimit(d, 'notify');
+      if (!db.telegramAds.reserve(chat, message.id)) return send(res, 200, { ok: false, uncertain: true, error: 'Отправка объявления уже началась.' });
+      db.usage.add(d.id, 'notify');
+      try {
+        await bot.send(d.tg_chat, message.text, message.keyboard);
+        db.telegramAds.sent(chat, message.id);
+        return send(res, 200, { ok: true });
+      } catch (e) {
+        if (e.rejected) {
+          db.telegramAds.release(chat, message.id);
+          return send(res, 200, { ok: false, error: e.message });
+        }
+        return send(res, 200, { ok: false, uncertain: true, error: 'Нет подтверждения от Telegram.' });
+      }
+    }
     checkLimit(d, 'notify');
     db.usage.add(d.id, 'notify');
     const msg = [b.title ? '🔔 ' + text(b.title, 200) : '', text(b.body, 1500), /^https:\/\//.test(b.url || '') ? text(b.url, 500) : ''].filter(Boolean).join('\n');

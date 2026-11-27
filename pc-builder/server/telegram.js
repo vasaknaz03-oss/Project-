@@ -17,8 +17,11 @@ async function call(token, method, body) {
   }, 20000);
   const data = await res.json().catch(() => ({}));
   if (!data.ok) {
-    if (res.status === 401 || res.status === 404) throw new Error('Telegram не принял токен — проверьте, что скопировали его целиком из сообщения @BotFather');
-    throw new Error('Telegram: ' + (data.description || 'HTTP ' + res.status));
+    const error = res.status === 401 || res.status === 404
+      ? new Error('Telegram не принял токен — проверьте, что скопировали его целиком из сообщения @BotFather')
+      : new Error('Telegram: ' + (data.description || 'HTTP ' + res.status));
+    error.rejected = data.ok === false;
+    throw error;
   }
   return data.result;
 }
@@ -52,11 +55,24 @@ function connected() {
   return !!(secrets.get('telegramToken') && secrets.get('telegramChatId'));
 }
 
-async function send(text) {
+async function send(text, replyMarkup) {
   const token = secrets.get('telegramToken');
   const chat = secrets.get('telegramChatId');
-  if (!token || !chat) throw new Error('Telegram не подключён');
-  return call(token, 'sendMessage', { chat_id: chat, text: String(text).slice(0, 4000), disable_web_page_preview: false });
+  if (!token || !chat) throw Object.assign(new Error('Telegram не подключён'), { rejected: true });
+  return call(token, 'sendMessage', { chat_id: chat, text: String(text).slice(0, 4000), disable_web_page_preview: false,
+    ...(replyMarkup ? { reply_markup: replyMarkup } : {}) });
+}
+
+function kufarNotification(ad) {
+  const id = String(ad?.id || '');
+  const name = typeof ad?.name === 'string' ? ad.name.trim().slice(0, 220) : '';
+  if (!/^\d{1,16}$/.test(id) || !name) return null;
+  const price = Number(ad.price);
+  const url = 'https://www.kufar.by/item/' + id;
+  return {
+    id, url, text: ['🔔 Новое объявление Kufar', name, Number.isFinite(price) && price > 0 ? price.toLocaleString('ru-RU') + ' р.' : null, url].filter(Boolean).join('\n'),
+    keyboard: { inline_keyboard: [[{ text: 'Открыть объявление', url }]] },
+  };
 }
 
 function disconnect() {
@@ -70,4 +86,4 @@ function notifyEvent(e) {
   return send(text).then(() => true).catch(() => false);
 }
 
-module.exports = { connect, link, send, connected, disconnect, notifyEvent, TOKEN_RE };
+module.exports = { connect, link, send, connected, disconnect, notifyEvent, kufarNotification, TOKEN_RE };

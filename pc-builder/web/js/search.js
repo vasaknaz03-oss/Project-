@@ -13,7 +13,7 @@ const Catalog = window.Catalog;
 
 const S = {
   q: '', cat: '', src: 'onliner', cond: '', min: '', max: '', sort: '', page: 1,
-  items: [], total: 0, pages: 0, loading: false, error: null, searched: false, replaceSlot: null,
+  items: [], total: 0, pages: 0, loading: false, error: null, searched: false, replaceSlot: null, view: null,
   filters: {}, ktype: {}, next: null, layoutKey: '',
 };
 
@@ -226,6 +226,8 @@ async function run(reset) {
     S.page = 1;
     S.items = [];
     S.next = null;
+    S.view = null;
+    S.index = null;
   }
   if (!S.q.trim() && !S.cat) {
     S.searched = false;
@@ -236,18 +238,21 @@ async function run(reset) {
   S.error = null;
   S.searched = true;
   refresh();
+  const page = reset ? 1 : S.page + 1;
   const toByn = (v) => (v === '' || v == null ? '' : Math.round(money.fromCur(+v) * 100) / 100);
   const params = new URLSearchParams({
-    q: S.q.trim(), cat: S.cat, src: S.src, cond: S.cond, sort: S.sort, page: String(S.page), min: String(toByn(S.min)), max: String(toByn(S.max)),
+    q: S.q.trim(), cat: S.cat, src: S.src, cond: S.cond, sort: S.sort, page: String(page), min: String(toByn(S.min)), max: String(toByn(S.max)),
   });
   if (hasFilters() && countActive(S.filters[fkey()])) params.set('f', JSON.stringify(S.filters[fkey()]));
   if (S.src === 'kufar' && !reset && S.next && S.sort !== 'value') params.set('cursor', S.next);
+  if (S.src === 'kufar' && !reset && S.sort === 'value' && S.view) params.set('view', S.view);
   if (S.noSmart) params.set('smart', '0');
   // Ответ на устаревший запрос (пользователь уже поменял раздел, источник или текст) не показываем
   const seq = (S.seq = (S.seq || 0) + 1);
   try {
     const r = await api('/api/search?' + params);
     if (seq !== S.seq) return;
+    if (r.restart && !reset) return run(true);
     // Умный поиск понял раздел и характеристики — показываем их как обычные фильтры раздела
     if (r.smart && reset) {
       const wasCat = S.cat;
@@ -259,12 +264,15 @@ async function run(reset) {
       S.layoutKey = '';
       S.needFull = true;
     }
-    S.items = reset ? r.items : S.items.concat(r.items);
+    const items = reset ? (r.items || []) : S.items.concat(r.items || []);
+    S.items = S.src === 'kufar' ? [...new Map(items.map((item) => [item.id, item])).values()] : items;
+    S.page = page;
     S.total = r.total;
     S.pages = r.pages;
     S.next = r.next || null;
     S.blocked = r.blocked ? r.url : null;
     S.index = r.index || null;
+    S.view = r.view || null;
     // Kufar «выгодные»: пока программа просматривает все объявления, обновляем первую страницу
     clearTimeout(S.indexTimer);
     if (S.index && !S.index.ready && S.page === 1) S.indexTimer = setTimeout(() => { if (seq === S.seq && S.page === 1) run(true); }, 2500);
@@ -314,13 +322,19 @@ function renderResults() {
       S.smart.rest ? el('span.dim', `+ ищу «${S.smart.rest}» в названии`) : null,
       el('button.link-btn', { onclick: searchAsIs, title: 'Искать по всем разделам без разбора запроса' }, 'Искать как есть')));
   }
-  if (S.items.length) {
+  const onKufar = S.src === 'kufar';
+  const hiddenN = onKufar ? S.items.filter(isFiltered).length : 0;
+  const shown = onKufar && !S.showHidden ? S.items.filter((it) => !isFiltered(it)) : S.items;
+  if (onKufar && (S.items.length || (!S.loading && !S.error))) {
+    const count = (n) => (n || 0).toLocaleString('ru-RU');
     out.push(el('div.dim.small', { style: { marginTop: '14px' } },
-      S.src === 'kufar' && S.index ? indexLine(S.index)
-        : S.src === 'kufar' ? `Найдено объявлений: ${S.total.toLocaleString('ru-RU')} · показано ${S.items.length}${S.next ? ' — ниже кнопка «Показать ещё»' : ''}` : S.cat ? `Товаров в разделе: ${S.total.toLocaleString('ru-RU')}` : 'Результаты каталога Onliner: компьютеры, периферия, мониторы и всё для сетапа'));
-    const hiddenN = S.src === 'kufar' ? S.items.filter(isFiltered).length : 0;
-    const shown = S.src === 'kufar' && !S.showHidden ? S.items.filter((it) => !isFiltered(it)) : S.items;
-    if (hiddenN) out.push(el('div.dim.small', { style: { marginTop: '6px' } }, `Скрыто объявлений: ${hiddenN}. `, hiddenToggle(hiddenN, S.showHidden, () => { S.showHidden = !S.showHidden; render(); })));
+      `На Kufar найдено ${count(S.total)} · загружено ${count(S.items.length)} · скрыто из загруженных ${count(hiddenN)} · показано ${count(shown.length)}. `,
+      hiddenN ? hiddenToggle(hiddenN, S.showHidden, () => { S.showHidden = !S.showHidden; render(); }) : null,
+      S.index ? indexLine(S.index) : null));
+  }
+  if (S.items.length) {
+    if (!onKufar) out.push(el('div.dim.small', { style: { marginTop: '14px' } },
+      S.cat ? `Товаров в разделе: ${S.total.toLocaleString('ru-RU')}` : 'Результаты каталога Onliner'));
     if (S.src === 'kufar') {
       out.push(el('div.notice.watch-hint', icon('bell'),
         el('div', el('b', 'Следить за новыми объявлениями. '), 'Программа будет проверять этот поиск (раздел, запрос, фильтры и цена) и сообщит о новых объявлениях — выгодные отметит отдельно.'),
@@ -332,7 +346,7 @@ function renderResults() {
             try {
               await saveKufarSearch({
                 name: [sec ? sec.name : null, S.q.trim() ? `«${S.q.trim()}»` : null].filter(Boolean).join(' ') || 'Kufar',
-                cat: S.cat, q: S.q.trim(), filters: S.filters[fkey()] || {}, priceMax: toByn(S.max), cond: S.cond,
+                cat: S.cat, q: S.q.trim(), filters: S.filters[fkey()] || {}, priceMin: toByn(S.min), priceMax: toByn(S.max), cond: S.cond,
               });
             } catch (err) {
               toast(err.message, 'err');
@@ -350,9 +364,9 @@ function renderResults() {
   }
   if (S.loading) {
     out.push(el('div.grid', Array.from({ length: S.items.length ? 4 : 8 }, () => el('div.pcard', el('div.skeleton', { style: { height: '140px' } }), el('div.skeleton', { style: { height: '14px' } }), el('div.skeleton', { style: { height: '14px', width: '60%' } })))));
-  } else if ((S.src === 'onliner' || (S.src === 'kufar' && S.index)) && S.page < S.pages && S.items.length) {
-    out.push(el('div.more-row', el('button.btn', { onclick: () => { S.page++; run(false); } }, 'Показать ещё')));
-  } else if (S.src === 'kufar' && S.next && S.items.length) {
+  } else if ((S.src === 'onliner' || (onKufar && S.index?.ready)) && S.page < S.pages && S.items.length) {
+    out.push(el('div.more-row', el('button.btn', { onclick: () => run(false) }, 'Показать ещё')));
+  } else if (onKufar && S.next) {
     out.push(el('div.more-row', el('button.btn', { onclick: () => run(false) }, 'Показать ещё объявления')));
   }
   return out;
@@ -445,8 +459,7 @@ function indexLine(ix) {
       el('span.dim', 'Первый раз это занимает до минуты, дальше — мгновенно: программа дочитывает только новые объявления.'));
   }
   const t = ix.updatedAt ? new Date(ix.updatedAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '';
-  return el('span', `Сначала выгодные — по всем ${ix.scanned.toLocaleString('ru-RU')} объявлениям${t ? ` (обновлено в ${t})` : ''}. `,
-    el('span.dim', 'Устаревшее, «куплю», бронь, нерабочее и подозрительно дешёвое — в конце списка.'));
+  return el('div.index-line', `Для сортировки просмотрено ${ix.scanned.toLocaleString('ru-RU')}${t ? ` · обновлено в ${t}` : ''}.`);
 }
 
 // ------------------------------------------------------------------ подсказка новичку

@@ -19,7 +19,7 @@ async function call(method, body, timeoutMs = 40000) {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}), signal: ctrl.signal,
     });
     const data = await res.json().catch(() => ({}));
-    if (!data.ok) throw new Error('Telegram: ' + (data.description || 'HTTP ' + res.status));
+    if (!data.ok) throw Object.assign(new Error('Telegram: ' + (data.description || 'HTTP ' + res.status)), { rejected: data.ok === false });
     return data.result;
   } finally {
     clearTimeout(t);
@@ -42,8 +42,9 @@ function linkFor(device) {
   return { url: `https://t.me/${username}?start=${code}`, bot: username };
 }
 
-async function send(chat, text) {
-  return call('sendMessage', { chat_id: chat, text: String(text).slice(0, 4000), disable_web_page_preview: false }, 20000);
+async function send(chat, text, replyMarkup) {
+  return call('sendMessage', { chat_id: chat, text: String(text).slice(0, 4000), disable_web_page_preview: false,
+    ...(replyMarkup ? { reply_markup: replyMarkup } : {}) }, 20000);
 }
 
 async function handle(update) {

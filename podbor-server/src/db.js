@@ -20,6 +20,9 @@ function open(dir) {
     CREATE TABLE IF NOT EXISTS cache (key TEXT PRIMARY KEY, value TEXT NOT NULL, t INTEGER NOT NULL, expires INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS spend (day TEXT PRIMARY KEY, usd REAL NOT NULL DEFAULT 0, requests INTEGER NOT NULL DEFAULT 0);
     CREATE TABLE IF NOT EXISTS iplimit (ip TEXT, hour TEXT, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (ip, hour));
+    CREATE TABLE IF NOT EXISTS telegram_ads (
+      chat TEXT, ad TEXT, state TEXT NOT NULL, PRIMARY KEY (chat, ad)
+    );
     CREATE INDEX IF NOT EXISTS cache_exp ON cache (expires);
   `);
   return db;
@@ -96,6 +99,21 @@ const cache = {
   },
 };
 
+const telegramAds = {
+  get(chat, ad) {
+    return db.prepare('SELECT state FROM telegram_ads WHERE chat = ? AND ad = ?').get(chat, ad)?.state || null;
+  },
+  reserve(chat, ad) {
+    return !!db.prepare("INSERT OR IGNORE INTO telegram_ads (chat, ad, state) VALUES (?, ?, 'sending')").run(chat, ad).changes;
+  },
+  sent(chat, ad) {
+    db.prepare("UPDATE telegram_ads SET state = 'sent' WHERE chat = ? AND ad = ?").run(chat, ad);
+  },
+  release(chat, ad) {
+    db.prepare("DELETE FROM telegram_ads WHERE chat = ? AND ad = ? AND state = 'sending'").run(chat, ad);
+  },
+};
+
 // ---------------- расходы на ИИ
 const spend = {
   today() {
@@ -117,4 +135,4 @@ const ip = {
   },
 };
 
-module.exports = { open, dev, usage, cache, spend, ip, day };
+module.exports = { open, dev, usage, cache, telegramAds, spend, ip, day };

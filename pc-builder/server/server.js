@@ -397,20 +397,24 @@ function kufarQuery(section, q, p) {
 
 /** «Сначала выгодные» на Kufar: по всем объявлениям поиска, а не по одной странице. */
 async function kufarValuePage(kq, p, sectionId) {
+  const token = p.get('view') || '';
+  const source = token.split('.')[0];
+  const view = /^(?:shared|local)\.[a-f0-9]{24}$/.test(token) ? token.split('.')[1] : '';
+  if (token && !view) return { restart: true };
   // Сервер ПодборПК просматривает Kufar один раз для всех — меньше нагрузки на Kufar и быстрее
-  if (await remote.has('kufar')) {
+  if (source !== 'local' && await remote.has('kufar')) {
     try {
       const r = await remote.call('/v1/kufar/value', {
         method: 'POST', timeout: 30000,
-        body: { kq, sectionId, page: num(p.get('page')) || 1, min: num(p.get('min')), max: num(p.get('max')), cond: p.get('cond') || '' },
+        body: { kq, sectionId, page: num(p.get('page')) || 1, min: num(p.get('min')), max: num(p.get('max')), cond: p.get('cond') || '', ...(view ? { view } : {}) },
       });
-      if (r.condition) return r;
-      await kufar.inspect(r.items);
-      return { ...r, items: kufar.prioritize(r.items) };
+      if (r.restart) return r;
+      if (/^[a-f0-9]{24}$/.test(r.view || '')) return { ...r, view: 'shared.' + r.view };
     } catch {
       // сервер недоступен — смотрим сами
     }
   }
+  if (source === 'shared') return { restart: true };
   const ix = kufarIndex.ensure({
     ...kq, priceMin: num(p.get('min')), priceMax: num(p.get('max')), condition: p.get('cond') || '',
   });
@@ -421,7 +425,8 @@ async function kufarValuePage(kq, p, sectionId) {
     while (!ix.items.size && ix.scanning && Date.now() - t0 < 6000) await new Promise((r) => setTimeout(r, 300));
   }
   const page = Math.max(1, Math.floor(num(p.get('page'))) || 1);
-  return kufarIndex.pageOf(ix, sectionId || '', page);
+  const result = await kufarIndex.pageOf(ix, sectionId || '', page, view);
+  return result.view ? { ...result, view: 'local.' + result.view } : result;
 }
 
 async function route(req, res, url) {
@@ -1024,6 +1029,36 @@ let telegramHooked = false;
 // Открытые API Onliner/Kufar — через общий кэш сервера ПодборПК (если он есть)
 setRemoteFetch((url) => remote.fetchVia(url));
 
+function telegramMode() {
+  const prefs = store.get('settings') || {};
+  if (prefs.telegramNotify === false) return 'disabled';
+  if (telegram.connected()) return 'own';
+  return remote.enabled() && prefs.serverTelegram ? 'shared' : 'unlinked';
+}
+
+async function sendKufarTelegram(ad, mode) {
+  const message = telegram.kufarNotification(ad);
+  if (!message) return { uncertain: true, error: 'У объявления нет корректной карточки Kufar.' };
+  if (mode === 'own') {
+    try {
+      await telegram.send(message.text, message.keyboard);
+      return { ok: true };
+    } catch (e) {
+      return { uncertain: !e.rejected, error: e.rejected ? e.message : 'Нет подтверждения от Telegram.' };
+    }
+  }
+  const status = await remote.status();
+  if (!status?.ok) return { error: 'Общий сервер ПодборПК сейчас недоступен.' };
+  if (!status.features?.telegramAds) return { error: 'Общий сервер пока не поддерживает уведомления со ссылками Kufar.' };
+  try {
+    const response = await remote.call('/v1/notify', { method: 'POST', body: { kufarAd: ad } });
+    return typeof response?.ok === 'boolean' ? response : { uncertain: true, error: 'Нет подтверждения отправки от общего сервера.' };
+  } catch (e) {
+    if (e.status && e.status < 500) return { error: e.message };
+    return { uncertain: true, error: 'Нет подтверждения отправки от общего сервера.' };
+  }
+}
+
 function start(port = 0, host = '127.0.0.1') {
   return new Promise((resolve, reject) => {
     const server = createServer();
@@ -1035,11 +1070,15 @@ function start(port = 0, host = '127.0.0.1') {
     server.listen(port, host, () => {
       const p = server.address().port;
       // Фоновая проверка цен и объявлений
-      watch.start({ kufarOpts: (s) => kufarQuery(sectionOf(s.cat), s.q, new URLSearchParams({ f: JSON.stringify(s.filters || {}) })) });
+      watch.start({
+        kufarOpts: (s) => kufarQuery(sectionOf(s.cat), s.q, new URLSearchParams({ f: JSON.stringify(s.filters || {}) })),
+        telegramDelivery: { mode: telegramMode, send: sendKufarTelegram },
+      });
       // События слежения — ещё и на телефон, если подключён Telegram (и в программе, и в режиме браузера)
       if (!telegramHooked) {
         telegramHooked = true;
         watch.onEvent((e) => {
+          if (e.type === 'ads') return;
           const st = store.get('settings') || {};
           if (st.telegramNotify === false) return;
           // Свой бот — если подключён; иначе общий бот сервера ПодборПК (если пользователь его подключил)

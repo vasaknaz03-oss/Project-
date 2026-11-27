@@ -17,9 +17,13 @@ const FRESH_MS = 10 * 60 * 1000; // дочитывать новые не чащ�
 const FULL_MS = 4 * 60 * 60 * 1000; // полный пересмотр раз в 4 часа
 const PAUSE_MS = 350; // пауза между страницами
 const KEEP = 24; // сколько разных поисков держать в памяти
+const PAGE_SIZE = 50;
+const VIEW_TTL = 30 * 60 * 1000;
+const MAX_VIEWS = 48;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const indexes = new Map();
+const views = new Map();
 
 /** Ключ поиска: всё, что влияет на набор объявлений (но не сортировка и не страница). */
 function keyOf(opts) {
@@ -156,17 +160,31 @@ function list(ix) {
   return [...ix.items.values()];
 }
 
-async function pageOf(ix, sectionId, page) {
-  const all = list(ix);
-  if (sectionId) await market.annotate(all, sectionId);
-  const ranked = market.rankByValue(all, sectionId);
-  const per = 50;
-  const items = ranked.slice((page - 1) * per, page * per);
+async function pageOf(ix, sectionId, page, viewId) {
+  let view = viewId && views.get(viewId);
+  if (viewId && (!view || view.until <= Date.now() || view.indexKey !== ix.key || view.sectionId !== sectionId)) {
+    return { restart: true };
+  }
+  if (!view) {
+    const all = list(ix);
+    if (sectionId) await market.annotate(all, sectionId);
+    const ranked = market.rankByValue(all, sectionId);
+    const current = status(ix);
+    viewId = crypto.randomBytes(12).toString('hex');
+    view = { indexKey: ix.key, sectionId, ranked, current, until: Date.now() + VIEW_TTL };
+    views.set(viewId, view);
+    for (const [id, entry] of views) {
+      if (entry.until <= Date.now() || views.size > MAX_VIEWS) views.delete(id);
+    }
+  }
+  const items = view.ranked.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   await kufar.inspect(items);
   if (sectionId) await market.annotate(items, sectionId);
+  // Оценки и состояние уточняются после чтения карточек. Порядок сохраняется до нового поиска.
   return {
-    items: market.rankByValue(items, sectionId, page === 1), total: ix.total || ranked.length,
-    pages: Math.max(1, Math.ceil(ranked.length / per)), next: null, index: status(ix), condition: true,
+    items, total: view.current.total || view.ranked.length,
+    pages: Math.max(1, Math.ceil(view.ranked.length / PAGE_SIZE)), next: null,
+    index: view.current, view: viewId, condition: true,
   };
 }
 

@@ -13,6 +13,10 @@ let kufarOptsFor = null; // (search) => параметры поиска Kufar; �
 let running = null;
 let timer = null;
 let lastRun = null;
+let telegram = null;
+const SEARCH_PAGE_SIZE = 200;
+const SEARCH_PAGE_LIMIT = 40;
+const TELEGRAM_BATCH = 10;
 
 const now = () => Date.now();
 const uid = () => now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -24,6 +28,7 @@ function data() {
   d.items = Array.isArray(d.items) ? d.items : [];
   d.searches = Array.isArray(d.searches) ? d.searches : [];
   d.events = Array.isArray(d.events) ? d.events : [];
+  d.telegramAds = d.telegramAds && typeof d.telegramAds === 'object' ? d.telegramAds : {};
   return d;
 }
 
@@ -123,18 +128,34 @@ async function checkItem(d, it) {
 
 function slimAd(a) {
   const { id, name, price, url, image, location, date, company, delivery, safedeal, risk, market: m } = a;
-  return { id, name, price, url, image, location, date, company, delivery, safedeal, risk, market: m || null, source: 'kufar' };
+  return { id, name, price, url: url || (/^\d{1,16}$/.test(id) ? 'https://www.kufar.by/item/' + id : null),
+    image, location, date, company, delivery, safedeal, risk, market: m || null, source: 'kufar' };
 }
 
-async function runSearch(s, size = 50) {
+async function runSearch(s) {
   if (!kufarOptsFor) throw new Error('Поиск Kufar не настроен');
   const opts = kufarOptsFor(s);
-  const r = await kufar.search({ ...opts, sort: 'new', size, priceMax: s.priceMax || undefined, condition: s.cond || '' });
-  const candidates = r.items.filter((a) => a.price > 0 && !kufar.offTopic(a.name) && (!s.priceMax || a.price <= s.priceMax));
-  await kufar.inspect(candidates, { limit: 10, timeout: 2200 });
+  const all = new Map();
+  const cursors = new Set();
+  let cursor;
+  let total = 0;
+  for (let page = 0; page < SEARCH_PAGE_LIMIT; page++) {
+    const r = await kufar.search({ ...opts, sort: 'new', size: SEARCH_PAGE_SIZE, cursor, noCache: true,
+      priceMin: s.priceMin || undefined, priceMax: s.priceMax || undefined, condition: s.cond || '' });
+    total = r.total;
+    for (const item of r.items) all.set(item.id, item);
+    cursor = r.next;
+    if (!cursor) break;
+    if (cursors.has(cursor) || page + 1 === SEARCH_PAGE_LIMIT) throw new Error('Не удалось загрузить все страницы Kufar. Уточните фильтры или повторите проверку.');
+    cursors.add(cursor);
+  }
+  const candidates = [...all.values()].filter((a) => (!s.priceMin || a.price >= s.priceMin) && (!s.priceMax || (a.price > 0 && a.price <= s.priceMax)));
+  const seen = new Set(s.seen);
+  const checked = s.complete ? candidates.filter((a) => !seen.has(a.id)) : candidates;
+  await kufar.inspect(checked, { limit: 20, timeout: 3500 });
   const items = kufar.prioritize(candidates).filter((a) => a.risk.level !== 'blocked');
   if (s.cat) await market.annotate(items, s.cat);
-  return { items, total: r.total };
+  return { items, total, ids: [...all.keys()] };
 }
 
 async function addSearch(input) {
@@ -144,6 +165,7 @@ async function addSearch(input) {
     cat: input.cat ? String(input.cat) : '',
     q: String(input.q || '').slice(0, 200),
     filters: input.filters && typeof input.filters === 'object' ? input.filters : {},
+    priceMin: Number(input.priceMin) > 0 ? Number(input.priceMin) : null,
     priceMax: Number(input.priceMax) > 0 ? Number(input.priceMax) : null,
     cond: input.cond === 'used' || input.cond === 'new' ? input.cond : '',
     createdAt: now(), lastCheck: now(), newCount: 0, seen: [], latest: [],
@@ -151,7 +173,8 @@ async function addSearch(input) {
   if (!s.q && !s.cat) throw new Error('Укажите запрос или раздел');
   // Всё, что уже есть сейчас, считаем просмотренным: уведомляем только о новых объявлениях
   const r = await runSearch(s);
-  s.seen = r.items.map((a) => a.id).slice(0, 600);
+  s.seen = r.ids;
+  s.complete = true;
   s.latest = r.items.slice(0, 12).map(slimAd);
   s.total = r.total;
   const d = data();
@@ -168,16 +191,28 @@ function removeSearch(id) {
 
 async function checkSearch(d, s) {
   const r = await runSearch(s);
+  if (!d.searches.includes(s)) return;
+  const seen = new Set(s.seen);
+  const cutoff = s.lastCheck || s.createdAt || 0;
+  // Старинные поиски запоминали только первую страницу. Не объявляем старые позиции новыми при обновлении.
+  const fresh = r.items.filter((a) => !seen.has(a.id) && (s.complete || Date.parse(a.date) > cutoff));
   s.lastCheck = now();
   s.total = r.total;
-  const seen = new Set(s.seen);
-  const fresh = r.items.filter((a) => !seen.has(a.id));
-  s.seen = r.items.map((a) => a.id).concat(s.seen.filter((id) => !r.items.some((a) => a.id === id))).slice(0, 600);
+  s.seen = [...new Set([...seen, ...r.ids])];
+  s.complete = true;
   s.latest = r.items.slice(0, 12).map(slimAd);
   if (!fresh.length) return;
   s.newCount = (s.newCount || 0) + fresh.length;
   const deals = fresh.filter((a) => a.market && (a.market.deal === 'great' || a.market.deal === 'good'));
-  const top = (deals.length ? deals : fresh).slice(0, 3).map((a) => `${a.name.slice(0, 50)} — ${fmt(a.price)}`).join('; ');
+  const top = (deals.length ? deals : fresh).slice(0, 3).map((a) => a.name.slice(0, 50) + (a.price > 0 ? ' — ' + fmt(a.price) : '')).join(' · ');
+  const mode = telegram?.mode();
+  if (mode === 'own' || mode === 'shared') {
+    for (const { id, name, price } of fresh) {
+      if (/^\d{1,16}$/.test(id) && !Object.hasOwn(d.telegramAds, id)) {
+        d.telegramAds[id] = { state: 'pending', ad: { id, name, price } };
+      }
+    }
+  }
   emit(d, {
     type: 'ads', title: `Kufar: ${fresh.length} ${plural(fresh.length, 'новое объявление', 'новых объявления', 'новых объявлений')} — «${s.name}»`,
     body: (deals.length ? `Выгодных: ${deals.length}. ` : '') + top, ref: s.id, ads: fresh.slice(0, 10).map(slimAd),
@@ -185,8 +220,50 @@ async function checkSearch(d, s) {
 }
 
 function publicSearch(s) {
-  const { seen, ...rest } = s;
+  const { seen, complete, ...rest } = s;
   return rest;
+}
+
+function telegramState(d) {
+  const states = Object.values(d.telegramAds);
+  return {
+    mode: telegram?.mode() || 'unlinked',
+    pending: states.filter((entry) => entry.state === 'pending').length,
+    uncertain: states.filter((entry) => entry.state === 'uncertain' || entry.state === 'sending').length,
+    error: d.telegramError || null,
+  };
+}
+
+async function deliverTelegram(d) {
+  const mode = telegram?.mode();
+  if (mode !== 'own' && mode !== 'shared') return;
+  // Если процесс завершился во время запроса, Telegram мог его принять. Повтор мог бы дать дубль.
+  for (const entry of Object.values(d.telegramAds)) {
+    if (entry.state === 'sending') entry.state = 'uncertain';
+  }
+  const batch = Object.entries(d.telegramAds).filter(([, entry]) => entry.state === 'pending').slice(0, TELEGRAM_BATCH);
+  for (const [id, entry] of batch) {
+    if (telegram.mode() !== mode) break;
+    entry.state = 'sending';
+    save(d);
+    store.flush();
+    let result;
+    try {
+      result = await telegram.send(entry.ad, mode);
+    } catch {
+      result = { uncertain: true };
+    }
+    if (result.ok) {
+      d.telegramAds[id] = { state: 'sent' };
+      d.telegramError = null;
+    } else {
+      entry.state = result.uncertain ? 'uncertain' : 'pending';
+      d.telegramError = result.error || 'Нет подтверждения от Telegram.';
+    }
+    save(d);
+    store.flush();
+    if (!result.ok) break;
+  }
 }
 
 // ------------------------------------------------------------------ проверка по расписанию
@@ -218,6 +295,7 @@ async function check({ force = false } = {}) {
       }
       await sleep(800);
     }
+    await deliverTelegram(d);
     save(d);
     lastRun = { t: now(), checked, errors };
     return lastRun;
@@ -229,8 +307,9 @@ async function check({ force = false } = {}) {
   }
 }
 
-function start({ kufarOpts } = {}) {
+function start({ kufarOpts, telegramDelivery } = {}) {
   if (kufarOpts) kufarOptsFor = kufarOpts;
+  if (telegramDelivery) telegram = telegramDelivery;
   if (timer) return;
   // Раз в 5 минут смотрим, что пора проверить (сами интервалы — в настройках)
   const tick = () => {
@@ -250,6 +329,7 @@ function summary() {
     events: d.events.slice(-100).reverse(),
     unread: d.events.filter((e) => !e.read).length,
     settings: settings(),
+    telegram: telegramState(d),
     lastRun,
     running: !!running,
   };

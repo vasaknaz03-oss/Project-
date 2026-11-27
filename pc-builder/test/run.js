@@ -1213,6 +1213,122 @@ test('разгон: профиль хранится локально, стары
   }
 });
 
+test('Kufar: 81 объявление листается без пропусков после чтения описаний', async () => {
+  await Promise.all(pending.slice());
+  const index = require('../server/kufarIndex');
+  const kufar = require('../server/providers/kufar');
+  const inspect = kufar.inspect;
+  const ads = Array.from({ length: 81 }, (_, i) => ({ id: String(i + 1), source: 'kufar', name: 'ASUS B650M',
+    price: 200 + i, risk: { level: 'unknown', full: false, reasons: [] } }));
+  const ix = { key: 'am5-snapshot-test', items: new Map(ads.map((ad) => [ad.id, ad])), total: 81, fullAt: Date.now() };
+  kufar.inspect = async (items) => {
+    for (const ad of items.filter((it) => +it.id <= 5)) ad.risk = { level: 'caution', full: true, reasons: ['проверка'] };
+    return items;
+  };
+  try {
+    const first = await index.pageOf(ix, 'motherboard', 1);
+    assert.match(first.view, /^[a-f0-9]{24}$/);
+    ix.items.set('82', { ...ads[0], id: '82' });
+    ix.total++;
+    const second = await index.pageOf(ix, 'motherboard', 2, first.view);
+    const ids = first.items.concat(second.items).map((ad) => ad.id);
+    assert.deepStrictEqual([first.items.length, second.items.length, second.total], [50, 31, 81]);
+    assert.strictEqual(new Set(ids).size, 81);
+    assert.ok(ads.every((ad) => ids.includes(ad.id)));
+    assert.deepStrictEqual(await index.pageOf(ix, 'videocard', 2, first.view), { restart: true });
+  } finally {
+    kufar.inspect = inspect;
+  }
+});
+
+test('слежение Kufar: обе страницы, объявление без цены, кнопка Telegram и повтор после отказа', async () => {
+  await Promise.all(pending.slice());
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const store = require('../server/store');
+  const secrets = require('../server/secrets');
+  const kufar = require('../server/providers/kufar');
+  const local = require('../server/server');
+  const dir = store.dataDir();
+  const originalFetch = global.fetch;
+  const originalSearch = kufar.search;
+  store.flush();
+  store.setDir(fs.mkdtempSync(path.join(os.tmpdir(), 'podbor-kufar-delivery-')));
+  store.set('settings', { serverMode: 'off' });
+  secrets.set({ telegramToken: '123456:TEST_ONLY', telegramChatId: '123' });
+  const risk = { level: 'clear', full: true, reasons: [] };
+  const ad = (id, name, price) => ({ id, name, price, risk, source: 'kufar' });
+  const queries = [];
+  const sent = [];
+  let reject = true;
+  let uncertain = false;
+  let listed = [];
+  const condition = 'kufar-page-2';
+  kufar.search = async (opts) => {
+    queries.push(opts);
+    return opts.cursor === condition
+      ? { items: [ad('90101', 'Existing AM5 board', 240), ...listed], total: 2 + listed.length, next: null }
+      : { items: [ad('90100', 'Existing AM5 kit', 350)], total: 2 + listed.length, next: condition };
+  };
+  global.fetch = async (url, opts) => {
+    if (!String(url).includes('/sendMessage')) return originalFetch(url, opts);
+    const body = JSON.parse(opts.body);
+    if (reject) {
+      reject = false;
+      return Response.json({ ok: false, description: 'Повторите позже' }, { status: 429 });
+    }
+    if (uncertain) throw new Error('Соединение потеряно');
+    sent.push(body);
+    return Response.json({ ok: true, result: { message_id: sent.length } });
+  };
+  let server;
+  try {
+    const started = await local.start();
+    server = started.server;
+    const api = async (resource, body) => {
+      const res = await originalFetch(new URL(resource, started.url), body
+        ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {});
+      const result = await res.json();
+      assert.strictEqual(res.status, 200, JSON.stringify(result));
+      return result;
+    };
+    const criteria = { cat: 'motherboard', filters: { ccsct: ['7'], ccch: ['12', '13', '14', '15'] } };
+    await api('/api/watch/search', { ...criteria, name: 'AM5' });
+    await api('/api/watch/search', { ...criteria, name: 'AM5 второй поиск', priceMin: 100, priceMax: 1000 });
+    assert.ok(queries.some((q) => q.cursor === condition && q.params.ccch === 'v.or:12,13,14,15' && q.priceMin === 100 && q.priceMax === 1000));
+    await api('/api/watch/check', {});
+    assert.strictEqual(sent.length, 0);
+    listed = [ad('90102', 'B650 без цены', 0), ad('90103', 'B850 с ценой', 420)];
+    await api('/api/watch/check', {});
+    const pendingDelivery = (await api('/api/watch')).telegram;
+    assert.strictEqual(pendingDelivery.pending, 2);
+    assert.match(pendingDelivery.error, /Повторите позже/);
+    assert.strictEqual(sent.length, 0);
+    await api('/api/watch/check', {});
+    assert.strictEqual(sent.length, 2);
+    assert.deepStrictEqual(sent[0].reply_markup.inline_keyboard[0][0], { text: 'Открыть объявление', url: 'https://www.kufar.by/item/90102' });
+    assert.doesNotMatch(sent[0].text, /0 р\./);
+    assert.match(sent[1].text, /B850 с ценой\n420 р\./);
+    assert.strictEqual((await api('/api/watch')).telegram.pending, 0);
+    await api('/api/watch/check', {});
+    assert.strictEqual(sent.length, 2);
+    uncertain = true;
+    listed.push(ad('90104', 'B650E', 250));
+    await api('/api/watch/check', {});
+    uncertain = false;
+    await api('/api/watch/check', {});
+    assert.strictEqual(sent.length, 2);
+    assert.strictEqual((await api('/api/watch')).telegram.uncertain, 1);
+  } finally {
+    global.fetch = originalFetch;
+    kufar.search = originalSearch;
+    if (server) await new Promise((resolve) => server.close(resolve));
+    store.flush();
+    store.setDir(dir);
+  }
+});
+
 async function live() {
   if (!process.argv.includes('--live')) return;
   console.log('Живой подбор (Onliner)');
