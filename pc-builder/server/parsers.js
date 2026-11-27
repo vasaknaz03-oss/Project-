@@ -298,9 +298,9 @@ function parseHardware(schema, html) {
     };
   } else if (schema === 'chassis') {
     spec = {
-      gpuMaxMm: mm(get('максимальная длина видеокарты', 'длина видеокарты')),
-      gpuMaxThicknessMm: mm(get('максимальная толщина видеокарты')),
-      expansionSlots: units(get('слоты расширения', 'количество слотов расширения'), '(?:слот)?'),
+      gpuMaxMm: mm(get('макс. длина видеокарты', 'максимальная длина видеокарты', 'длина видеокарты')),
+      gpuMaxThicknessMm: mm(get('макс. толщина видеокарты', 'максимальная толщина видеокарты')),
+      expansionSlots: units(get('горизонтальные слоты расширения', 'слоты расширения', 'количество слотов расширения'), '(?:слот)?'),
     };
   } else if (schema === 'powersupply') {
     const gpuOutputs = {};

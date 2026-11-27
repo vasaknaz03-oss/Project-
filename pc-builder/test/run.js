@@ -390,8 +390,8 @@ test('Onliner: точные размеры, разъёмы, комплектац
   assert.deepStrictEqual(gpuConnectors('6+2 pin'), { six: 0, eight: 1, sixteen: 0 });
   assert.deepStrictEqual(gpuConnectors('нет'), { six: 0, eight: 0, sixteen: 0 });
   const kase = parseHardware('chassis', [
-    row('Максимальная длина видеокарты', '345 мм'), row('Максимальная толщина видеокарты', '55,5 мм'),
-    row('Слоты расширения', '3'),
+    row('Макс. длина видеокарты', '345 мм'), row('Максимальная толщина видеокарты', '55,5 мм'),
+    row('Горизонтальные слоты расширения', '3'), row('Вертикальные слоты расширения', '2'),
   ].join(''));
   assert.deepStrictEqual(kase, { gpuMaxMm: 345, gpuMaxThicknessMm: 55.5, expansionSlots: 3 });
 });
