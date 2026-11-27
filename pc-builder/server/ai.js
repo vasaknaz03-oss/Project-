@@ -101,23 +101,23 @@ tomshardware.com, gamersnexus.net, hardwareunboxed, ixbt.com), отзывы по
 - Структура: «## Коротко» (2–4 предложения с выводом), затем разделы по смыслу (например «## Что хвалят»,
   «## На что жалуются», «## Разгон и настройка», «## Совет»). Списки — через «- ».`;
 
+const OC_GUIDE_MESSAGE = 'Откройте «Разгон → Моя сборка» для сверки параметров с документацией производителей.';
+
 const MODES = {
   part: (q) => `Найди отзывы владельцев, обсуждения на форумах и обзоры про: ${q}.
 Что хвалят, какие частые проблемы (брак, шум, нагрев, писк дросселей, драйверы, BIOS), кому подходит,
 с чем лучше сочетать, на что обратить внимание при покупке б/у. В конце — совет новичку.`,
-  oc: (q) => `Найди опыт разгона и настройки: ${q}.
-Что реально делают люди (профили EXPO/XMP, PBO и Curve Optimizer, андервольт, тайминги памяти), какие значения
-безопасны и чем тестировать стабильность, какие типичные ошибки. Отдельно — что делать новичку, чтобы ничего не сломать.`,
   build: (q) => `Найди рассказы людей о сборках и обсуждения сборок на тему: ${q}.
 Какие комплектующие чаще берут, какие ошибки совершают, что советуют опытные сборщики, на чём не стоит экономить.`,
   free: (q) => q,
 };
 
 /**
- * Поиск и выжимка. mode: part | oc | build | free; depth: quick | deep.
+ * Поиск и выжимка. mode: part | build | free; depth: quick | deep.
  * Возвращает { text, sources: [{ n, url, title }], searches, model }.
  */
 async function research(query, { mode = 'part', depth = 'quick' } = {}) {
+  if (mode === 'oc') throw new Error(OC_GUIDE_MESSAGE);
   query = String(query || '').trim().slice(0, 500);
   if (!query) throw new Error('Пустой запрос');
   if (engine() === 'local') return require('./aiLocal').research(query, { mode, depth });
@@ -308,4 +308,4 @@ async function structuredReply(system, input, schema, maxTokens, action) {
   }
 }
 
-module.exports = { research, reviewSummary, reviewBuild, reviewKufar, available, engine, modelLabel, cacheScope, checkAnthropic, setKeyProvider, MODEL, assemble, _setClientForTests: (c) => (cached = { key: keyProvider(), c }) };
+module.exports = { research, reviewSummary, reviewBuild, reviewKufar, available, engine, modelLabel, cacheScope, checkAnthropic, setKeyProvider, MODEL, OC_GUIDE_MESSAGE, assemble, _setClientForTests: (c) => (cached = { key: keyProvider(), c }) };

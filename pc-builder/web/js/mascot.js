@@ -118,7 +118,7 @@ function rules() {
 
   document.addEventListener('page-shown', (e) => {
     const { page } = e.detail;
-    if (page === 'oc') hint({ id: 'oc-first', once: 'forever', delay: 900, title: 'Разгон без риска', text: 'Начните с «Памятки для моей сборки»: я подставил вашу сборку и расписал шаги — где в BIOS что включать и какие значения безопасны.' });
+    if (page === 'oc') hint({ id: 'oc-first', once: 'forever', delay: 900, title: 'Данные для настройки', text: 'Во вкладке «Моя сборка» можно подставить модели деталей, записать версию BIOS и замеры и открыть документацию производителей.' });
     if (page === 'search') hint({ id: 'search-first', once: 'forever', delay: 900, text: 'Пишите как удобно: «ssd 512 gb», «бп 750w gold», «ddr5 32gb» — я сам пойму раздел и фильтры. На Kufar сначала показываю самые выгодные объявления.' });
     if (page === 'watch') hint({ id: 'watch-first', once: 'forever', delay: 900, text: 'Слежение сообщит о снижении цены и новых выгодных объявлениях. Подключите Telegram в «Настройках» — уведомления будут приходить на телефон.', action: { label: 'В настройки', fn: () => go('settings') } });
   });

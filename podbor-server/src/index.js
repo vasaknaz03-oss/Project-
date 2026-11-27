@@ -210,7 +210,8 @@ async function route(req, res, url) {
 
   if (pth === '/v1/ai/research' && req.method === 'POST') {
     const b = await readBody(req);
-    const mode = ['part', 'oc', 'build', 'free'].includes(b.mode) ? b.mode : 'free';
+    if (b.mode === 'oc') return send(res, 422, { error: ai.OC_GUIDE_MESSAGE });
+    const mode = ['part', 'build', 'free'].includes(b.mode) ? b.mode : 'free';
     const depth = b.depth === 'deep' ? 'deep' : 'quick';
     const query = text(b.query, 300);
     if (!query) throw new HttpErr(400, 'Пустой запрос');

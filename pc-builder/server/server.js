@@ -58,7 +58,7 @@ function sectionOf(cat) {
   if (Catalog.ONLINER_SCHEMAS.has(cat)) return { id: cat, onliner: cat };
   return null;
 }
-const STORE_KEYS = new Set(['builds', 'settings', 'lastForm', 'kufarMarks', 'upgradeForm', 'laptopForm']);
+const STORE_KEYS = new Set(['builds', 'settings', 'lastForm', 'kufarMarks', 'upgradeForm', 'laptopForm', 'ocProfile']);
 
 function send(res, status, body, type = 'application/json; charset=utf-8') {
   const data = typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body);
@@ -553,7 +553,8 @@ async function route(req, res, url) {
   }
   if (pathname === '/api/ai/research' && req.method === 'POST') {
     const body = await readBody(req);
-    const mode = ['part', 'oc', 'build', 'free'].includes(body.mode) ? body.mode : 'free';
+    if (body.mode === 'oc') return send(res, 422, { error: ai.OC_GUIDE_MESSAGE });
+    const mode = ['part', 'build', 'free'].includes(body.mode) ? body.mode : 'free';
     const depth = body.depth === 'deep' ? 'deep' : 'quick';
     const query = String(body.query || '').trim().slice(0, 500);
     // Один и тот же вопрос в течение суток не оплачиваем повторно
@@ -571,7 +572,7 @@ async function route(req, res, url) {
     return send(res, 200, { ...result, t });
   }
   if (pathname === '/api/ai/history') {
-    return send(res, 200, { items: (store.get('aiHistory') || []).map(({ mode, depth, query, t }) => ({ mode, depth, query, t })) });
+    return send(res, 200, { items: (store.get('aiHistory') || []).filter((entry) => entry.mode !== 'oc').map(({ mode, depth, query, t }) => ({ mode, depth, query, t })) });
   }
   if (pathname === '/api/ai/reviews' && req.method === 'POST') {
     const body = await readBody(req);
@@ -982,7 +983,7 @@ async function route(req, res, url) {
     const key = m[1];
     if (!STORE_KEYS.has(key)) return send(res, 404, { error: 'Нет такого раздела' });
     if (req.method === 'PUT') {
-      store.set(key, await readBody(req, 20 * 1024 * 1024));
+      store.set(key, await readBody(req, key === 'ocProfile' ? 16 * 1024 : 20 * 1024 * 1024));
       return send(res, 200, { ok: true });
     }
     return send(res, 200, { value: store.get(key) ?? null });

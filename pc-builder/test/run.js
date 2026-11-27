@@ -1145,6 +1145,74 @@ test('новости: 20 лент на двух языках; лента в wind
   assert.strictEqual(decodeBody(Buffer.from('Привет'), ''), 'Привет', 'по умолчанию UTF-8');
 });
 
+test('разгон: только заполненные данные, официальные источники и расчёт задержки', async () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const code = fs.readFileSync(path.join(__dirname, '../web/js/ocdata.js'), 'utf8');
+  const { BIOS, GUIDES, memoOf, importProfile, cleanProfile, timingNs, timingsAt } = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
+  const empty = memoOf({});
+  assert.strictEqual(empty.vendor, null);
+  assert.ok(empty.missing.includes('Версия BIOS') && empty.missing.includes('Цель'));
+  const profile = { motherboard: 'Gigabyte B650 AORUS ELITE AX', bios: 'F31', ram: 'KIT-A', cpuLoad: '74,5', focus: 'memory', goal: 'speed' };
+  const memo = memoOf(profile);
+  assert.strictEqual(memo.vendor.id, 'gigabyte');
+  assert.ok(memo.missing.includes('Ревизия платы') && memo.missing.includes('Чипы и ревизия памяти'));
+  assert.ok(memo.guides.some(({ id }) => id === 'memory') && !memo.guides.some(({ id }) => id === 'gpu'));
+  assert.strictEqual(cleanProfile({ cpuLoad: 'не знаю', focus: 'whatever' }).cpuLoad, undefined);
+  assert.strictEqual(cleanProfile(profile).cpuLoad, '74,5');
+  const updated = importProfile(profile, { motherboard: { name: 'MSI B650 TOMAHAWK' }, ram: { name: 'Комплект из каталога' } });
+  assert.deepStrictEqual(updated, { motherboard: 'MSI B650 TOMAHAWK', ramName: 'Комплект из каталога', focus: 'memory', goal: 'speed' });
+  assert.deepStrictEqual(importProfile(profile, {}), cleanProfile(profile));
+  assert.strictEqual(memoOf({ focus: 'gpu' }).missing.includes('Видеокарта'), true);
+  for (const { text, boundary, sources } of GUIDES) {
+    assert.ok(boundary.length && sources.length);
+    assert.ok(sources.every(([, url]) => new URL(url).protocol === 'https:'));
+    assert.doesNotMatch(text + boundary, /\d+(?:[.,]\d+)?\s*(?:В(?:\s|\.)|мВ|МГц|МТ\/с|°C)/iu);
+  }
+  assert.ok(BIOS.every(({ support }) => new URL(support[1]).protocol === 'https:'));
+  assert.strictEqual(timingNs(30, 6000), 10);
+  assert.strictEqual(timingsAt(30, 6000, 6400), 32);
+  assert.strictEqual(timingNs(30, 0), null);
+  assert.strictEqual(timingsAt(30, 6000, 0), null);
+});
+
+test('разгон: профиль хранится локально, старый ответ ИИ недоступен через кэш', async () => {
+  await Promise.all(pending.slice());
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const store = require('../server/store');
+  const ai = require('../server/ai');
+  const remote = require('../server/remote');
+  const { createServer } = require('../server/server');
+  const original = store.dataDir();
+  store.flush();
+  store.setDir(fs.mkdtempSync(path.join(os.tmpdir(), 'podbor-oc-test-')));
+  const server = createServer();
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const request = (route, method = 'GET', body) => fetch(base + route, {
+    method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined,
+  });
+  try {
+    const profile = { cpu: 'Точная модель', bios: 'Версия', cpuLoad: '70' };
+    assert.strictEqual((await request('/api/store/ocProfile', 'PUT', profile)).status, 200);
+    assert.deepStrictEqual(await (await request('/api/store/ocProfile')).json(), { value: profile });
+    const query = 'ryzen';
+    store.set('aiHistory', [{
+      key: JSON.stringify([ai.cacheScope() || remote.baseUrl(), 'oc', 'quick', query]), mode: 'oc', query, t: Date.now(), result: { text: 'старый ответ' },
+    }]);
+    const response = await request('/api/ai/research', 'POST', { query, mode: 'oc', cachedOnly: true });
+    assert.strictEqual(response.status, 422);
+    assert.deepStrictEqual(await response.json(), { error: ai.OC_GUIDE_MESSAGE });
+    assert.deepStrictEqual(await (await request('/api/ai/history')).json(), { items: [] });
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    store.flush();
+    store.setDir(original);
+  }
+});
+
 async function live() {
   if (!process.argv.includes('--live')) return;
   console.log('Живой подбор (Onliner)');

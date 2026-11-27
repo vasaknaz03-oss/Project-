@@ -205,8 +205,6 @@ const SYSTEM = `Ты — помощник в программе «ПодборП
 const TASKS = {
   part: (q) => `Что пишут люди и обзорщики про: ${q}. Что хвалят, какие частые проблемы (брак, шум, нагрев, писк, драйверы),
 кому подходит, на что смотреть при покупке б/у. В конце — совет новичку.`,
-  oc: (q) => `Опыт разгона и настройки: ${q}. Что реально делают люди, какие значения безопасны, чем проверять стабильность,
-типичные ошибки. Отдельно — что делать новичку, чтобы ничего не сломать.`,
   build: (q) => `Сборки и советы на тему: ${q}. Какие комплектующие берут, какие ошибки совершают, на чём не стоит экономить.`,
   free: (q) => q,
 };
@@ -223,7 +221,7 @@ async function research(query, { mode = 'part', depth = 'quick' } = {}) {
   const [rv, arts, vids] = await Promise.all([
     mode === 'part' || mode === 'free' ? buyerReviews(query, deep ? 30 : 12) : { sources: [], links: [] },
     articles(query, deep ? 6 : 3, mode),
-    videoComments(query + (mode === 'oc' ? ' разгон' : mode === 'part' ? ' обзор' : '')),
+    videoComments(query + (mode === 'part' ? ' обзор' : '')),
   ]);
   const all = [...rv.sources, ...arts, ...vids];
   if (!all.length) {

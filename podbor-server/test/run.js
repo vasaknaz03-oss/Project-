@@ -95,9 +95,17 @@ async function test(name, fn) {
 
   await test('ИИ: дневной бюджет сервера', async () => {
     // первый запрос стоил 5000×4/1e6 + 1000×20/1e6 + 2×10/1000 = 0.06 $ > 0.05 $
-    const r = await call('POST', '/v1/ai/research', { query: 'другой вопрос', mode: 'oc' }, tok);
+    const r = await call('POST', '/v1/ai/research', { query: 'другой вопрос', mode: 'build' }, tok);
     assert.strictEqual(r.status, 429);
     assert.ok(/бюджет/i.test(r.data.error));
+  });
+
+  await test('разгон: общий сервер направляет к документации без запроса к модели', async () => {
+    const before = aiCalls;
+    const r = await call('POST', '/v1/ai/research', { query: 'разгон процессора', mode: 'oc' }, tok);
+    assert.strictEqual(r.status, 422);
+    assert.match(r.data.error, /Моя сборка/);
+    assert.strictEqual(aiCalls, before);
   });
 
   await test('YouTube: кэш на всех, видео со ссылкой и каналом', async () => {
