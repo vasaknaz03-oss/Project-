@@ -7,6 +7,14 @@ const NEGATED_AFTER = /^(?:(?:\s*[,/]\s*|\s+(?:и|или)\s+)(?:арт[еи]фа
 const UNCERTAIN = /(?:^|[^\p{L}])(?:возможно|вероятно|подозреваю|вроде|может быть|есть подозрение|если|не знаю|не уверен[а]?|не факт)(?!\p{L})/u;
 const SECONDARY = /(?<![\p{L}\p{N}])(?:подсветк\p{L}*|hdmi|displayport|rgb|argb)(?![\p{L}\p{N}])/u;
 
+// В предложении обмена допустимый дефект чужой детали не относится к продаваемой детали.
+const BUYER_DEFECT = String.raw`(?:не\s*(?:исправн|рабоч)\p{L}*|с\s+(?:дефект|поврежден|арт[еи]факт)\p{L}*|на\s+запчасти|под\s+ремонт)`;
+const BUYER_CONDITIONS = String.raw`(?:(?:можно|даже|подойдут|в\s+том\s+числе)\s+)?${BUYER_DEFECT}(?:(?:\s*,\s*|\s+(?:или|и)\s+)${BUYER_DEFECT})*`;
+const BUYER_EXCHANGE = new RegExp(
+  String.raw`(?<!\p{L})обмен(?:яю|яюсь)?\s+на\s+ваш(?:и|у|е)?\s+(?:(?:любые|даже)\s+)?(?:${BUYER_DEFECT}\s+)?` +
+  String.raw`(?:комплектующ\p{L}*|детал\p{L}*|железо|видеокарт\p{L}*|(?:материнск\p{L}*\s+)?плат\p{L}*)(?!\p{L})` +
+  String.raw`(?:\s*\(\s*${BUYER_CONDITIONS}\s*\)|(?:\s*,\s*|\s+)${BUYER_CONDITIONS}(?!\p{L}))?`, 'gu');
+
 // Слова и короткие фразы, встречающиеся в объявлениях. Оценка качественная, без процентов.
 const RULES = [
   { level: 'blocked', reason: 'Продавец указывает, что деталь не работает или не запускается.',
@@ -42,7 +50,8 @@ function plain(value) {
 function assess(title, description, full = false) {
   const text = [plain(title), plain(description)].join('\n').toLowerCase().replace(/ё/g, 'е');
   const matches = new Map();
-  for (const clause of text.split(CLAUSE)) {
+  for (const part of text.split(CLAUSE)) {
+    const clause = part.replace(BUYER_EXCHANGE, ' ');
     for (const rule of RULES) {
       for (const hit of clause.matchAll(rule.pattern)) {
         const before = clause.slice(0, hit.index).slice(-90);
