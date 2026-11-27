@@ -98,6 +98,61 @@ test('SSD, БП, корпус, кулер, видеокарта', () => {
 });
 
 console.log('Распознавание моделей');
+test('рабочие программы: измеренные баллы, точные модели и эталон 100', async () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const source = (file) => fs.readFileSync(path.join(__dirname, '../web/js', file), 'utf8');
+  const moduleUrl = (code) => 'data:text/javascript;base64,' + Buffer.from(code).toString('base64');
+  const dataUrl = moduleUrl(source('work-data.js'));
+  const domStub = moduleUrl('export const el = (...args) => args; export const icon = (name) => name;');
+  const ui = await import(moduleUrl(source('work.js').replace('./util.js', domStub).replace('./work-data.js', dataUrl)));
+  const { WORK_BENCHMARKS, benchmarkCpuKey, benchmarkScore } = await import(dataUrl);
+  const [cpu, gpu, premiere, resolve, photoshop, compile] = WORK_BENCHMARKS;
+  const processor = (name) => ({ name, perf: perf.cpuPerf(name, {}) });
+  const videocard = (name, vram) => {
+    const key = perf.gpuKey(name);
+    return { name, perf: key && { key, ...perf.gpuPerf(key, vram) }, specs: { vramGb: vram } };
+  };
+  assert.strictEqual(benchmarkCpuKey('AMD Ryzen 7 9800X3D'), 'r9800x3d');
+  assert.strictEqual(benchmarkCpuKey('14th Gen Intel Core i5-14600KF'), 'i14600kf');
+  assert.strictEqual(benchmarkCpuKey('Intel Core Ultra 9 285HX'), 'u285hx');
+  assert.strictEqual(benchmarkScore(cpu, processor('Ryzen 5 5600')).points, 100);
+  const baseParts = { cpu: processor('Ryzen 5 5600') };
+  assert.match(JSON.stringify(ui.renderWorkBenchmarks(baseParts)), /≈ 100/);
+  const comparison = ui.compareWorkRows([baseParts, {}], (label, cell) => [label, cell(null, 0), cell(null, 1)]);
+  assert.match(JSON.stringify(comparison.rows), /Нет замера/);
+  assert.strictEqual(benchmarkScore(cpu, processor('Ryzen 5 7500F')).points, 130);
+  assert.notDeepStrictEqual(benchmarkScore(cpu, processor('Core i5-12400')), benchmarkScore(cpu, processor('Core i5-12400F')));
+  assert.strictEqual(benchmarkScore(cpu, processor('Core i7-12700H')), null);
+  assert.strictEqual(benchmarkScore(gpu, videocard('RTX 4060', 8)).points, 100);
+  assert.strictEqual(benchmarkScore(gpu, videocard('RTX 4060 Ti', 16)), null);
+  assert.strictEqual(benchmarkScore(gpu, videocard('RTX 4060 Ti', 8)), null);
+  assert.strictEqual(benchmarkScore(gpu, videocard('GTX 1060')), null);
+  assert.notStrictEqual(benchmarkScore(gpu, videocard('GTX 1060', 3)).points, benchmarkScore(gpu, videocard('GTX 1060', 6)).points);
+  assert.strictEqual(benchmarkScore(gpu, { name: 'RTX 4090 Laptop', perf: { key: 'rtx4090' } }), null);
+  assert.strictEqual(benchmarkScore(gpu, { gpu: { variant: 'rtx4060' }, risk: { level: 'blocked' } }), null);
+  assert.strictEqual(benchmarkScore(gpu, { gpu: { variant: 'rtx4060' } }).points, 100);
+  for (const data of [premiere, resolve, photoshop, compile]) {
+    assert.strictEqual(benchmarkScore(data, processor('Intel Core i5-14600K')).points, 100);
+    assert.strictEqual(benchmarkScore(data, processor('Intel Core i5-14600KF')), null);
+    assert.strictEqual(benchmarkScore(data, processor('Ryzen 5 5600')), null);
+    assert.strictEqual(Object.keys(data.scores).length, 10);
+  }
+  assert.strictEqual(benchmarkScore(compile, processor('Core Ultra 9 285K')).points, 144);
+  assert.strictEqual(benchmarkScore(photoshop, processor('Ryzen 7 9700X')).points, 127);
+  for (const [key, [median, count]] of Object.entries(gpu.scores)) {
+    const [model, gb] = key.split(':');
+    assert.strictEqual(perf.gpuVariantKey(model, Number(gb) || null), key);
+    assert.ok(Object.hasOwn(perf.GPU, model) && median > 0 && count >= 5, key);
+  }
+  for (const [key, [median, count]] of Object.entries(cpu.scores)) {
+    const [, family, pro, model] = key.match(/^([riucpa])(pro)?(.+)$/);
+    const prefix = { r: 'AMD Ryzen 5', i: 'Intel Core i5-', u: 'Intel Core Ultra 5', c: 'Intel Core 5', p: 'Intel Pentium', a: 'AMD Athlon' }[family];
+    const name = prefix + (family === 'i' ? '' : ' ') + (pro ? 'PRO ' : '') + model;
+    assert.strictEqual(benchmarkCpuKey(name), key);
+    assert.ok(perf.cpuKey(name) && median > 0 && count >= 5, key);
+  }
+});
 test('видеокарты', () => {
   const cases = {
     'MSI GeForce RTX 4060 Ti Gaming X Slim 8G': 'rtx4060ti',

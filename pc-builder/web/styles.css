@@ -310,6 +310,11 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .tbl tr:last-child td { border-bottom: 0; }
 .tbl .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tbl tr.best td { background: var(--ok-soft); }
+.tbl th[scope="row"] { text-transform: none; letter-spacing: normal; font-size: inherit; color: var(--text); vertical-align: top; padding: 8px; }
+.tbl tr:last-child th[scope="row"] { border-bottom: 0; }
+.work-card .tbl td { text-align: right; font-variant-numeric: tabular-nums; }
+.work-sources { margin-top: 10px; }
+.work-sources summary { cursor: pointer; }
 
 .side { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 16px; }
 .side .card + .card { margin-top: 0; }

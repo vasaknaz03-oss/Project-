@@ -7,6 +7,7 @@ import { state, CAT_TO_SLOT, CAT_ICON, specChips, shopLinks, linkFor } from './s
 import { replaceFromSearch, hasActiveBuild, takeKufarToBuild } from './build.js';
 import { facetPanel, loadFacets, loadKufarFacets, countActive } from './facets.js';
 import { reviewChip, loadReviews, openReviews } from './reviews.js';
+import { compareWorkRows, workPartsOf } from './work.js';
 
 const Catalog = window.Catalog;
 
@@ -613,7 +614,8 @@ function showCompare() {
   const perfOf = perfOfItem;
   const perfs = items.map(perfOf).filter((v) => v != null);
   const maxPerf = perfs.length ? Math.max(...perfs) : null;
-  const row = (label, fn) => el('tr', el('td', el('b', label)), items.map((i) => el('td', fn(i))));
+  const row = (label, fn) => el('tr', el('th', { scope: 'row' }, label), items.map((i, index) => el('td', fn(i, index))));
+  const work = compareWorkRows(items.map(workPartsOf), row);
   const table = el('table.tbl.compare-table',
     el('tbody',
       row('', (i) => thumb(i.image, CAT_ICON[i.category] || 'cpu')),
@@ -629,12 +631,13 @@ function showCompare() {
         const p = perfOf(i);
         return p && i.price ? money.fmt(i.price / p) : '—';
       }),
+      work.rows,
       row('Оценка покупателей', (i) => el('div.small', { 'data-rev': 'score', 'data-id': i.id }, i.source === 'onliner' ? (i.reviews ? '…' : 'отзывов нет') : '—')),
       row('Хвалят', (i) => el('div.small', { 'data-rev': 'pros', 'data-id': i.id }, i.source === 'onliner' && i.reviews ? '…' : '—')),
       row('Жалуются', (i) => el('div.small', { 'data-rev': 'cons', 'data-id': i.id }, i.source === 'onliner' && i.reviews ? '…' : '—')),
       row('Характеристики', (i) => el('div.small.muted', i.description || i.location || '—'))));
   const verdictBox = el('div.verdict.compare-verdict', { class: 'v-good' }, icon('sparkles'), el('div', el('b', 'Коротко: '), compareVerdict(items, []).join(' '), items.some((i) => i.source === 'onliner' && i.reviews) ? el('span.dim', ' Загружаем отзывы…') : null));
-  modal('Сравнение товаров', el('div', verdictBox, el('div', { style: { overflowX: 'auto', marginTop: '12px' } }, table)));
+  modal('Сравнение товаров', el('div', verdictBox, el('div', { style: { overflowX: 'auto', marginTop: '12px' } }, table), work.sources));
   // Отзывы подгружаем отдельно — таблица видна сразу
   Promise.all(items.map((i) => (i.source === 'onliner' && i.reviews ? loadReviews(i).catch(() => null) : Promise.resolve(null)))).then((revs) => {
     items.forEach((i, k) => {

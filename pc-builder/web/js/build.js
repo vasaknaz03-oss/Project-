@@ -9,6 +9,7 @@ import { watchButton } from './watch.js';
 import { offersTable, historyBlock, openBuyPlan } from './shops.js';
 import { fpsTable, powerDraw, monthlyCost, RESOLUTIONS } from './games.js';
 import { openBuildAdvice } from './ai.js';
+import { renderWorkBenchmarks, compareWorkRows } from './work.js';
 
 const Compat = window.Compat;
 const Catalog = window.Catalog;
@@ -702,7 +703,7 @@ function renderBuild(v) {
         : el('div.s', t.sub ? t.sub + ' · ' : '', left >= 0 ? `остаток от бюджета ${money.fmt(left)}` : `больше бюджета на ${money.fmt(-left)}`),
       hasSetup(b) ? el('div.s', `компьютер ${money.fmt(pcTotal)} + сетап ${money.fmt(setupTotal)}`) : null),
     meter('Игровой индекс', idx.gaming, 300, idx.tier),
-    meter('Рабочий индекс', idx.work, 300, 'монтаж, рендер, компиляция'),
+    meter('Общий рабочий индекс', idx.work, 300, 'условная оценка по комплектующим'),
     el('div.sum-actions',
       b.custom ? el('button.btn.btn-primary', { title: 'Оставить ваши детали и подобрать недостающее под бюджет', onclick: fillMissing }, icon('sparkles'), 'Подобрать недостающее') : null,
       el('button.btn.btn-primary', { title: 'Оценка сборки через подключённого провайдера ИИ', onclick: () => askBuildAdvice(v, have) }, icon('sparkles'), 'ИИ-помощник'),
@@ -745,6 +746,7 @@ function renderBuild(v) {
       el('h3', 'Совместимость'),
       el('div.checks', checks.map((c) => el('div.ck', { class: c.level }, icon({ ok: 'check', warn: 'alert', error: 'error', info: 'info' }[c.level], 'ci'), el('div', c.text))))),
     renderFps(parts, have),
+    renderWorkBenchmarks(parts, have),
     el('div.card',
       el('h3', 'Питание и охлаждение'),
       el('div.kv',
@@ -1298,13 +1300,15 @@ function compareVariants() {
     }));
   });
   const have = (state.lastBuildForm && state.lastBuildForm.have) || {};
-  const idxRow = (label, fn) => el('tr', el('td', el('b', label)), vs.map((v) => el('td', fn(v))));
+  const idxRow = (label, fn) => el('tr', el('th', { scope: 'row' }, label), vs.map((v, i) => el('td', fn(v, i))));
+  const work = compareWorkRows(vs.map((v) => v.build.parts), idxRow);
   const table = el('table.tbl.compare-table', el('thead', head), el('tbody', rows,
     idxRow('Итого', (v) => el('b', money.fmt(fullTotal(v.build)))),
     idxRow('Игровой индекс', (v) => String(Compat.indices(v.build.parts, have.gpu).gaming ?? '—')),
-    idxRow('Рабочий индекс', (v) => String(Compat.indices(v.build.parts, have.gpu).work)),
-    idxRow('Уровень', (v) => Compat.indices(v.build.parts, have.gpu).tier)));
-  modal('Сравнение вариантов', el('div', { style: { overflowX: 'auto' } }, table));
+    idxRow('Общий рабочий индекс', (v) => String(Compat.indices(v.build.parts, have.gpu).work)),
+    idxRow('Уровень', (v) => Compat.indices(v.build.parts, have.gpu).tier),
+    work.rows));
+  modal('Сравнение вариантов', el('div', el('div', { style: { overflowX: 'auto' } }, table), work.sources));
 }
 
 async function saveCurrent(v) {
