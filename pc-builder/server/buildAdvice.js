@@ -9,7 +9,7 @@ const LABELS = { cpu: 'процессор', motherboard: 'материнская
 const SLOTS = Object.keys(LABELS);
 const CORE = ['cpu', 'motherboard', 'ram', 'psu'];
 const PURPOSES = { gaming: 'Игры', universal: 'Универсальный', work: 'Работа', office: 'Офис и учёба' };
-const SPEC_FIELDS = ['socket', 'mem', 'chipset', 'form', 'type', 'totalGb', 'modules', 'capacityGb', 'iface', 'vramGb', 'power', 'watts', 'boards', 'gpuMaxMm', 'gpuMaxThicknessMm', 'expansionSlots', 'coolerMaxMm', 'lengthMm', 'thicknessMm', 'slots', 'boardWatts', 'recommendedPsuWatts', 'adapter8', 'heightMm', 'hasIgpu', 'withCooler', 'cores', 'tdp', 'registered', 'memSlots', 'm2', 'mhz', 'pcie5', 'fans', 'aio', 'radMm', 'psuIncluded'];
+const SPEC_FIELDS = ['socket', 'mem', 'chipset', 'form', 'type', 'totalGb', 'modules', 'capacityGb', 'iface', 'vramGb', 'power', 'watts', 'boards', 'gpuMaxMm', 'gpuMaxThicknessMm', 'expansionSlots', 'coolerMaxMm', 'lengthMm', 'thicknessMm', 'slots', 'boardWatts', 'recommendedPsuWatts', 'adapter8', 'heightMm', 'hasIgpu', 'withCooler', 'cores', 'tdp', 'registered', 'memSlots', 'm2', 'mhz', 'pcie5', 'fans', 'aio', 'radMm', 'dissipationWatts', 'coolerDesign', 'psuIncluded'];
 const CONNECTOR_FIELDS = ['six', 'eight', 'sixteen', 'flex'];
 const PERF_FIELDS = ['key', 'score', 'watts', 'gaming', 'multi', 'igpu'];
 
@@ -17,7 +17,6 @@ const money = (value) => Number.isFinite(+value) && +value > 0 ? Math.round(+val
 const sum = (parts) => Object.values(parts || {}).reduce((n, it) => n + money(it?.price), 0);
 const modelText = (value) => typeof value === 'string' ? value.trim().slice(0, 120) : '';
 const sku = (value) => typeof value === 'string' && /^[\w.-]{1,120}$/.test(value);
-const checkText = (x) => x.text.startsWith('Кулер слабоват:') ? 'По расчёту у охлаждения может не хватить запаса под нагрузкой.' : x.text;
 
 function facts(object, fields) {
   return Object.fromEntries(fields.flatMap((k) => {
@@ -34,6 +33,12 @@ function currentParts(input) {
     const part = input?.[slot];
     if (!modelText(part?.name)) return [];
     const specs = facts(part.specs, SPEC_FIELDS);
+    if (slot === 'cooler') {
+      delete specs.tdp;
+      if (part.source === 'onliner' && part.specs?.catalogHardware && Number.isInteger(part.specs.heatpipes) && part.specs.heatpipes > 0) {
+        specs.heatpipes = part.specs.heatpipes;
+      }
+    }
     for (const field of ['gpuInputs', 'gpuOutputs']) {
       const counts = Object.fromEntries(CONNECTOR_FIELDS.filter((k) => Number.isInteger(part.specs?.[field]?.[k]) && part.specs[field][k] >= 0)
         .map((k) => [k, part.specs[field][k]]));
@@ -61,7 +66,7 @@ function gaps(parts, have) {
 
 function observations(parts, have, purpose, total, limit) {
   const checks = Compat.check(parts, have).filter((x) => x.level === 'error' || x.level === 'warn' || /BIOS/.test(x.text))
-    .map((x) => ({ level: x.level, text: checkText(x) }));
+    .map(({ level, text }) => ({ level, text }));
   if (total > limit) checks.unshift({ level: 'error', text: 'Текущая сборка превышает указанный бюджет.' });
   const note = (text) => checks.push({ level: 'info', text });
   const cpu = parts.cpu?.perf?.gaming;
@@ -90,7 +95,7 @@ function checkReplacement(slot, item, build) {
   const checks = Compat.check(next, have);
   if (checks.some((x) => x.level === 'error')) return null;
   return { item, slot, cost: cost / 100, diff: diff / 100,
-    warnings: [...new Set([...checks.filter((x) => x.level === 'warn' || /BIOS/.test(x.text)).map(checkText), ...gaps(next, have)])],
+    warnings: [...new Set([...checks.filter((x) => x.level === 'warn' || /BIOS/.test(x.text)).map((x) => x.text), ...gaps(next, have)])],
     indices: Compat.indices(next, have.gpu) };
 }
 
@@ -117,7 +122,7 @@ async function choicesFor(slot, ids, build) {
   const allowance = build.limit - build.total + money(build.parts[slot]?.price);
   if (allowance <= 0) return [];
   const check = (items) => items.map((it) => checkReplacement(slot, it, build)).filter(Boolean);
-  const physical = ['gpu', 'psu', 'case'].includes(slot);
+  const physical = ['gpu', 'psu', 'case', 'cooler'].includes(slot);
   if (slot !== 'cooler') {
     const items = await Promise.all([...new Set((Array.isArray(ids) ? ids : []).slice(0, 8).filter(sku))].slice(0, 5)
       .map((id) => onliner.product(id, schema).then(onliner.enrichHardware).catch(() => null)));

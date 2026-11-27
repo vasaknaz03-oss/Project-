@@ -1,4 +1,5 @@
 // Общее состояние приложения и описание слотов сборки.
+/* global Compat */
 import { api, el, money } from './util.js';
 
 export const state = {
@@ -126,15 +127,11 @@ export function specChips(cat, it) {
       add(s.class, 'accent');
       if (s.boards && s.boards.length) add(s.boards.join(' / '));
       if (s.fans) add(`${s.fans} вент.`);
-      else if (s.fans === 0) add('без вентиляторов');
       if (s.gpuMaxMm) add(`GPU до ${s.gpuMaxMm} мм`);
       if (s.coolerMaxMm) add(`кулер до ${s.coolerMaxMm} мм`);
       break;
     case 'fan':
-      if (s.aio) add(s.radMm ? `СЖО ${s.radMm} мм` : 'СЖО', 'accent');
-      if (s.tdp) add(`до ${s.tdp} Вт`, s.aio ? '' : 'accent');
-      if (s.heightMm) add(`высота ${s.heightMm} мм`);
-      if (s.fanMm) add(`вентилятор ${s.fanMm} мм`);
+      Compat.coolerLabels(it).forEach((label, i) => add(label, i === 0 ? 'accent' : ''));
       break;
     case 'display': {
       const d = it.description || '';

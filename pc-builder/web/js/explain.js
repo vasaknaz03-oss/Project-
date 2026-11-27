@@ -103,15 +103,9 @@ function psuWhy(it, parts) {
   return out;
 }
 
-function coolerWhy(it, parts) {
-  const out = [];
-  const need = Compat.coolerNeed(parts.cpu);
-  const cap = Compat.coolerCapacity(it);
-  out.push(`${Compat.coolerClass(it)[0].toUpperCase() + Compat.coolerClass(it).slice(1)}: реально отводит около ${cap} Вт.`);
-  if (need) out.push(`Процессору в пике нужно ~${need} Вт (с запасом). ${cap >= need ? 'Кулер справляется — процессор не будет сбрасывать частоты от перегрева.' : '⚠ Запаса мало: под долгой нагрузкой будет шумно и горячо.'}`);
-  const s = it.specs || {};
-  if (s.heightMm) out.push(`Высота ${s.heightMm} мм — проверено, что влезает в выбранный корпус.`);
-  if (s.aio) out.push(`Жидкостная система (СЖО)${s.radMm ? ` с радиатором ${s.radMm} мм` : ''}: проверьте, что в корпусе есть место под такой радиатор.`);
+function coolerWhy(it) {
+  const out = Compat.coolerLabels(it).map((text) => text + '.');
+  if (!it.specs?.dissipationWatts) out.push('В характеристиках не указана рассеиваемая мощность.');
   return out;
 }
 
@@ -121,9 +115,8 @@ function caseWhy(it, parts) {
   if (s.boards && s.boards.length) out.push(`Поддерживает платы ${s.boards.join(', ')} — выбранная влезает.`);
   if (s.gpuMaxMm) out.push(`Корпус поддерживает видеокарты длиной до ${s.gpuMaxMm} мм.`);
   if (s.coolerMaxMm) out.push(`Кулер процессора до ${s.coolerMaxMm} мм.`);
-  if (s.fans) out.push(`${s.fans} вентилятор(а) в комплекте — ${s.fans >= 3 ? 'хороший обдув из коробки' : 'для мощной сборки стоит докупить 1–2'}.`);
-  else out.push('Вентиляторов в комплекте нет — для нормального обдува стоит докупить 2–3 штуки.');
-  if (s.mesh) out.push('Сетчатая передняя панель — лучше продувается, детали холоднее.');
+  if (s.fans > 0) out.push(`Вентиляторов в комплекте — ${s.fans}.`);
+  if (s.mesh) out.push('Сетчатая передняя панель.');
   if (s.window) out.push('Боковое окно — видно комплектующие.');
   return out;
 }

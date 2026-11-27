@@ -883,8 +883,8 @@ async function route(req, res, url) {
 
   if (pathname === '/api/build/hardware' && req.method === 'POST') {
     const body = await readBody(req);
-    const requested = Array.isArray(body.items) ? body.items.slice(0, 3) : [];
-    const allowed = new Set(['videocard', 'powersupply', 'chassis']);
+    const requested = Array.isArray(body.items) ? body.items.slice(0, 4) : [];
+    const allowed = new Set(['videocard', 'powersupply', 'chassis', 'fan']);
     const items = await Promise.all(requested.map(async (part) => {
       const { id, category } = part || {};
       if (typeof id !== 'string' || !/^[\w.-]{1,120}$/.test(id) || !allowed.has(category)) return null;

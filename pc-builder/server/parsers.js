@@ -195,28 +195,33 @@ function chassis(desc) {
   spec.gpuMaxMm = mm((d.match(/видеокарта до\s+([\d.,]+\s*(?:мм|mm))/i) || [])[1]);
   spec.coolerMaxMm = num((d.match(/охлаждение ЦП до\s+(\d+)\s*мм/) || [])[1]);
   const fans = d.match(/с\s+(\d+)\s+вентилятор/);
-  spec.fans = fans ? num(fans[1]) : 0;
+  spec.fans = fans ? num(fans[1]) : /без (?:комплектных )?вентиляторов/i.test(d) ? 0 : null;
   spec.window = /окно/.test(d);
   spec.mesh = /сетк|забором воздуха|mesh/i.test(d);
   return spec;
 }
 
-// Типичное рассеивание СЖО по размеру радиатора, если производитель его не указал
-const AIO_TDP = { 120: 150, 140: 170, 240: 250, 280: 280, 360: 320, 420: 350 };
+function coolerDesign(text) {
+  if (/двухбашен|две\s+башни/i.test(text)) return 'dual-tower';
+  if (/низкопрофильн/i.test(text)) return 'low-profile';
+  if (/башенн/i.test(text)) return 'tower';
+  if (/пассивн/i.test(text)) return 'passive';
+  return null;
+}
 
 function cooler(desc, name) {
   const d = desc || '';
-  const radMm = num((d.match(/типоразмер\s+(\d{3})/) || [])[1]);
-  const aio = !!radMm || /СЖО|жидкост|\bAIO\b/i.test(d + ' ' + (name || ''));
-  let tdp = num((d.match(/рассеивание до\s+(\d+)\s*Вт/) || [])[1]);
-  if (!tdp && radMm) tdp = AIO_TDP[radMm] || 200;
+  const radMm = num((d.match(/(?:типоразмер(?: СЖО)?\s*[:–-]?\s*(\d{3})(?!\d)|(?:типоразмер радиатора|радиатор)\s*[:–-]?\s*(\d{3})\s*мм(?!\s*[xх×]))/i) || []).slice(1).find(Boolean));
+  const aio = Boolean(radMm) || /СЖО|жидкост|\bAIO\b/i.test(d + ' ' + (name || ''));
+  const dissipation = (d.match(/(?:рассеивание\s+до|рассеиваемая мощность(?:\s*\(TDP\))?|рассеивает\s+до)\s*[:–-]?\s*([\d.,]+\s*(?:Вт|W))/i) || [])[1];
   return {
-    tdp,
+    dissipationWatts: units(dissipation, '(?:Вт|W)'),
     // у СЖО «высота» — толщина радиатора, с высотой кулера в корпусе её сравнивать нельзя
-    heightMm: aio ? null : num((d.match(/высота\s+([\d.]+)\s*мм/) || [])[1]),
-    fanMm: num((d.match(/вентилятор\s+(\d+)\s*мм/) || [])[1]),
+    heightMm: aio ? null : mm((d.match(/высота(?: кулера)?\s*[:–-]?\s*([\d.,]+\s*мм)/i) || [])[1]),
+    fanMm: mm((d.match(/вентилятор\s+([\d.,]+\s*мм)/i) || [])[1]),
     aio,
     radMm,
+    coolerDesign: aio ? null : coolerDesign(d),
   };
 }
 
@@ -301,6 +306,19 @@ function parseHardware(schema, html) {
       gpuMaxMm: mm(get('макс. длина видеокарты', 'максимальная длина видеокарты', 'длина видеокарты')),
       gpuMaxThicknessMm: mm(get('макс. толщина видеокарты', 'максимальная толщина видеокарты')),
       expansionSlots: units(get('горизонтальные слоты расширения', 'слоты расширения', 'количество слотов расширения'), '(?:слот)?'),
+    };
+  } else if (schema === 'fan') {
+    const type = get('тип');
+    const radMm = num((get('типоразмер сжо').match(/^(\d{3})(?:\s*мм)?$/) || [])[1]);
+    const aio = Boolean(radMm) || /жидкостн/.test(type) || /\baio\b/.test(get('конструкция сжо'));
+    const heatpipes = (get('тепловые трубки', 'количество тепловых трубок').match(/^(\d+)(?:\s*шт\.?)?$/) || [])[1];
+    spec = {
+      aio: aio ? true : null,
+      coolerDesign: aio ? null : coolerDesign(get('конструкция кулера цп')),
+      dissipationWatts: units(get('рассеиваемая мощность (tdp)', 'рассеиваемая мощность'), '(?:Вт|W)'),
+      heightMm: aio ? null : mm(get('высота (толщина)', 'высота кулера')),
+      radMm,
+      heatpipes: !aio && Number(heatpipes) > 0 ? Number(heatpipes) : null,
     };
   } else if (schema === 'powersupply') {
     const gpuOutputs = {};

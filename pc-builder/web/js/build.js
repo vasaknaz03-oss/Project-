@@ -661,7 +661,7 @@ function renderVariants() {
 const hardwareRequests = new WeakSet();
 
 function refreshBuildHardware(parts) {
-  const items = [parts.gpu, parts.psu, parts.case].filter((it) => it?.source === 'onliner'
+  const items = [parts.gpu, parts.psu, parts.case, parts.cooler].filter((it) => it?.source === 'onliner'
     && !it.specs?.catalogHardware && !hardwareRequests.has(it));
   if (!items.length) return;
   items.forEach((it) => hardwareRequests.add(it));
@@ -737,6 +737,9 @@ function renderBuild(v) {
   }
 
   const need = Compat.psuNeed(parts.cpu, parts.gpu, have.gpu ? 250 : 0);
+  const cooling = parts.cooler ? Compat.coolerClass(parts.cooler) : have.cooler ? 'Ваше'
+    : parts.cpu?.specs.withCooler && !Compat.coolerNeed(parts.cpu) ? 'Кулер в комплекте'
+      : parts.cpu ? 'Нужен отдельный кулер' : '—';
   const side = el('div.side',
     el('div.card',
       el('h3', 'Совместимость'),
@@ -748,7 +751,7 @@ function renderBuild(v) {
         el('span', 'Пиковая нагрузка'), el('span', `~${need.load} Вт`),
         el('span', 'Рекомендуемый БП'), el('span', `от ${need.rec} Вт`),
         el('span', 'Выбранный БП'), el('span', parts.psu ? (parts.psu.specs && parts.psu.specs.watts ? `${parts.psu.specs.watts} Вт` : 'мощность не указана') : have.psu ? 'ваш' : '—'),
-        el('span', 'Нужен кулер'), el('span', Compat.coolerNeed(parts.cpu) ? `от ${Compat.coolerNeed(parts.cpu)} Вт` : 'в комплекте')),
+        el('span', 'Охлаждение ЦП'), el('span', cooling)),
       renderPowerCost(parts)),
     renderUsedSummary(v),
     el('div.card',
@@ -1020,7 +1023,9 @@ function relPerf(slotKey, item, cur) {
 function altRow(slot, a, cur, onPick) {
   const it = a.item;
   const diff = cur ? it.price - cur.price : it.price;
-  const note = relPerf(slot.key, it, cur) || a.perf || '';
+  let note = relPerf(slot.key, it, cur) || a.perf || '';
+  if (slot.key === 'cooler') note = Compat.coolerLabels(it).join(', ');
+  if (slot.key === 'case') note = [it.specs?.class, it.specs?.fans > 0 ? `${it.specs.fans} вент.` : null, it.specs?.gpuMaxMm ? `GPU до ${it.specs.gpuMaxMm} мм` : null].filter(Boolean).join(', ');
   return el('div.alt',
     thumb(it.image, slot.icon),
     el('div',

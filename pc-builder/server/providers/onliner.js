@@ -110,7 +110,7 @@ async function product(key, category) {
   return normalize({ ...data, schema: data.schema || { key: category, name: CATEGORIES[category] || '' } });
 }
 
-const HARDWARE_CATEGORIES = new Set(['videocard', 'chassis', 'powersupply']);
+const HARDWARE_CATEGORIES = new Set(['videocard', 'chassis', 'powersupply', 'fan']);
 const hardwareCache = new Map();
 
 async function enrichHardware(item) {
@@ -135,6 +135,7 @@ async function enrichHardware(item) {
   const specs = await entry.pending;
   if (Object.keys(specs).length) {
     item.specs = { ...item.specs, ...specs, catalogHardware: true };
+    if (item.category === 'fan' && item.specs.aio) item.specs.heightMm = null;
     if (item.category === 'videocard') enrich(item);
   }
   return item;

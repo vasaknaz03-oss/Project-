@@ -403,7 +403,7 @@ function preparePools(raw, opts, B, F = {}) {
   }
 
   // Кулеры
-  pools.coolerAll = cheapestBy((raw.coolers || []).filter((c) => inStock(c) && c.specs.tdp), (c) => c.id + c.family);
+  pools.coolerAll = cheapestBy((raw.coolers || []).filter(inStock), (c) => c.id + c.family);
 
   pools.prof = prof;
   applyPins(pools, opts);
@@ -501,27 +501,21 @@ function makePickers(pools, opts, B) {
     if (pools.coolerPinned) return pools.coolerPinned;
     if (!need) return null;
     const fam = COOLER_FAMILY[cpu.specs.socket];
-    // need — пик процессора с запасом. В дорогой сборке запас больше: тише и без сброса частот
+    // need — расчётная нагрузка процессора с запасом.
     let want = B >= 7000 ? Math.round(need * 1.25) : B >= 4500 ? Math.round(need * 1.15) : need;
-    // Тихая сборка: кулер с большим запасом крутится медленнее
     if (opts.quiet) want = Math.max(want, Math.round(need * 1.4));
     const key = fam + ':' + need + ':' + want + ':' + (maxH || '');
     if (coolMemo.has(key)) return coolMemo.get(key);
     // maxH — сколько кулера помещается в корпус по высоте
     const fitsH = (c) => c.family === fam && (!c.specs.heightMm || (c.specs.heightMm >= 70 && (!maxH || c.specs.heightMm <= maxH)));
-    // Реальная способность кулера (а не «рассеивание до …» с коробки)
-    const cap = (c) => Compat.coolerCapacity(c);
-    const known = (c) => /двухбаш|отзыв|СЖО/.test(Compat.coolerClass(c));
+    const available = pools.coolerAll.filter(fitsH).sort((a, b) => a.price - b.price);
+    const watts = (c) => c.specs.dissipationWatts || 0;
     const choose = (min) => {
-      const list = pools.coolerAll.filter((c) => fitsH(c) && cap(c) >= min).sort((a, b) => a.price - b.price);
-      if (!list.length) return null;
-      // Проверенная модель, если она не сильно дороже самой дешёвой подходящей
-      const good = list.find((c) => known(c) && c.price <= list[0].price * 1.3 + 15);
-      return good || list[0];
+      const first = available.find((c) => watts(c) >= min);
+      if (!first) return null;
+      return available.find((c) => watts(c) >= min && c.price <= first.price * 1.3 + 15 && ratingFactor(c) > 1) || first;
     };
-    let pick = choose(want) || choose(need);
-    // Ничего не тянет — берём самый сильный из доступных (проверка совместимости предупредит)
-    if (!pick) pick = pools.coolerAll.filter(fitsH).sort((a, b) => cap(b) - cap(a))[0];
+    const pick = choose(want) || choose(need) || available.sort((a, b) => watts(b) - watts(a))[0];
     coolMemo.set(key, pick);
     return pick;
   }
@@ -625,8 +619,8 @@ function scoreParts(prof, purpose, cpu, gpu, ram, ssd, mb, haveGpu, kase, quiet,
     if (kase.noname) s *= Brands.PENALTY.chassis;
     // Хороший продув важен мощному железу: при дорогой видеокарте «удачный» корпус в приоритете
     if (kase.goodCase && gpu && gpu.price >= 2500) s *= 1.012;
-    if (!kase.specs.fans) s *= 0.99; // без вентиляторов придётся докупать
-    if (quiet && (kase.specs.fans || 0) < 2) s *= 0.98;
+    if (kase.specs.fans === 0) s *= 0.99;
+    if (quiet && kase.specs.fans != null && kase.specs.fans < 2) s *= 0.98;
   }
   // Офису отдельная видеокарта почти ничего не даёт, а шумит и тратит деньги
   if (purpose === 'office' && gpu) s *= 0.92;
@@ -708,10 +702,13 @@ function optimize(pools, opts, budget) {
 
 async function verifyHardware(best, pools, opts, budget) {
   for (let attempt = 0; best && attempt < 5; attempt++) {
-    const { gpu, psu, case: kase, cpu } = best.parts;
-    await Promise.all([gpu, psu, kase].map(onliner.enrichHardware));
+    const { gpu, psu, case: kase, cpu, cooler } = best.parts;
+    await Promise.all([gpu, psu, kase, cooler].map(onliner.enrichHardware));
     const need = Compat.psuNeed(cpu, gpu, opts.have?.gpu ? 250 : 0);
-    const fit = !Compat.gpuCaseErrors(gpu, kase).length && Compat.checkGpuPower(gpu, psu)?.level !== 'error';
+    const coolerLimit = kase?.specs?.coolerMaxMm;
+    const tooTall = !cooler?.specs?.aio && coolerLimit > 0 && cooler?.specs?.heightMm > coolerLimit;
+    const fit = !Compat.gpuCaseErrors(gpu, kase).length && Compat.checkGpuPower(gpu, psu)?.level !== 'error'
+      && (!tooTall || pools.coolerPinned);
     const watts = psu?.specs.watts;
     const requiredWatts = psu?.pinned || pools.psuPinned ? need.min : need.rec;
     const adequate = !watts || watts >= requiredWatts;
@@ -879,13 +876,16 @@ function alternatives(build, pools, opts) {
   if (p.case) {
     const form = p.motherboard ? p.motherboard.specs.form : 'ATX';
     const list = pools.caseAll.filter((c) => Compat.boardFitsCase(form, c) && !Compat.gpuCaseErrors(p.gpu, c).length);
-    alt.case = around(list, p.case, 3, 4).map((c) => wrap(c, p.case, { perf: [c.specs.class, c.specs.fans ? c.specs.fans + ' вент.' : 'без вентиляторов', c.specs.gpuMaxMm ? 'GPU до ' + c.specs.gpuMaxMm + ' мм' : null].filter(Boolean).join(', ') }));
+    alt.case = around(list, p.case, 3, 4).map((c) => wrap(c, p.case, { perf: [c.specs.class, c.specs.fans ? c.specs.fans + ' вент.' : null, c.specs.gpuMaxMm ? 'GPU до ' + c.specs.gpuMaxMm + ' мм' : null].filter(Boolean).join(', ') }));
   }
   if (p.cooler) {
     const need = Compat.coolerNeed(p.cpu);
-    const fam = COOLER_FAMILY[p.cpu.specs.socket];
-    const list = pools.coolerAll.filter((c) => c.family === fam && c.specs.tdp >= need);
-    alt.cooler = around(list, p.cooler, 2, 5).map((c) => wrap(c, p.cooler, { perf: `до ${c.specs.tdp} Вт${c.specs.heightMm ? ', ' + c.specs.heightMm + ' мм' : ''}` }));
+    const fam = COOLER_FAMILY[p.cpu?.specs.socket];
+    const limit = p.case?.specs?.coolerMaxMm;
+    const list = pools.coolerAll.filter((c) => c.family === fam
+      && (!c.specs.dissipationWatts || c.specs.dissipationWatts >= need)
+      && (!limit || !c.specs.heightMm || c.specs.heightMm <= limit));
+    alt.cooler = around(list, p.cooler, 2, 5).map((c) => wrap(c, p.cooler, { perf: Compat.coolerLabels(c).join(', ') }));
   }
   return alt;
 }

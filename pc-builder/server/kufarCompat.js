@@ -6,7 +6,7 @@ const kufar = require('./providers/kufar');
 const kf = require('./providers/kufarFilters');
 const perf = require('./perfdb');
 const onliner = require('./providers/onliner');
-const { normSocket, capacityGb } = require('./parsers');
+const { normSocket, capacityGb, parseSpecs } = require('./parsers');
 
 // «Тип» в категории «Комплектующие» Kufar для каждого слота сборки
 const TYPE = { cpu: '10', gpu: '11', motherboard: '7', ram: '9', ssd: '15', hdd: '13', psu: '5', case: '1', cooler: '3' };
@@ -249,7 +249,7 @@ async function enrich(slot, item) {
     const fans = Number((name.match(/(\d)\s*(?:шт\.?\s*)?(?:a?rgb\s*)?(?:вентилятор|кулер|fan)/i) || [])[1]) || null;
     out.specs = { boards: /mini|itx/i.test(name) ? ['mATX', 'ITX'] : ['ATX', 'mATX', 'ITX'], fans };
   } else if (slot === 'cooler') {
-    out.specs = { tdp: Number((name.match(/(\d{3})\s*(w|вт)/i) || [])[1]) || 150, heightMm: null };
+    out.specs = parseSpecs('fan', description, name);
   }
   out.kufarNote = notes.join('; ');
   return out;

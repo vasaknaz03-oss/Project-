@@ -88,8 +88,9 @@ test('SSD, БП, корпус, кулер, видеокарта', () => {
   assert.strictEqual(c.fans, 6);
   const m = parseSpecs('chassis', 'Mini Tower, БП отсутствует, для плат micro-ATX/mini-ITX');
   assert.deepStrictEqual(m.boards, ['mATX', 'ITX']);
+  assert.strictEqual(m.fans, null);
   const cool = parseSpecs('fan', 'рассеивание до 220 Вт, высота 154 мм, вентилятор 120 мм');
-  assert.strictEqual(cool.tdp, 220);
+  assert.strictEqual(cool.dissipationWatts, 220);
   assert.strictEqual(cool.heightMm, 154);
   const g = parseSpecs('videocard', '16 ГБ GDDR7, 2300 МГц / 2452 МГц, 8960sp, 70 RT-ядер, трассировка лучей, 256 бит, 2.5 слота, питание 16 pin (12V-2x6), HDMI, DisplayPort');
   assert.strictEqual(g.vramGb, 16);
@@ -198,7 +199,48 @@ test('СЖО распознаётся, высота радиатора не пу
   assert.strictEqual(c.aio, true);
   assert.strictEqual(c.radMm, 360);
   assert.strictEqual(c.heightMm, null);
-  assert.ok(c.tdp >= 300);
+  assert.strictEqual(c.dissipationWatts, null);
+  assert.deepStrictEqual(Compat.coolerLabels({ specs: c }), ['СЖО', 'Типоразмер радиатора 360 мм', 'Вентилятор 120 мм']);
+});
+
+test('охлаждение: число трубок только из поля Onliner, тип и размеры только по характеристикам', () => {
+  const row = (k, v) => `<tr><td>${k}</td><td>${v}</td></tr>`;
+  const spec = parseHardware('fan', row('Конструкция кулера ЦП', 'башенный')
+    + row('Тепловые трубки', '7') + row('Высота (толщина)', '154 мм'));
+  assert.deepStrictEqual(spec, { coolerDesign: 'tower', heightMm: 154, heatpipes: 7 });
+  const known = { source: 'onliner', specs: { ...spec, catalogHardware: true } };
+  assert.deepStrictEqual(Compat.coolerLabels(known), ['Башенный кулер', 'Высота 154 мм', 'Тепловых трубок — 7']);
+  assert.ok(!Compat.coolerLabels({ ...known, source: 'kufar' }).some((label) => /трубок/.test(label)));
+  assert.strictEqual(parseHardware('fan', row('Тепловые трубки', '6–7')).heatpipes, undefined);
+  assert.strictEqual(parseHardware('fan', row('Рассеиваемая мощность (TDP)', '285 Вт')).dissipationWatts, 285);
+  assert.deepStrictEqual(parseHardware('fan', row('Тип', 'система жидкостного охлаждения для процессора')
+    + row('Типоразмер СЖО', '240') + row('Высота (толщина)', '38 мм') + row('Длина трубки', '0.45 м')), { aio: true, radMm: 240 });
+});
+
+test('сборка и «Почему эта деталь» не показывают подставленную мощность, тип и число трубок', async () => {
+  const { enrich } = require('../server/kufarCompat');
+  const used = await enrich('cooler', { name: 'DeepCool AK500', description: 'Рабочий кулер, высота 158 мм.' });
+  assert.strictEqual(used.specs.dissipationWatts, null);
+  assert.strictEqual(Compat.coolerClass(used), 'Кулер');
+  const cpu = { name: 'Ryzen 5 5600', specs: { tdp: 65, hasIgpu: true } };
+  const saved = { name: 'Thermalright Phantom Spirit 120', source: 'onliner', specs: { tdp: 260, heightMm: 154 } };
+  const restored = Compat.check({ cpu, cooler: saved }, {});
+  assert.ok(restored.some((c) => c.level === 'warn' && c.text.includes('мощность кулера не указана')));
+  assert.ok(restored.every((c) => !/260|6–7|4–5|двухбашенный|с запасом/i.test(c.text)));
+  const correct = { specs: { dissipationWatts: 55 } };
+  assert.ok(Compat.check({ cpu, cooler: correct }, {}).some((c) => c.level === 'warn' && /55 Вт/.test(c.text)));
+  const original = globalThis.Compat;
+  globalThis.Compat = Compat;
+  try {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const code = fs.readFileSync(path.join(__dirname, '../web/js/explain.js'), 'utf8');
+    const { explainPart } = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
+    const labels = explainPart('cooler', saved, { cpu });
+    assert.deepStrictEqual(labels, ['Кулер.', 'Высота 154 мм.', 'В характеристиках не указана рассеиваемая мощность.']);
+  } finally {
+    globalThis.Compat = original;
+  }
 });
 
 console.log('Kufar и каталог разделов');
