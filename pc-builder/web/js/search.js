@@ -13,7 +13,7 @@ const Catalog = window.Catalog;
 
 const S = {
   q: '', cat: '', src: 'onliner', cond: '', min: '', max: '', sort: '', page: 1,
-  items: [], total: 0, pages: 0, loading: false, error: null, searched: false, replaceSlot: null, view: null,
+  items: [], total: 0, pages: 0, loading: false, error: null, searched: false, target: null, view: null,
   filters: {}, ktype: {}, next: null, layoutKey: '',
 };
 
@@ -44,16 +44,32 @@ export function rerenderSearch() {
 }
 
 /** Переход из сборки: «Найти другую в поиске». */
-export function openSearchFor(cat, slot) {
+export function openSearchFor({ cat, slot, label, buildName }) {
   S.cat = cat;
   S.q = '';
   S.src = 'onliner';
-  S.replaceSlot = slot;
+  S.target = { cat, slot, label, buildName };
   S.sort = 'rating';
+  S.autoCat = false;
+  S.smart = null;
+  S.noSmart = false;
+  if (buildName) {
+    S.cond = S.min = S.max = '';
+    delete S.filters['onliner|' + cat];
+    delete S.filters['kufar|' + cat];
+  }
   // Те же фильтры Onliner, что были заданы в подборе
   const bf = state.lastBuildForm && state.lastBuildForm.filters && state.lastBuildForm.filters[cat];
   if (bf && countActive(bf)) S.filters['onliner|' + cat] = JSON.parse(JSON.stringify(bf));
   run(true);
+}
+
+export function leaveBuildSearch() {
+  S.target = null;
+}
+
+export function focusBuildSearch() {
+  if (S.target) root.querySelector('.search-input input')?.focus();
 }
 
 function render() {
@@ -130,7 +146,7 @@ function filtersColumn() {
 
 function renderBar() {
   const q = el('input.input', {
-    type: 'search', placeholder: 'Например: RTX 5060, Ryzen 5 7500F, 32 ГБ DDR5', value: S.q,
+    type: 'search', 'aria-label': 'Запрос для поиска', placeholder: 'Например: RTX 5060, Ryzen 5 7500F, 32 ГБ DDR5', value: S.q,
     oninput: (e) => { S.q = e.target.value; S.noSmart = false; },
     onkeydown: (e) => e.key === 'Enter' && newSearch(),
   });
@@ -142,7 +158,11 @@ function renderBar() {
         S.q = '';
         q.value = '';
       }
-      S.cat = e.target.value; S.autoCat = false; S.smart = null; S.replaceSlot = null; run(true);
+      S.cat = e.target.value;
+      S.autoCat = false;
+      S.smart = null;
+      if (!S.target?.buildName) leaveBuildSearch();
+      run(true);
     },
   },
     el('option', { value: '' }, 'Все разделы'),
@@ -197,9 +217,11 @@ function renderBar() {
       el('div.row', el('span.label', 'Сортировка'), sort)),
     query ? el('details.also-links', el('summary', `Искать «${query}» в других магазинах`),
       el('div.ext-links', shopLinks().map((l) => el('a', { href: linkFor(l.url, query), target: '_blank', rel: 'noopener' }, l.name, ' ↗')))) : null,
-    S.replaceSlot && hasActiveBuild() ? el('div.notice.info', { style: { marginTop: '14px' } }, icon('swap'),
-      el('div.grow', 'Выберите деталь и нажмите «В сборку» — она заменит текущую в подобранной сборке.'),
-      el('button.btn.btn-sm.btn-ghost', { onclick: () => { S.replaceSlot = null; render(); } }, 'Отмена')) : null);
+    S.target && hasActiveBuild() ? el('div.notice.info', { style: { marginTop: '14px' } }, icon('swap'),
+      el('div.grow', S.target.buildName
+        ? [el('b', `${S.target.buildName} · ${S.target.label}`), el('div', 'Введите модель или характеристики, затем нажмите «В сборку» у нужной детали.')]
+        : 'Выберите деталь и нажмите «В сборку».'),
+      el('button.btn.btn-sm.btn-ghost', { onclick: () => document.dispatchEvent(new CustomEvent('goto-page', { detail: 'build' })) }, 'Вернуться в сборку')) : null);
 }
 
 /** Новый поиск по кнопке «Найти» / Enter: раздел, выбранный умным поиском прошлый раз, не мешает новому запросу. */
@@ -207,7 +229,7 @@ function newSearch() {
   if (S.autoCat && S.smart) {
     const key = fkey();
     for (const k of Object.keys(S.smart.filters || {})) if (S.filters[key]) delete S.filters[key][k];
-    S.cat = '';
+    S.cat = S.target?.cat || '';
     S.autoCat = false;
     S.layoutKey = '';
   }
@@ -374,8 +396,13 @@ function renderResults() {
 
 function card(it) {
   const isOnliner = it.source === 'onliner';
-  const slot = isOnliner ? CAT_TO_SLOT[it.category] : null;
-  const setupSlot = isOnliner && !slot && Catalog.setupById[it.category] ? it.category : null;
+  const isKufar = it.source === 'kufar';
+  const cat = isOnliner ? it.category : isKufar ? S.cat : '';
+  const slot = CAT_TO_SLOT[cat];
+  const setupSlot = !slot && Catalog.setupById[cat] ? cat : null;
+  const destination = slot || setupSlot;
+  const canAdd = destination && hasActiveBuild() && (!S.target?.buildName || S.target.slot === destination)
+    && (isKufar ? !isBlocked(it) : isOnliner && it.price);
   const inCompare = state.compare.some((c) => c.id === it.id && c.source === it.source);
   const p = money.both(it.price);
   const node = el('div.pcard', { class: it.source === 'kufar' && isViewed(it) ? 'viewed' : '' },
@@ -405,31 +432,16 @@ function card(it) {
           style: isWatched(it) ? { color: 'var(--accent)' } : null,
           onclick: async (e) => { await toggleWatch(it, e.currentTarget); render(); },
         }, icon('bell')) : null,
-        !isOnliner && !isBlocked(it) && hasActiveBuild() && S.cat && (CAT_TO_SLOT[S.cat] || Catalog.setupById[S.cat]) ? el('button.btn.btn-sm', {
-          title: CAT_TO_SLOT[S.cat] ? 'Взять объявление в сборку и закрепить' : 'Добавить объявление в сетап',
+        el('button.icon-btn', { title: inCompare ? 'Убрать из сравнения' : 'Добавить к сравнению', style: inCompare ? { color: 'var(--accent)' } : null, onclick: () => toggleCompare(it) }, icon('scale')),
+        canAdd ? el('button.btn.btn-sm', {
           onclick: async (e) => {
             const button = e.currentTarget;
             button.disabled = true;
-            const ok = CAT_TO_SLOT[S.cat] ? await takeKufarToBuild(CAT_TO_SLOT[S.cat], it) : await takeKufarToBuild(S.cat, it, true);
-            if (ok) document.dispatchEvent(new CustomEvent('goto-page', { detail: 'build' }));
-            else button.disabled = false;
+            const ok = isKufar ? await takeKufarToBuild(destination, it, !!setupSlot) : replaceFromSearch(it, destination, !!setupSlot);
+            if (ok && state.page === 'search') document.dispatchEvent(new CustomEvent('goto-page', { detail: 'build' }));
+            else if (!ok) button.disabled = false;
           },
-        }, CAT_TO_SLOT[S.cat] ? 'В сборку' : 'В сетап') : null,
-        el('button.icon-btn', { title: inCompare ? 'Убрать из сравнения' : 'Добавить к сравнению', style: inCompare ? { color: 'var(--accent)' } : null, onclick: () => toggleCompare(it) }, icon('scale')),
-        setupSlot && it.price && hasActiveBuild() ? el('button.btn.btn-sm', {
-          title: 'Добавить в сетап текущей сборки',
-          onclick: () => {
-            if (replaceFromSearch(it, setupSlot, true)) document.dispatchEvent(new CustomEvent('goto-page', { detail: 'build' }));
-          },
-        }, 'В сетап') : null,
-        slot && it.price && hasActiveBuild() ? el('button.btn.btn-sm', {
-          title: 'Заменить в текущей сборке', onclick: () => {
-            if (replaceFromSearch(it, S.replaceSlot && CAT_TO_SLOT[it.category] === S.replaceSlot ? S.replaceSlot : slot)) {
-              S.replaceSlot = null;
-              document.dispatchEvent(new CustomEvent('goto-page', { detail: 'build' }));
-            }
-          },
-        }, 'В сборку') : null)));
+        }, setupSlot && !S.target?.buildName ? 'В сетап' : 'В сборку') : null)));
   return node;
 }
 

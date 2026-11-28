@@ -172,14 +172,42 @@ export async function loadBuilds() {
   return state.builds;
 }
 
-export async function saveBuilds() {
-  await api('/api/store/builds', { method: 'PUT', body: state.builds });
-  updateSavedCount();
+let buildWrites = Promise.resolve();
+
+export function changeBuilds(change) {
+  const write = buildWrites.then(async () => {
+    const next = change(state.builds);
+    await api('/api/store/builds', { method: 'PUT', body: next });
+    state.builds = next;
+    updateSavedCount();
+    return next;
+  });
+  buildWrites = write.catch(() => {});
+  return write;
 }
 
 export function updateSavedCount() {
   const n = state.builds.length;
   document.getElementById('savedCount').textContent = n ? String(n) : '';
+}
+
+export function totalOf(parts) {
+  return Object.values(parts || {}).reduce((sum, item) => sum + (Number(item?.price) || 0), 0);
+}
+
+export async function saveBuildEdits(id, changes) {
+  const builds = await changeBuilds((list) => {
+    if (!list.some((build) => build.id === id)) throw new Error('Сборка удалена из «Моих сборок».');
+    return list.map((build) => {
+      if (build.id !== id) return build;
+      const parts = { ...build.parts, ...changes.parts };
+      const setup = { ...build.setup, ...changes.setup };
+      for (const key of Object.keys(setup)) if (!setup[key]) delete setup[key];
+      const total = totalOf(parts) + totalOf(setup);
+      return { ...build, parts, setup, total, edited: new Date().toISOString() };
+    });
+  });
+  return builds.find((build) => build.id === id);
 }
 
 /** Облегчённая копия товара для сохранения. */

@@ -3,7 +3,7 @@ import { el, icon, api, money, toast, modal, closeModal, promptText, copyText, t
 import { downloadBuildTable } from './buildExport.js';
 import { reviewsPanel, reviewChip } from './reviews.js';
 import { explainPart } from './explain.js';
-import { state, SLOTS, specChips, shopLinks, linkFor, slim, saveBuilds, buildText } from './state.js';
+import { state, SLOTS, specChips, shopLinks, linkFor, slim, changeBuilds, saveBuildEdits, totalOf, buildText } from './state.js';
 import { openFacetModal, loadFacets, summarize, countActive } from './facets.js';
 import { adChips, adRisk, adLink, hideButton, isBlocked, isFiltered, isViewed, hiddenToggle } from './kufarui.js';
 import { watchButton } from './watch.js';
@@ -133,6 +133,13 @@ function persistForm() {
 }
 
 function render() {
+  const editing = state.result?.savedEdit;
+  if (editing) {
+    root.replaceChildren(el('div.page-head', el('h1', current().label), el('div.row.wrap',
+      el('button.btn', { onclick: () => document.dispatchEvent(new CustomEvent('goto-page', { detail: 'saved' })) }, 'К моим сборкам'),
+      el('button.btn', { onclick: startNewBuild }, 'Новый подбор'))), el('div.results#results', renderResults()));
+    return;
+  }
   root.replaceChildren(renderForm(), el('div.results#results', renderResults()));
 }
 
@@ -387,6 +394,7 @@ const SLOT_LABEL = Object.fromEntries(SLOTS.map((x) => [x.key, x.label]));
 /** Своя сборка → подбор недостающего: ваши детали закреплены, остальное под общий бюджет. */
 async function fillMissing() {
   const v = current();
+  if (state.result?.savedEdit || !v?.build) return;
   const have = totalOf(v.build.parts);
   const value = await promptText('Подобрать недостающее', `Общий бюджет на всю сборку, ${money.currency} (ваши детали уже стоят ${money.fmt(have)})`, String(Math.round(money.toCur(have + 1500))));
   if (!value) return;
@@ -401,17 +409,19 @@ async function fillMissing() {
 }
 
 /** Цена детали из другого магазина (своя сборка). */
-function editPrice(slotKey, it) {
+function editPrice(slotKey, it, isSetup) {
+  const b = current()?.build;
   promptText('Цена', `Цена «${it.name}», ${money.currency}`, String(Math.round(money.toCur(it.price || 0)))).then((val) => {
-    if (val == null) return;
+    if (val == null || current()?.build !== b) return;
     const n = parseFloat(String(val).replace(/\s/g, '').replace(',', '.'));
     if (!(n >= 0)) return toast('Введите цену числом', 'err');
-    replacePart(slotKey, { ...it, price: money.fromCur(n) });
+    replacePart(slotKey, { ...it, price: money.fromCur(n) }, isSetup);
   });
 }
 
 /** Окно «Своя деталь»: ссылка, название, цена → деталь в сборке (закреплённая). */
 function openCustomPart(slotKey) {
+  const b = current()?.build;
   const slotSel = el('select.select', SLOTS.map((sl) => el('option', { value: sl.key, selected: sl.key === slotKey }, sl.label)));
   const url = el('input.input', { type: 'url', placeholder: 'https://… (необязательно)' });
   const name = el('input.input', { placeholder: 'Например: MSI MAG B650 Tomahawk WiFi' });
@@ -424,8 +434,12 @@ function openCustomPart(slotKey) {
       try {
         const body = { slot: slotSel.value, url: url.value.trim(), name: name.value.trim(), price: price.value ? money.fromCur(+price.value) : 0 };
         const { item, exact } = await api('/api/part/custom', { method: 'POST', body });
-        replacePart(slotSel.value, item);
-        pinPart(slotSel.value, item, true);
+        if (current()?.build !== b) throw new Error('Сборка изменилась. Откройте форму снова.');
+        if (!replaceFromSearch(item, body.slot)) {
+          btn.disabled = false;
+          status.textContent = 'Проверьте совместимость детали и повторите попытку.';
+          return;
+        }
         closeModal();
         toast(exact ? `Добавлено с каталога Onliner: ${item.name}` : `Добавлено: ${item.name}. Характеристики определены по названию — проверьте совместимость справа.`);
       } catch (e) {
@@ -521,6 +535,7 @@ async function submit() {
   }
   const btn = document.getElementById('buildBtn');
   btn.disabled = true;
+  const previousResult = state.result;
   const results = document.getElementById('results');
   const step = el('div.loading-step', STEPS[0]);
   results.replaceChildren(el('div.card.loading', el('div.spinner'), el('b', 'Подбираем сборку'), step));
@@ -528,7 +543,9 @@ async function submit() {
   const timer = setInterval(() => (step.textContent = STEPS[Math.min(++i, STEPS.length - 1)]), 1300);
   try {
     const body = { ...form, budget: form.budget, currency: form.currency, trustedOnly: !!state.settings.trustedOnly };
-    state.result = await api('/api/build', { method: 'POST', body });
+    const result = await api('/api/build', { method: 'POST', body });
+    if (state.result !== previousResult) return;
+    state.result = result;
     state.lastBuildForm = { ...form, have: { ...form.have }, filters: JSON.parse(JSON.stringify(form.filters || {})) };
     state.variant = state.result.variants.find((v) => v.id === 'optimal' && v.build) ? 'optimal' : (state.result.variants.find((v) => v.build) || {}).id || 'optimal';
     for (const k of Object.keys(panels)) delete panels[k];
@@ -551,10 +568,6 @@ function current() {
   const r = state.result;
   if (!r) return null;
   return r.variants.find((v) => v.id === state.variant) || null;
-}
-
-function totalOf(parts) {
-  return Object.values(parts || {}).reduce((s, it) => s + (it ? it.price || 0 : 0), 0);
 }
 
 /** Итог: компьютер + сетап. */
@@ -590,7 +603,7 @@ function renderResults() {
         + (r.minSetup ? ` (компьютер ${money.fmt(r.minNeeded - r.minSetup)} + самая доступная периферия ${money.fmt(r.minSetup)})` : '') + '. ' : '',
       'Увеличьте бюджет, отметьте детали, которые у вас уже есть, или посмотрите б/у на Kufar через «Поиск».')));
   }
-  if (!r.custom) out.push(renderVariants());
+  if (!r.custom && !r.savedEdit) out.push(renderVariants());
   const v = current();
   if (v && v.build) out.push(renderBuild(v));
   return out;
@@ -681,6 +694,7 @@ function refreshBuildHardware(parts) {
 
 function renderBuild(v) {
   const b = v.build;
+  const editor = state.result.savedEdit;
   const have = (state.lastBuildForm && state.lastBuildForm.have) || form.have || {};
   const parts = b.parts;
   refreshBuildHardware(parts);
@@ -697,9 +711,9 @@ function renderBuild(v) {
 
   const summary = el('div.card.summary',
     el('div.sum-total',
-      el('div.dim.small', b.custom ? 'Своя сборка — итог по вашим деталям' : `${state.result.purposeLabel} · ${v.label.toLowerCase()}`),
+      el('div.dim.small', editor ? 'Итого' : b.custom ? 'Своя сборка — итог по вашим деталям' : `${state.result.purposeLabel} · ${v.label.toLowerCase()}`),
       el('div.t', t.main),
-      b.custom
+      b.custom || editor
         ? (t.sub ? el('div.s', t.sub) : null)
         : el('div.s', t.sub ? t.sub + ' · ' : '', left >= 0 ? `остаток от бюджета ${money.fmt(left)}` : `больше бюджета на ${money.fmt(-left)}`),
       hasSetup(b) ? el('div.s', `компьютер ${money.fmt(pcTotal)} + сетап ${money.fmt(setupTotal)}`) : null),
@@ -708,10 +722,13 @@ function renderBuild(v) {
     el('div.sum-actions',
       b.custom ? el('button.btn.btn-primary', { title: 'Оставить ваши детали и подобрать недостающее под бюджет', onclick: fillMissing }, icon('sparkles'), 'Подобрать недостающее') : null,
       el('button.btn.btn-primary', { title: 'Оценка сборки через подключённого провайдера ИИ', onclick: () => askBuildAdvice(v, have) }, icon('sparkles'), 'ИИ-помощник'),
-      el('button.btn', { onclick: () => saveCurrent(v) }, icon('save'), 'Сохранить'),
+      editor ? el('button.btn.btn-primary', { disabled: editor.saving || !hasSavedEdits(editor), onclick: () => saveEdits(v, editor) },
+        icon('save'), editor.saving ? 'Сохраняем…' : 'Сохранить изменения')
+        : el('button.btn', { onclick: () => saveCurrent(v) }, icon('save'), 'Сохранить'),
       el('button.btn', { title: 'В каком магазине (или паре магазинов) есть вся сборка и сколько это стоит', onclick: () => openBuyPlan(Object.values(parts).concat(Object.values(b.setup || {}))) }, icon('store'), 'Где купить всё'),
       el('button.btn', { onclick: () => copyText(buildText(textTitle(v), parts, total, '', b.setup)) }, icon('copy'), 'Копировать список'),
-      el('button.btn', { onclick: () => downloadBuildTable(textTitle(v), parts, total, b.setup) }, icon('download'), 'Скачать таблицу')));
+      el('button.btn', { onclick: () => downloadBuildTable(textTitle(v), parts, total, b.setup) }, icon('download'), 'Скачать таблицу')),
+    editor && hasSavedEdits(editor) ? el('p.dim.small', { role: 'status' }, 'Есть несохранённые изменения') : null);
 
   // Анимация появления деталей — только для новой сборки, а не при каждом открытии панели
   const fresh = lastAnimated !== v;
@@ -828,6 +845,7 @@ function renderPowerCost(parts) {
 }
 
 function textTitle(v) {
+  if (state.result.savedEdit) return v.label;
   return `Сборка ПК «${state.result.purposeLabel}» (${v.label.toLowerCase()})`;
 }
 
@@ -857,11 +875,24 @@ function altsOf(b, slot) {
   return (b.alternatives && b.alternatives[slot.key]) || [];
 }
 
+function searchForPart(slot) {
+  const editor = state.result.savedEdit;
+  const detail = { cat: slot.cat, slot: slot.key, label: slot.label, buildName: editor ? current().label : null };
+  document.dispatchEvent(new CustomEvent('goto-search', { detail }));
+}
+
 function renderPart(slot, v) {
   const b = v.build;
+  const editor = state.result.savedEdit;
   const it = slot.setup ? (b.setup || {})[slot.key] : b.parts[slot.key];
   const have = (state.lastBuildForm && state.lastBuildForm.have) || form.have || {};
   const alts = altsOf(b, slot);
+  if (!it && editor && !slot.setup) {
+    return el('div.part.empty', { 'data-slot': slot.key }, el('div.part-main',
+      el('div.thumb.ph', icon(slot.icon)),
+      el('div', el('div.part-kind', icon(slot.icon), slot.label), el('div.part-name.muted', have[slot.key] ? 'У вас уже есть' : 'Не выбрано')),
+      el('div.part-side', el('button.btn.btn-sm', { onclick: () => searchForPart(slot) }, icon('search'), 'Найти деталь'))));
+  }
   if (!it && slot.setup) {
     const row = el('div.part.empty',
       el('div.part-main',
@@ -879,7 +910,7 @@ function renderPart(slot, v) {
         el('div.thumb.ph', icon(slot.icon)),
         el('div', el('div.part-kind', icon(slot.icon), slot.label), el('div.part-name.muted', optional)),
         el('div.part-side.row', { style: { gap: '6px', flexDirection: 'row' } },
-          el('button.btn.btn-sm', { onclick: () => document.dispatchEvent(new CustomEvent('goto-search', { detail: { cat: slot.cat, slot: slot.key } })) }, icon('search'), 'Найти'),
+          el('button.btn.btn-sm', { onclick: () => searchForPart(slot) }, icon('search'), 'Найти'),
           el('button.btn.btn-sm', { onclick: () => openCustomPart(slot.key) }, icon('plus'), 'Ссылка или название'))));
   }
   if (!it) {
@@ -896,7 +927,8 @@ function renderPart(slot, v) {
     return row;
   }
   const p = money.both(it.price);
-  const changed = slot.setup ? b.originalSetup && b.originalSetup[slot.key] !== it : b.original && b.original[slot.key] !== it;
+  const changed = editor ? editor[slot.setup ? 'setup' : 'parts'].has(slot.key)
+    : slot.setup ? b.originalSetup && b.originalSetup[slot.key] !== it : b.original && b.original[slot.key] !== it;
   const note = slot.setup && b.setupNotes && b.setupNotes[slot.key] && !changed ? b.setupNotes[slot.key] : null;
   const openBtn = (kind, ic, label) => el('button.btn.btn-sm', { class: panels[slot.key] === kind ? 'on' : '', onclick: () => togglePanel(slot.key, kind) }, icon(ic), label);
 
@@ -921,11 +953,12 @@ function renderPart(slot, v) {
         el('div.price-sub', it.offers ? `${it.offers} ${plural(it.offers, 'предложение', 'предложения', 'предложений')}` : ''))),
     // Главные действия — всегда на виду; остальные — под «Ещё», чтобы карточка не превращалась в стену кнопок
     el('div.part-actions',
+      editor ? el('button.btn.btn-sm', { onclick: () => searchForPart(slot) }, icon('search'), 'Заменить через поиск') : null,
       !slot.setup && explainPart(slot.key, it, b.parts).length ? openBtn('why', 'help', 'Почему эта') : null,
       openBtn('reviews', 'chat', it.source === 'onliner' && it.reviews ? `Отзывы (${it.reviews})` : 'Отзывы и обзоры'),
       alts.length || (slot.key === 'gpu' && b.alternatives && b.alternatives.gpuSame && b.alternatives.gpuSame.length) ? openBtn('alts', 'swap', `Заменить (${alts.length + ((slot.key === 'gpu' && b.alternatives && b.alternatives.gpuSame) ? b.alternatives.gpuSame.length : 0)})`) : null,
       openBtn('used', 'recycle', 'Б/у'),
-      isPinned(slot.key, it) ? el('span.chip.accent', { title: 'При пересборке эта деталь останется' }, icon('pin'), 'закреплено') : null,
+      !editor && isPinned(slot.key, it) ? el('span.chip.accent', { title: 'При пересборке эта деталь останется' }, icon('pin'), 'закреплено') : null,
       el('button.btn.btn-sm.btn-ghost.more-btn', {
         class: moreOpen[slot.key] ? 'on' : '', 'aria-expanded': moreOpen[slot.key] ? 'true' : 'false',
         onclick: () => { moreOpen[slot.key] = !moreOpen[slot.key]; justOpened = moreOpen[slot.key] ? 'more:' + slot.key : null; rerenderResults(); },
@@ -935,8 +968,8 @@ function renderPart(slot, v) {
       it.source === 'onliner' ? openBtn('history', 'chart', 'История цены') : null,
       watchButton(it, rerenderResults),
       el('a.btn.btn-sm.btn-ghost', { href: it.url, target: '_blank', rel: 'noopener' }, icon('external'), 'Открыть на сайте'),
-      b.custom && !slot.setup ? el('button.btn.btn-sm.btn-ghost', { title: 'Поменять цену (например, цена в другом магазине)', onclick: () => editPrice(slot.key, it) }, icon('tag'), 'Цена') : null,
-      !slot.setup ? el('button.btn.btn-sm.btn-ghost', {
+      editor || (b.custom && !slot.setup) ? el('button.btn.btn-sm.btn-ghost', { title: 'Поменять цену (например, цена в другом магазине)', onclick: () => editPrice(slot.key, it, slot.setup) }, icon('tag'), 'Цена') : null,
+      !editor && !slot.setup ? el('button.btn.btn-sm.btn-ghost', {
         class: isPinned(slot.key, it) ? 'on' : '',
         title: isPinned(slot.key, it) ? 'Открепить' : 'Закрепить: при пересборке эта деталь останется, остальное подберётся под бюджет',
         onclick: () => { pinPart(slot.key, it, !isPinned(slot.key, it)); rerenderResults(); },
@@ -970,33 +1003,44 @@ function togglePanel(slot, kind) {
 }
 
 function replacePart(slotKey, item, isSetup = false) {
-  queueMicrotask(saveCustomParts);
   const v = current();
-  if (!v || !v.build) return;
+  if (!v || !v.build) return false;
+  const editor = state.result.savedEdit;
+  if (editor?.saving) {
+    toast('Дождитесь сохранения сборки.', 'err');
+    return false;
+  }
   const b = v.build;
-  if (isSetup) {
-    if (!b.setup) b.setup = {};
-    if (!b.originalSetup) b.originalSetup = { ...b.setup };
-    b.setup = { ...b.setup, [slotKey]: item };
-    if (!item) delete b.setup[slotKey];
-  } else {
-    if (!b.original) b.original = { ...b.parts };
-    b.parts = { ...b.parts, [slotKey]: item };
+  const bag = isSetup ? 'setup' : 'parts';
+  const original = isSetup ? 'originalSetup' : 'original';
+  if (editor) editor[bag].add(slotKey);
+  else b[original] ||= { ...b[bag] };
+  b[bag] = { ...b[bag], [slotKey]: item };
+  if (isSetup && !item) delete b.setup[slotKey];
+  if (!editor && !isSetup) {
     // Выбранное вручную закрепляем: при пересборке оно останется
     if (item) pinPart(slotKey, item, true);
     else pinPart(slotKey, null, false);
   }
+  if (state.result.custom) queueMicrotask(saveCustomParts);
   panels[slotKey] = null;
   rerenderResults();
   if (!isSetup) prefetchUsed();
-  toast(item ? (isSetup ? 'Добавлено в сетап' : 'Деталь заменена') : 'Убрано из сборки');
+  toast(item ? (isSetup ? 'Добавлено в сетап' : 'Деталь добавлена в сборку') : 'Убрано из сборки');
+  return true;
 }
 
 export function replaceFromSearch(item, slotKey, isSetup = false) {
   const v = current();
   if (!v || !v.build) return false;
-  replacePart(slotKey, item, isSetup);
-  return true;
+  if (state.result.savedEdit && !isSetup) {
+    const issues = Compat.replacementErrors(slotKey, item, v.build.parts, state.lastBuildForm?.have, { allowMissing: true });
+    if (issues.length) {
+      toast('Не удалось добавить: ' + issues[0].text, 'err');
+      return false;
+    }
+  }
+  return replacePart(slotKey, item, isSetup);
 }
 
 /** Из поиска: объявление Kufar → в сборку (для комплектующих) или в сетап. */
@@ -1055,7 +1099,7 @@ function renderAlts(slot, v) {
   }
   box.append(el('div.row', { style: { marginTop: '10px' } },
     el('button.btn.btn-sm.btn-ghost', {
-      onclick: () => document.dispatchEvent(new CustomEvent('goto-search', { detail: { cat: slot.cat, slot: slot.key } })),
+      onclick: () => searchForPart(slot),
     }, icon('search'), 'Найти другую в поиске')));
   return box;
 }
@@ -1178,23 +1222,23 @@ async function takeFromKufar(slot, u, btn) {
   if (btn) btn.disabled = true;
   try {
     if (isBlocked(u)) throw new Error(u.risk.reasons[0]);
+    const b = current()?.build;
+    if (!b) throw new Error('Сначала откройте сборку.');
     if (slot.setup) {
       if (u.source === 'kufar' && /^\d{1,16}$/.test(u.id)) {
         const { risk } = await api('/api/kufar/check', { method: 'POST', body: { id: u.id } });
         u.risk = risk;
         if (isBlocked(u)) throw new Error(risk.reasons[0]);
       }
-      replacePart(slot.key, { ...u, category: slot.cat }, true);
-      return true;
+      if (current()?.build !== b) throw new Error('Сборка изменилась. Откройте объявление снова.');
+      return replacePart(slot.key, { ...u, category: slot.cat }, true);
     }
-    const b = current()?.build;
-    if (!b) throw new Error('Сначала откройте сборку.');
-    const { item } = await api('/api/kufar/enrich', { method: 'POST', body: { slot: slot.key, item: { id: u.id }, ctx: kufarCtx(b, slot.key) } });
+    const ctx = kufarCtx(b, slot.key);
+    const { item } = await api('/api/kufar/enrich', { method: 'POST', body: { slot: slot.key, item: { id: u.id }, ctx } });
     if (current()?.build !== b) throw new Error('Сборка изменилась. Откройте объявление снова.');
-    const issues = Compat.replacementErrors(slot.key, item, b.parts, kufarCtx(b, slot.key).have);
+    const issues = Compat.replacementErrors(slot.key, item, b.parts, ctx.have, { allowMissing: ctx.allowMissing });
     if (issues.length) throw new Error(issues[0].text);
-    replacePart(slot.key, item);
-    return true;
+    return replacePart(slot.key, item);
   } catch (e) {
     toast('Не удалось добавить: ' + e.message, 'err');
     if (btn) btn.disabled = false;
@@ -1210,7 +1254,7 @@ function kufarCtx(b, slotKey) {
   const socket = motherboard?.specs?.socket || cpu?.specs?.socket;
   const cpuMem = cpu?.specs?.mem || [];
   const mem = socket === 'AM5' ? 'DDR5' : motherboard?.specs?.mem || ram?.specs?.type || (cpuMem.length === 1 ? cpuMem[0] : null);
-  const ctx = { parts, have: state.lastBuildForm?.have || form.have || {}, socket, mem };
+  const ctx = { parts, have: state.lastBuildForm?.have || form.have || {}, socket, mem, allowMissing: !!state.result.savedEdit };
   if (slotKey === 'psu') ctx.need = Compat.psuNeed(cpu, parts.gpu, 0).rec;
   return ctx;
 }
@@ -1332,39 +1376,98 @@ function compareVariants() {
 
 async function saveCurrent(v) {
   const total = fullTotal(v.build);
+  const { purpose, purposeLabel } = state.result;
+  const have = { ...state.lastBuildForm?.have };
   const name = await promptText('Сохранить сборку', 'Название', `${state.result.purposeLabel} за ${money.fmt(total, money.currency, { round: true })}`);
   if (!name) return;
   const parts = {};
   for (const s of SLOTS) parts[s.key] = slim(v.build.parts[s.key]);
   const setup = {};
   for (const [id, it] of Object.entries(v.build.setup || {})) if (it) setup[id] = slim(it);
-  state.builds.unshift({
+  const saved = {
     id: Date.now().toString(36),
     name,
     date: new Date().toISOString(),
-    purpose: state.result.purpose,
-    purposeLabel: state.result.purposeLabel,
+    purpose,
+    purposeLabel,
     total,
     parts,
     setup,
-    have: (state.lastBuildForm && state.lastBuildForm.have) || {},
-  });
-  await saveBuilds();
-  toast('Сборка сохранена в «Мои сборки»');
+    have,
+  };
+  try {
+    await changeBuilds((builds) => [saved, ...builds]);
+    toast('Сборка сохранена в «Мои сборки»');
+  } catch (e) {
+    toast('Не удалось сохранить сборку: ' + e.message, 'err');
+  }
+}
+
+function hasSavedEdits(editor) {
+  return !!(editor.parts.size || editor.setup.size);
+}
+
+function canCloseEditor() {
+  const editor = state.result?.savedEdit;
+  if (editor?.saving) {
+    toast('Дождитесь сохранения сборки.', 'err');
+    return false;
+  }
+  return !editor || !hasSavedEdits(editor) || confirm('В сборке есть несохранённые изменения. Закрыть её без сохранения?');
+}
+
+function startNewBuild() {
+  if (!canCloseEditor()) return;
+  state.result = null;
+  state.lastBuildForm = null;
+  if (form.mode === 'custom') openCustomBuild();
+  render();
+}
+
+function copySavedItems(items) {
+  return Object.fromEntries(Object.entries(items || {}).map(([slot, item]) => [slot, item ? { ...item } : null]));
+}
+
+async function saveEdits(v, editor) {
+  if (editor.saving || !hasSavedEdits(editor)) return;
+  const patch = (slots, items) => Object.fromEntries([...slots].map((slot) => [slot, slim(items[slot])]));
+  editor.saving = true;
+  rerenderResults();
+  try {
+    const saved = await saveBuildEdits(editor.id, { parts: patch(editor.parts, v.build.parts), setup: patch(editor.setup, v.build.setup) });
+    v.label = saved.name;
+    v.budget = state.result.budget = saved.total;
+    v.build.parts = copySavedItems(saved.parts);
+    v.build.setup = copySavedItems(saved.setup);
+    editor.parts.clear();
+    editor.setup.clear();
+    render();
+    toast('Изменения сохранены в «Мои сборки»');
+  } catch (e) {
+    toast('Не удалось сохранить изменения: ' + e.message, 'err');
+  } finally {
+    editor.saving = false;
+    if (state.result?.savedEdit === editor) rerenderResults();
+  }
 }
 
 /** Открыть сохранённую сборку на этой странице. */
 export function openSaved(saved) {
+  const editor = state.result?.savedEdit;
+  if (editor && editor.id === saved.id && (editor.saving || hasSavedEdits(editor))) return true;
+  if (!canCloseEditor()) return false;
   state.result = {
+    savedEdit: { id: saved.id, parts: new Set(), setup: new Set(), saving: false },
     budget: saved.total,
     purpose: saved.purpose,
     purposeLabel: saved.purposeLabel || 'Сохранённая',
-    variants: [{ id: 'saved', label: saved.name, hint: '', budget: saved.total, build: { parts: { ...saved.parts }, setup: { ...(saved.setup || {}) }, alternatives: {}, setupAlternatives: {}, index: Compat.indices(saved.parts, saved.have && saved.have.gpu) } }],
+    variants: [{ id: 'saved', label: saved.name, hint: '', budget: saved.total, build: { parts: copySavedItems(saved.parts), setup: copySavedItems(saved.setup), alternatives: {}, setupAlternatives: {} } }],
     warnings: [],
     stats: { ms: 0, cpus: 0, gpus: 0, boards: 0 },
   };
-  state.lastBuildForm = { have: saved.have || {} };
+  state.lastBuildForm = { have: { ...saved.have } };
   state.variant = 'saved';
   for (const k of Object.keys(panels)) delete panels[k];
   render();
+  return true;
 }

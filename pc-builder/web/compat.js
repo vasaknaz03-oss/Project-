@@ -162,7 +162,7 @@
     const out = [];
     const ok = (t) => out.push({ level: 'ok', text: t });
     const warn = (t) => out.push({ level: 'warn', text: t });
-    const err = (t) => out.push({ level: 'error', text: t });
+    const err = (t, missing) => out.push({ level: 'error', text: t, ...(missing ? { missing } : {}) });
     const info = (t) => out.push({ level: 'info', text: t });
 
     const { cpu, motherboard: mb, ram, gpu, ssd, psu, cooler } = parts;
@@ -213,7 +213,7 @@
     }
 
     if (!gpu && !have.gpu) {
-      if (cpu && !cs.hasIgpu) err('У процессора нет встроенной графики, а видеокарта не выбрана: изображения не будет');
+      if (cpu && !cs.hasIgpu) err('У процессора нет встроенной графики, а видеокарта не выбрана: изображения не будет', 'gpu');
       else if (cpu) info('Изображение будет со встроенной графики процессора (подходит для работы и учёбы)');
     }
 
@@ -260,7 +260,7 @@
     if (cpu && !have.cooler) {
       const need = coolerNeed(cpu);
       const watts = cooler?.specs?.dissipationWatts;
-      if (need && !cooler) err('Для процессора нужен отдельный кулер.');
+      if (need && !cooler) err('Для процессора нужен отдельный кулер.', 'cooler');
       else if (!need && !cooler) ok('Кулер идёт в комплекте с процессором');
       else if (!watts) warn('Рассеиваемая мощность кулера не указана. Уточните, подходит ли он для этого процессора.');
       else if (need && watts < need) warn(`Заявленные для кулера ${watts} Вт ниже расчётной потребности процессора.`);
@@ -271,11 +271,12 @@
     return out;
   }
 
-  function replacementErrors(slot, item, parts = {}, have = {}) {
+  function replacementErrors(slot, item, parts = {}, have = {}, { allowMissing = false } = {}) {
     if (!item) return [];
     // Повторно не показываем ошибки, которые уже были между другими деталями сборки.
     const existing = new Set(check({ ...parts, [slot]: null }, have).filter((x) => x.level === 'error').map((x) => x.text));
-    return check({ ...parts, [slot]: item }, have).filter((x) => x.level === 'error' && !existing.has(x.text));
+    return check({ ...parts, [slot]: item }, have)
+      .filter((x) => x.level === 'error' && (!allowMissing || !x.missing) && !existing.has(x.text));
   }
 
   function gamingTier(s) {

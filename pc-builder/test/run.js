@@ -1131,6 +1131,63 @@ test('б/у для сборки: AM5, три карточки DDR4, плата �
   }
 });
 
+test('редактор: замена и добавление сохраняются в исходную сборку с новым итогом', async () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const asModule = (code) => 'data:text/javascript;base64,' + Buffer.from(code).toString('base64');
+  const stub = asModule(`
+    let saved;
+    export let shouldFail = false;
+    export function failNext() { shouldFail = true; }
+    export const el = () => {};
+    export const money = {};
+    export async function api(route, options = {}) {
+      if (route !== '/api/store/builds') throw Error(route);
+      if (options.method === 'PUT') {
+        if (shouldFail) { shouldFail = false; throw Error('Сбой записи'); }
+        saved = JSON.parse(JSON.stringify(options.body));
+        return { ok: true };
+      }
+      return { value: saved };
+    }
+  `);
+  const source = fs.readFileSync(path.join(__dirname, '../web/js/state.js'), 'utf8');
+  const globals = 'const window = { Catalog: { SECTIONS: [] } }; const document = { getElementById: () => ({}) };\n';
+  const { state, loadBuilds, changeBuilds, saveBuildEdits } = await import(asModule(globals + source.replace('./util.js', stub)));
+  const { failNext } = await import(stub);
+  const first = { id: 'am5', name: 'Моя сборка', date: '2026-11-27', total: 500, have: { cooler: true },
+    parts: { motherboard: { price: 400 }, ram: { id: 'old', price: 100 } } };
+  const second = { id: 'other', name: 'Вторая', total: 0, parts: {} };
+  await changeBuilds(() => [first, second]);
+  const ram = { id: 'new', name: '32 ГБ DDR5', price: 225, url: 'https://catalog.onliner.by/dram/test' };
+  const hdd = { id: '123456', source: 'kufar', name: 'HDD 2 ТБ', price: 125, url: 'https://www.kufar.by/item/123456' };
+  const patch = { parts: { ram, hdd }, setup: {} };
+  failNext();
+  await assert.rejects(saveBuildEdits('am5', patch), /Сбой записи/);
+  assert.strictEqual(state.builds[0], first);
+  const newerBoard = { price: 410 };
+  const rename = changeBuilds((builds) => [{ ...builds[0], name: 'Моя AM5', parts: { ...builds[0].parts, motherboard: newerBoard } }, builds[1]]);
+  const edited = saveBuildEdits('am5', patch);
+  await rename;
+  const result = await edited;
+  assert.strictEqual(result.name, 'Моя AM5');
+  assert.strictEqual(result.parts.motherboard, newerBoard);
+  assert.strictEqual(result.total, 760);
+  assert.strictEqual(result.date, first.date);
+  assert.deepStrictEqual(result.have, first.have);
+  const reopened = await loadBuilds();
+  assert.deepStrictEqual(reopened.map((it) => it.id), ['am5', 'other']);
+  assert.deepStrictEqual(reopened[0].parts, { motherboard: newerBoard, ram, hdd });
+  assert.deepStrictEqual(reopened[1], second);
+  await assert.rejects(saveBuildEdits('missing', patch), /удалена/);
+
+  const cpu = { name: 'AMD Ryzen 5 7500F', specs: { socket: 'AM5', mem: ['DDR5'], hasIgpu: false, tdp: 65 } };
+  assert.ok(Compat.replacementErrors('cpu', cpu).some((issue) => issue.missing === 'gpu'));
+  assert.deepStrictEqual(Compat.replacementErrors('cpu', cpu, {}, {}, { allowMissing: true }), []);
+  const conflict = Compat.replacementErrors('ram', { specs: { type: 'DDR4' } }, { cpu }, {}, { allowMissing: true });
+  assert.ok(conflict.some((issue) => /DDR5.*DDR4/.test(issue.text)));
+});
+
 test('экспорт сборки: таблица с итогом и прямыми ссылками для ПК и сетапа', async () => {
   const fs = require('node:fs');
   const path = require('node:path');

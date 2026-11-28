@@ -292,7 +292,7 @@ function compatibilityIssue(slot, item, ctx = {}) {
     if (slot === 'motherboard' && ctx.mem && specs.mem !== ctx.mem) return `Плата рассчитана на ${specs.mem}, а сборке нужна ${ctx.mem}.`;
     if (slot === 'cpu' && ctx.mem && !specs.mem?.includes(ctx.mem)) return `Поддержка ${ctx.mem} этим процессором не подтверждена.`;
   }
-  return Compat.replacementErrors(slot, item, ctx.parts || {}, ctx.have)[0]?.text || null;
+  return Compat.replacementErrors(slot, item, ctx.parts || {}, ctx.have, { allowMissing: ctx.allowMissing === true })[0]?.text || null;
 }
 
 async function verifiedPart(slot, ad, ctx) {

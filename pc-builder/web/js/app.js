@@ -2,7 +2,7 @@
 import { el, api, money, toast, hydrateIcons, closeModal } from './util.js';
 import { state, loadSettings, loadBuilds, saveSettings } from './state.js';
 import { initBuild, rerenderBuild } from './build.js';
-import { initSearch, rerenderSearch, openSearchFor, renderTray } from './search.js';
+import { initSearch, rerenderSearch, openSearchFor, leaveBuildSearch, focusBuildSearch, renderTray } from './search.js';
 import { initSaved, rerenderSaved } from './saved.js';
 import { initSettings, rerenderSettings } from './settings.js';
 import { loadMarks } from './kufarui.js';
@@ -24,12 +24,17 @@ function go(page) {
 
 function show(page) {
   const first = !state.page;
+  if (state.page === 'search' && page !== 'search') leaveBuildSearch();
   state.page = page;
   for (const p of pages) document.getElementById('page-' + p).hidden = p !== page;
   for (const b of document.querySelectorAll('.nav-item')) b.classList.toggle('active', b.dataset.page === page);
   navIndicator();
   document.dispatchEvent(new CustomEvent('page-shown', { detail: { page, first } }));
   if (page === 'saved') rerenderSaved();
+  if (page === 'search') {
+    rerenderSearch();
+    focusBuildSearch();
+  }
   if (page === 'watch') rerenderWatch();
   if (page === 'upgrade') rerenderUpgrade();
   if (page === 'laptops') rerenderLaptops();
@@ -74,8 +79,8 @@ async function main() {
   document.addEventListener('keydown', (e) => e.key === 'Escape' && closeModal());
   document.addEventListener('goto-page', (e) => go(e.detail));
   document.addEventListener('goto-search', (e) => {
+    openSearchFor(e.detail);
     go('search');
-    openSearchFor(e.detail.cat, e.detail.slot);
   });
   document.addEventListener('currency-change', () => {
     rerenderSearch();
@@ -102,7 +107,7 @@ async function main() {
   document.getElementById('themeDots').replaceChildren(...themeDots(state.settings.theme || 'iron', pickTheme));
   document.addEventListener('theme-pick', (e) => pickTheme(e.detail));
   await loadRates();
-  loadBuilds().catch(() => {});
+  await loadBuilds().catch(() => {});
   await loadMarks();
   let lastForm = null;
   try {
