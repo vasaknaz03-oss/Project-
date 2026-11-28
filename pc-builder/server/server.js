@@ -1058,9 +1058,10 @@ async function sendKufarTelegram(ad, mode) {
   }
   const status = await remote.status();
   if (!status?.ok) return { error: 'Общий сервер ПодборПК сейчас недоступен.' };
-  if (!status.features?.telegramAds) return { error: 'Общий сервер пока не поддерживает уведомления со ссылками Kufar.' };
+  const { title, body, url } = message;
+  const payload = status.features?.telegramAds ? { kufarAd: ad } : { title, body, url };
   try {
-    const response = await remote.call('/v1/notify', { method: 'POST', body: { kufarAd: ad } });
+    const response = await remote.call('/v1/notify', { method: 'POST', body: payload, singleAttempt: true });
     return typeof response?.ok === 'boolean' ? response : { uncertain: true, error: 'Нет подтверждения отправки от общего сервера.' };
   } catch (e) {
     if (e.status && e.status < 500) return { error: e.message };

@@ -14,7 +14,7 @@ async function call(token, method, body) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body || {}),
-  }, 20000);
+  }, 20000, { singleAttempt: method === 'sendMessage' });
   const data = await res.json().catch(() => ({}));
   if (!data.ok) {
     const error = res.status === 401 || res.status === 404
@@ -69,8 +69,10 @@ function kufarNotification(ad) {
   if (!/^\d{1,16}$/.test(id) || !name) return null;
   const price = Number(ad.price);
   const url = 'https://www.kufar.by/item/' + id;
+  const title = 'Новое объявление Kufar';
+  const body = [name, Number.isFinite(price) && price > 0 ? price.toLocaleString('ru-RU') + ' р.' : null].filter(Boolean).join('\n');
   return {
-    id, url, text: ['🔔 Новое объявление Kufar', name, Number.isFinite(price) && price > 0 ? price.toLocaleString('ru-RU') + ' р.' : null, url].filter(Boolean).join('\n'),
+    id, url, title, body, text: [`🔔 ${title}`, body, url].join('\n'),
     keyboard: { inline_keyboard: [[{ text: 'Открыть объявление', url }]] },
   };
 }

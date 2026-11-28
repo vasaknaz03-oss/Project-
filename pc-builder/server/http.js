@@ -171,10 +171,12 @@ async function getText(url, { ttl = 12 * 60 * 60 * 1000, timeout = 20000 } = {})
 }
 
 /** Произвольный запрос (POST и т. п.) без кэша: fetch Node.js, при сетевом сбое — системный прокси Electron. */
-async function request(url, opts = {}, timeout = 20000) {
+async function request(url, opts = {}, timeout = 20000, { singleAttempt = false } = {}) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeout);
   try {
+    // Отправку сообщения нельзя повторять через другой транспорт после потери ответа.
+    if (singleAttempt && altFetch) return await altFetch(url, { ...opts, signal: ctrl.signal });
     try {
       return await fetch(url, { ...opts, signal: ctrl.signal });
     } catch (e) {

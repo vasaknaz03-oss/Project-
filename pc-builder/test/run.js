@@ -1521,6 +1521,95 @@ test('слежение Kufar: обе страницы, объявление бе
   }
 });
 
+test('Telegram Kufar: старый общий бот получает прямую ссылку, отправка без дублей', async () => {
+  await Promise.all(pending.slice());
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const store = require('../server/store');
+  const secrets = require('../server/secrets');
+  const http = require('../server/http');
+  const kufar = require('../server/providers/kufar');
+  const local = require('../server/server');
+  const previousDir = store.dataDir();
+  const originalFetch = global.fetch;
+  const originalSearch = kufar.search;
+  const legacy = 'https://legacy.podbor.test';
+  const modern = 'https://modern.podbor.test';
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'podbor-kufar-legacy-bot-'));
+  const configure = (origin) => {
+    store.set('settings', { serverUrl: origin, serverTelegram: true, serverFetch: false });
+    secrets.set({ serverUrl: origin, serverToken: 'test-device-token' });
+  };
+  const ad = (id, name, price) => ({ id, name, price, risk: { level: 'clear', full: true, reasons: [] }, source: 'kufar' });
+  const listed = [ad('90200', 'Объявление до начала слежения', 120)];
+  const sent = [];
+  let loseConfirmation = false;
+  const mock = async (url, options, transport) => {
+    const u = new URL(url);
+    assert.ok(u.origin === legacy || u.origin === modern, `Запрос вне тестового сервера: ${u.origin}`);
+    if (u.pathname === '/v1/health') return Response.json({ ok: true, features: u.origin === modern ? { telegram: true, telegramAds: true } : { telegram: true } });
+    assert.strictEqual(u.pathname, '/v1/notify');
+    assert.strictEqual(options.headers.Authorization, 'Bearer test-device-token');
+    sent.push({ body: JSON.parse(options.body), transport, origin: u.origin });
+    if (loseConfirmation) throw new Error('Ответ потерян после отправки');
+    return Response.json({ ok: true });
+  };
+  let server;
+  try {
+    store.flush();
+    store.setDir(profile);
+    configure(legacy);
+    kufar.search = async () => ({ items: listed.slice(), next: null, total: listed.length });
+    global.fetch = (url, options) => mock(url, options, 'node');
+    const started = await local.start();
+    server = started.server;
+    const api = async (resource, body) => {
+      const res = await originalFetch(new URL(resource, started.url), body
+        ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {});
+      const data = await res.json();
+      assert.strictEqual(res.status, 200, JSON.stringify(data));
+      return data;
+    };
+    await api('/api/watch/search', { cat: 'motherboard', name: 'AM5' });
+    listed.push(ad('90201', 'MSI B650 за 200 рублей', 200), ad('90202', 'ASUS B850 без цены', 0));
+    await api('/api/watch/check', {});
+    assert.deepStrictEqual(sent.map(({ body }) => body), [
+      { title: 'Новое объявление Kufar', body: 'MSI B650 за 200 рублей\n200 р.', url: 'https://www.kufar.by/item/90201' },
+      { title: 'Новое объявление Kufar', body: 'ASUS B850 без цены', url: 'https://www.kufar.by/item/90202' },
+    ]);
+    store.flush();
+    store.setDir(profile);
+    await api('/api/watch/check', {});
+    assert.strictEqual(sent.length, 2);
+    assert.strictEqual((await api('/api/watch')).telegram.pending, 0);
+
+    http.setAltFetch((url, options) => mock(url, options, 'proxy'));
+    loseConfirmation = true;
+    listed.push(ad('90203', 'Gigabyte B650', 220));
+    await api('/api/watch/check', {});
+    loseConfirmation = false;
+    await api('/api/watch/check', {});
+    assert.strictEqual(sent.length, 3);
+    assert.strictEqual(sent[2].transport, 'proxy');
+    assert.strictEqual((await api('/api/watch')).telegram.uncertain, 1);
+
+    configure(modern);
+    listed.push(ad('90204', 'Gigabyte B850', 250));
+    await api('/api/watch/check', {});
+    assert.strictEqual(sent.length, 4);
+    assert.strictEqual(sent[3].origin, modern);
+    assert.deepStrictEqual(sent[3].body, { kufarAd: { id: '90204', name: 'Gigabyte B850', price: 250 } });
+  } finally {
+    http.setAltFetch(null);
+    global.fetch = originalFetch;
+    kufar.search = originalSearch;
+    if (server) await new Promise((resolve) => server.close(resolve));
+    store.flush();
+    store.setDir(previousDir);
+  }
+});
+
 async function live() {
   if (!process.argv.includes('--live')) return;
   console.log('Живой подбор (Onliner)');

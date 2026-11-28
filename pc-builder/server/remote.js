@@ -32,12 +32,12 @@ function enabled() {
   return !!baseUrl();
 }
 
-async function raw(path, { method = 'GET', body, token, timeout = 30000 } = {}) {
+async function raw(path, { method = 'GET', body, token, timeout = 30000, singleAttempt = false } = {}) {
   const res = await request(baseUrl() + path, {
     method,
     headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
     body: body ? JSON.stringify(body) : undefined,
-  }, timeout);
+  }, timeout, { singleAttempt });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const e = new Error(data.error || `Сервер ПодборПК: HTTP ${res.status}`);
